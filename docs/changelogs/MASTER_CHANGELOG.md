@@ -45,6 +45,11 @@
 - Added: pytest configuration
 - Added: Example unit tests
 - Added: Test directory structure
+- Added: **Virtual Bankroll / Paper Trading requirements**
+  - 48+ hours paper trading mandatory before live
+  - Track whale transactions with virtual positions
+  - Calculate virtual PnL with all fees
+  - Success criteria: >25% ROI, >60% win rate
 
 ### 🚀 DevOps
 **Summary:** Deployment preparation

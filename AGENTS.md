@@ -318,6 +318,41 @@ pytest tests/integration/ --use-testnet -v
 pytest tests/database/ -v
 ```
 
+## Paper Trading / Virtual Bankroll (ОБЯЗАТЕЛЬНО)
+
+**Перед live trading ОБЯЗАТЕЛЬНО 48+ часов paper trading:**
+
+### Virtual Bankroll Mode
+```bash
+# Run with virtual bankroll (no real trades executed)
+python src/main.py --mode paper --bankroll 10.00
+```
+
+### Что должен делать paper trading:
+- ✅ Отслеживать реальные сделки китов (whale transactions)
+- ✅ Рассчитывать virtual positions (как если бы мы копировали)
+- ✅ Учитывать все fees (trading fees, gas costs)
+- ✅ Трекать Win/Loss в virtual bankroll
+- ✅ Сохранять в PostgreSQL для анализа
+- ❌ НЕ исполнять реальные trades
+
+### Критерии перехода к Live Trading:
+- [ ] 48+ часов paper trading без ошибок
+- [ ] Virtual bankroll > $12.50 (25% ROI target)
+- [ ] Win rate > 60%
+- [ ] No consecutive losses > 3
+- [ ] All fees correctly accounted
+- [ ] Logs clean (no errors)
+
+### Тестирование:
+```bash
+# Run paper trading
+python src/main.py --mode paper --bankroll 10.00 --duration 48h
+
+# Check results
+psql -c "SELECT * FROM virtual_trades ORDER BY executed_at DESC LIMIT 10;"
+```
+
 ## Git Workflow
 
 ### Milestone Commits
