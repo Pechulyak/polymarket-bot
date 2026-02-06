@@ -71,18 +71,38 @@
 **Breaking Changes:** None  
 **Ready for Release:** Yes - Foundation complete
 
-## Next Milestone: v0.2.0 (API Integration)
+## [MILESTONE] v0.2.0 - 2026-02-06 - API Integration Complete
 
-### Infrastructure ✅ COMPLETE
+### 🤖 Development (from Development Chat)
+**Summary:** Polymarket API client implementation
+
+- Added: **PolymarketClient** for CLOB API access
+  - Async methods: get_markets(), get_orderbook(), get_price()
+  - Rate limiting: 100 req/min with sliding window
+  - Retry logic with exponential backoff
+  - Error handling for API and network failures
+  - 13 unit tests, all passing (>90% coverage)
+  
+- Added: **CopyTradingEngine** (previously in v0.2.0)
+  - Whale transaction following
+  - Proportional position sizing
+  - 16 unit tests, all passing
+
+### ✅ Infrastructure - COMPLETE
 - [x] Docker Compose with PostgreSQL + Redis
 - [x] Infrastructure test scripts
 - [x] Local environment setup
 
-### Planned
-- [ ] PolymarketClient implementation
-- [ ] WebSocket connection setup
+### ✅ API Integration - COMPLETE
+- [x] PolymarketClient implementation
+- [x] Rate limiting and error handling
+- [x] API connectivity tests
+
+### 🎯 Next Milestone: v0.3.0 (Data Pipeline)
+- [ ] WebSocket connection for real-time data
 - [ ] Database integration layer
-- [ ] API connectivity tests
+- [ ] Market data ingestion
+- [ ] Virtual bankroll tracker
 
 ---
 
