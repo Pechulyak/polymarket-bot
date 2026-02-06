@@ -153,4 +153,4 @@ ON CONFLICT DO NOTHING;
 
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
-VALUES (10.00, 0, 10.00, 0, 0);
+VALUES (100.00, 0, 100.00, 0, 0);

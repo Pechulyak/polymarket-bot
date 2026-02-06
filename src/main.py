@@ -15,7 +15,7 @@ async def main():
     """Main trading loop."""
     parser = argparse.ArgumentParser(description="Polymarket Trading Bot")
     parser.add_argument("--mode", choices=["paper", "live"], default="paper")
-    parser.add_argument("--bankroll", type=float, default=10.0)
+    parser.add_argument("--bankroll", type=float, default=100.0)
     args = parser.parse_args()
     
     logger.info(f"Starting bot in {args.mode} mode with ${args.bankroll} bankroll")

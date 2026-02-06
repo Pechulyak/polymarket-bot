@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     redis_url: str
     
     # Trading
-    initial_bankroll: float = 10.0
+    initial_bankroll: float = 100.0
     trading_mode: str = "paper"  # paper or live
     min_edge_bps: float = 10.0
     max_position_pct: float = 25.0
