@@ -320,12 +320,12 @@ pytest tests/database/ -v
 
 ## Paper Trading / Virtual Bankroll (ОБЯЗАТЕЛЬНО)
 
-**Перед live trading ОБЯЗАТЕЛЬНО 48+ часов paper trading:**
+**Перед live trading ОБЯЗАТЕЛЬНО минимум 7 дней (168 часов) paper trading:**
 
 ### Virtual Bankroll Mode
 ```bash
 # Run with virtual bankroll (no real trades executed)
-python src/main.py --mode paper --bankroll 10.00
+python src/main.py --mode paper --bankroll 100.00
 ```
 
 ### Что должен делать paper trading:
@@ -336,21 +336,22 @@ python src/main.py --mode paper --bankroll 10.00
 - ✅ Сохранять в PostgreSQL для анализа
 - ❌ НЕ исполнять реальные trades
 
-### Критерии перехода к Live Trading:
-- [ ] 48+ часов paper trading без ошибок
-- [ ] Virtual bankroll > $12.50 (25% ROI target)
+### Критерии перехода к Live Trading (минимум 7 дней):
+- [ ] 7+ дней paper trading без ошибок (168+ часов)
+- [ ] Virtual bankroll > $125 (25% ROI target) - т.е. +$25 прибыли
 - [ ] Win rate > 60%
 - [ ] No consecutive losses > 3
 - [ ] All fees correctly accounted
 - [ ] Logs clean (no errors)
+- [ ] Стабильная работа без перебоев
 
 ### Тестирование:
 ```bash
-# Run paper trading
-python src/main.py --mode paper --bankroll 10.00 --duration 48h
+# Run paper trading (минимум 7 дней)
+python src/main.py --mode paper --bankroll 100.00 --duration 7d
 
-# Check results
-psql -c "SELECT * FROM virtual_trades ORDER BY executed_at DESC LIMIT 10;"
+# Check results daily
+psql -c "SELECT DATE(executed_at) as day, COUNT(*) as trades, SUM(net_pnl) as pnl FROM virtual_trades GROUP BY DATE(executed_at) ORDER BY day;"
 ```
 
 ## Git Workflow
