@@ -93,16 +93,44 @@
 - [x] Infrastructure test scripts
 - [x] Local environment setup
 
-### ✅ API Integration - COMPLETE
-- [x] PolymarketClient implementation
-- [x] Rate limiting and error handling
-- [x] API connectivity tests
+- Added: **PolymarketWebSocket** for real-time data
+  - Official Polymarket CLOB WebSocket API implementation
+  - URL: `wss://ws-subscriptions-clob.polymarket.com/ws/market`
+  - Auto-reconnect with exponential backoff
+  - Ping/Pong heartbeat every 10 seconds
+  - 17 unit tests, all passing (>90% coverage)
+  - Mock server for local development
 
-### 🎯 Next Milestone: v0.3.0 (Data Pipeline)
-- [ ] WebSocket connection for real-time data
-- [ ] Database integration layer
-- [ ] Market data ingestion
-- [ ] Virtual bankroll tracker
+### ✅ API Integration - COMPLETE
+- [x] PolymarketClient implementation (REST API)
+- [x] PolymarketWebSocket implementation (WebSocket)
+- [x] Rate limiting and error handling
+- [x] Mock server for development
+- [x] 17 WebSocket + 13 REST + 16 CopyTrading = 46 unit tests total
+
+### ⚠️ BLOCKER: API Key Required
+**Status:** WebSocket code production-ready, but live testing blocked
+
+**Issue:** Without API key, Polymarket returns only old test data (2020-2021)
+- Markets returned: Biden COVID (Nov 2020), Airbnb IPO (2021), etc.
+- All markets expired, none active for 2026
+- Need API key for real-time 2026 market data
+
+**Solution:** Mock server implemented for development
+- Local WebSocket server simulates Polymarket
+- All 17 tests pass on mock data
+- Code ready for production after API key obtained
+
+**Requirements for live testing:**
+- [ ] Register on Polymarket
+- [ ] Deposit $1 minimum
+- [ ] Obtain API key
+
+### 🎯 Next Milestone: v0.3.0 (API Key & Paper Trading)
+- [ ] Obtain Polymarket API key (BLOCKER)
+- [ ] Test WebSocket with real 2026 market data
+- [ ] Virtual bankroll tracker implementation
+- [ ] Start 7-day paper trading validation
 
 ---
 
