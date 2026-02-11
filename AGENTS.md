@@ -234,30 +234,148 @@ async def execute_arbitrage(self, opp: ArbitrageOpportunity) -> None:
 
 ### Database Schema
 
+#### Connection Details
+```env
+# PostgreSQL Connection (development)
+DATABASE_URL=postgresql://postgres:password@localhost:5433/postgres
+
+# Docker PostgreSQL
+# Host: localhost, Port: 5433, User: postgres, Password: password, Database: postgres
+```
+
+#### Schema (init_db.sql)
+
 ```sql
--- Trades table
-CREATE TABLE trades (
+-- Market data cache
+CREATE TABLE IF NOT EXISTS market_data (
     id SERIAL PRIMARY KEY,
-    trade_id UUID UNIQUE NOT NULL,
+    market_id VARCHAR(255) NOT NULL,
+    exchange VARCHAR(50) NOT NULL,
+    best_bid DECIMAL(20, 8) NOT NULL,
+    best_ask DECIMAL(20, 8) NOT NULL,
+    bid_volume DECIMAL(20, 8),
+    ask_volume DECIMAL(20, 8),
+    timestamp TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Trading opportunities detected
+CREATE TABLE IF NOT EXISTS opportunities (
+    id SERIAL PRIMARY KEY,
+    opportunity_id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
+    market_id VARCHAR(255) NOT NULL,
+    strategy VARCHAR(100) NOT NULL,
+    polymarket_price DECIMAL(20, 8) NOT NULL,
+    bybit_price DECIMAL(20, 8) NOT NULL,
+    spread_bps DECIMAL(10, 4) NOT NULL,
+    gross_edge DECIMAL(20, 8) NOT NULL,
+    net_edge DECIMAL(20, 8) NOT NULL,
+    kelly_fraction DECIMAL(10, 8) NOT NULL,
+    recommended_size DECIMAL(20, 8) NOT NULL,
+    detected_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    executed BOOLEAN DEFAULT FALSE
+);
+
+-- Trade execution log
+CREATE TABLE IF NOT EXISTS trades (
+    id SERIAL PRIMARY KEY,
+    trade_id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
+    opportunity_id UUID REFERENCES opportunities(opportunity_id),
     market_id VARCHAR(255) NOT NULL,
     side VARCHAR(10) NOT NULL CHECK (side IN ('buy', 'sell')),
     size DECIMAL(20, 8) NOT NULL,
     price DECIMAL(20, 8) NOT NULL,
     exchange VARCHAR(50) NOT NULL,
     commission DECIMAL(20, 8) NOT NULL,
+    gas_cost_eth DECIMAL(20, 18),
+    gas_cost_usd DECIMAL(20, 8),
+    fiat_fees DECIMAL(20, 8),
+    gross_pnl DECIMAL(20, 8),
+    total_fees DECIMAL(20, 8),
     net_pnl DECIMAL(20, 8),
+    status VARCHAR(50) NOT NULL,
     executed_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    strategy VARCHAR(100) NOT NULL
+    settled_at TIMESTAMP
 );
 
--- Risk events
-CREATE TABLE risk_events (
+-- Position tracking
+CREATE TABLE IF NOT EXISTS positions (
     id SERIAL PRIMARY KEY,
+    position_id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
+    market_id VARCHAR(255) NOT NULL,
+    polymarket_size DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    bybit_size DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    net_exposure DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    avg_entry_price DECIMAL(20, 8),
+    unrealized_pnl DECIMAL(20, 8) DEFAULT 0,
+    realized_pnl DECIMAL(20, 8) DEFAULT 0,
+    opened_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    closed_at TIMESTAMP,
+    status VARCHAR(20) NOT NULL DEFAULT 'open'
+);
+
+-- Bankroll tracking (virtual and real)
+CREATE TABLE IF NOT EXISTS bankroll (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+    total_capital DECIMAL(20, 8) NOT NULL,
+    allocated DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    available DECIMAL(20, 8) NOT NULL,
+    daily_pnl DECIMAL(20, 8) DEFAULT 0,
+    daily_drawdown DECIMAL(10, 4) DEFAULT 0,
+    total_trades INTEGER DEFAULT 0,
+    win_count INTEGER DEFAULT 0,
+    loss_count INTEGER DEFAULT 0
+);
+
+-- Risk events log
+CREATE TABLE IF NOT EXISTS risk_events (
+    id SERIAL PRIMARY KEY,
+    event_id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
     event_type VARCHAR(100) NOT NULL,
     severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
     description TEXT NOT NULL,
-    triggered_at TIMESTAMP NOT NULL DEFAULT NOW()
+    market_id VARCHAR(255),
+    position_id UUID,
+    triggered_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    resolved_at TIMESTAMP,
+    resolution_notes TEXT
 );
+
+-- Fee structure
+CREATE TABLE IF NOT EXISTS fee_schedule (
+    id SERIAL PRIMARY KEY,
+    exchange VARCHAR(50) NOT NULL,
+    fee_type VARCHAR(50) NOT NULL,
+    fee_percentage DECIMAL(10, 6),
+    fixed_fee DECIMAL(20, 8),
+    currency VARCHAR(10),
+    effective_from TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (exchange, fee_type, effective_from)
+);
+
+-- API latency monitoring
+CREATE TABLE IF NOT EXISTS api_health (
+    id SERIAL PRIMARY KEY,
+    exchange VARCHAR(50) NOT NULL,
+    endpoint VARCHAR(255) NOT NULL,
+    latency_ms INTEGER NOT NULL,
+    success BOOLEAN NOT NULL,
+    error_message TEXT,
+    checked_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+#### Initialize Database
+```bash
+# Run schema
+psql -U postgres -d postgres -f scripts/init_db.sql
+
+# Or via Docker
+docker exec -i polymarket-postgres-1 psql -U postgres -d postgres < scripts/init_db.sql
+```
+
+#### Virtual Trades Note
+Virtual trades (paper trading) use the same `trades` table with `exchange='VIRTUAL'` and `status='open'/'closed'`.
 ```
 
 ## Constraints & Rules

@@ -11,7 +11,7 @@ Sources:
 Example:
     >>> from execution.copy_trading_engine import CopyTradingEngine
     >>> from decimal import Decimal
-    >>> 
+    >>>
     >>> engine = CopyTradingEngine(
     ...     config={
     ...         "whale_addresses": ["0x123...", "0x456..."],
@@ -22,7 +22,7 @@ Example:
     ...     risk_manager=risk_manager,
     ...     executor=executor
     ... )
-    >>> 
+    >>>
     >>> # Process whale transaction
     >>> result = await engine.process_transaction(tx_data)
 """
@@ -42,7 +42,7 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class WhaleSignal:
     """Represents a detected whale trade signal.
-    
+
     Attributes:
         address: Whale wallet address
         market_id: Market/token identifier
@@ -54,6 +54,7 @@ class WhaleSignal:
         is_opening: True if opening position, False if closing
         timestamp: Unix timestamp of detection
     """
+
     address: str
     market_id: str
     side: str
@@ -68,7 +69,7 @@ class WhaleSignal:
 @dataclass
 class CopyPosition:
     """Tracks a copied position from a whale.
-    
+
     Attributes:
         market_id: Market identifier
         entry_price: Entry price
@@ -79,6 +80,7 @@ class CopyPosition:
         exit_price: Exit price (set on close)
         exit_time: Exit timestamp (set on close)
     """
+
     market_id: str
     entry_price: Decimal
     size: Decimal
@@ -91,24 +93,27 @@ class CopyPosition:
 
 class CopyTradingEngine:
     """Copy Trading Engine for following whale trades.
-    
+
     Monitors whale addresses and replicates their trades with
     proportional sizing based on conviction level. Uses Kelly Criterion
     principles for position sizing.
-    
+
     Attributes:
         CLOB_ADDRESS: Polymarket CLOB contract address (Polygon)
+        mode: Trading mode ("paper" or "live")
     """
 
     # Polymarket CLOB contract (Polygon mainnet)
-    CLOB_ADDRESS = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+    CLOB_ADDRESS = "0x4bFb41d5B3570DeFd03C39a9A4dE6Bd8B8982E"
 
     def __init__(
         self,
         config: Dict[str, Any],
         risk_manager: Any,
         executor: Any,
-        w3: Optional[Web3] = None
+        w3: Optional[Web3] = None,
+        mode: str = "paper",
+        virtual_bankroll: Optional[Any] = None,
     ) -> None:
         """Initialize Copy Trading Engine.
 
@@ -122,11 +127,15 @@ class CopyTradingEngine:
             risk_manager: RiskManager instance for trade validation
             executor: OrderExecutor instance for trade execution
             w3: Optional Web3 instance for transaction decoding
+            mode: Trading mode ("paper" or "live")
+            virtual_bankroll: Optional VirtualBankroll instance for paper trading
         """
         self.config = config
         self.risk_manager = risk_manager
         self.executor = executor
         self.w3 = w3
+        self.mode = mode
+        self.virtual_bankroll = virtual_bankroll
 
         # Tracked whales (lowercase for comparison)
         self.tracked_whales: Set[str] = set(
@@ -153,8 +162,6 @@ class CopyTradingEngine:
 
         logger.info(
             "copy_trading_engine_initialized",
-            tracked_whales=len(self.tracked_whales),
-            copy_capital=str(config.get("copy_capital", Decimal("70.0"))),
         )
 
     async def process_transaction(self, tx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -219,9 +226,7 @@ class CopyTradingEngine:
 
         # Risk check
         can_trade, reason = self.risk_manager.can_trade(
-            market_id=signal.market_id,
-            size=float(copy_size),
-            strategy="copy"
+            market_id=signal.market_id, size=float(copy_size), strategy="copy"
         )
         if not can_trade:
             logger.info(
@@ -237,19 +242,37 @@ class CopyTradingEngine:
             side=signal.side,
             size=str(copy_size),
             market=signal.market_id[:20],
+            mode=self.mode,
         )
+
+        if self.mode == "paper":
+            result = await self._execute_paper_trade(
+                market_id=signal.market_id,
+                side=signal.side,
+                size=copy_size,
+                price=signal.price,
+                strategy="copy",
+            )
+        else:
+            result = await self.executor.execute(
+                market_id=signal.market_id,
+                side=signal.side,
+                size=float(copy_size),
+                price=float(signal.price),
+                mode="rest",
+            )
 
         result = await self.executor.execute(
             market_id=signal.market_id,
             side=signal.side,
             size=float(copy_size),
             price=float(signal.price),
-            mode="rest"  # Copy trading uses REST (latency less critical)
+            mode="rest",  # Copy trading uses REST (latency less critical)
         )
 
         if result.get("success"):
             self.stats["trades_executed"] += 1
-            
+
             # Track our position
             fill_price = Decimal(str(result.get("fill_price", signal.price)))
             self.positions[signal.market_id] = CopyPosition(
@@ -272,11 +295,106 @@ class CopyTradingEngine:
 
         return result
 
-    def _decode_trade(
-        self,
-        tx: Dict[str, Any],
-        sender: str
-    ) -> Optional[WhaleSignal]:
+    async def _execute_paper_trade(
+        self, market_id: str, side: str, size: Decimal, price: Decimal, strategy: str
+    ) -> Dict[str, Any]:
+        """Execute a virtual trade in paper mode.
+
+        Does NOT execute real trades - updates virtual bankroll only.
+
+        Args:
+            market_id: Market identifier
+            side: Trade side ("BUY" or "SELL")
+            size: Position size in USD
+            price: Execution price
+            strategy: Trading strategy name
+
+        Returns:
+            Dict with success status and trade details
+        """
+        if not self.virtual_bankroll:
+            logger.warning("virtual_bankroll_not_configured")
+            return {"success": False, "error": "Virtual bankroll not configured"}
+
+        try:
+            fees = size * Decimal("0.002")
+            gas = Decimal("1.50")
+
+            result = await self.virtual_bankroll.execute_virtual_trade(
+                market_id=market_id,
+                side=side.lower(),
+                size=size,
+                price=price,
+                strategy=strategy,
+                fees=fees,
+                gas=gas,
+            )
+
+            logger.info(
+                "paper_trade_executed",
+                trade_id=result.trade_id,
+                market_id=market_id,
+                side=side,
+                size=str(size),
+                price=str(price),
+                new_balance=str(self.virtual_bankroll.balance),
+            )
+
+            return {
+                "success": True,
+                "trade_id": result.trade_id,
+                "fill_price": float(price),
+                "size": float(size),
+                "mode": "paper",
+            }
+
+        except ValueError as e:
+            logger.warning("paper_trade_insufficient_balance", error=str(e))
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error("paper_trade_failed", error=str(e))
+            return {"success": False, "error": str(e)}
+
+    async def _execute_paper_close(
+        self, market_id: str, side: str, size: Decimal, price: Decimal
+    ) -> Dict[str, Any]:
+        """Close a virtual position in paper mode.
+
+        Args:
+            market_id: Market identifier
+            side: Opposite side to close
+            size: Position size
+            price: Close price
+
+        Returns:
+            Dict with success status and trade details
+        """
+        if not self.virtual_bankroll:
+            return {"success": False, "error": "Virtual bankroll not configured"}
+
+        try:
+            fees = size * Decimal("0.002")
+
+            result = await self.virtual_bankroll.close_virtual_position(
+                market_id=market_id, close_price=price, fees=fees
+            )
+
+            return {
+                "success": True,
+                "trade_id": result.trade_id,
+                "fill_price": float(price),
+                "pnl": float(result.net_pnl),
+                "mode": "paper",
+            }
+
+        except ValueError as e:
+            logger.warning("paper_close_failed", error=str(e))
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error("paper_close_error", error=str(e))
+            return {"success": False, "error": str(e)}
+
+    def _decode_trade(self, tx: Dict[str, Any], sender: str) -> Optional[WhaleSignal]:
         """Decode Polymarket CLOB transaction.
 
         Extracts trade details from transaction input data using
@@ -301,7 +419,7 @@ class CopyTradingEngine:
             # Decode function call
             contract = self.w3.eth.contract(
                 address=self.CLOB_ADDRESS,
-                abi=self.clob_abi  # type: ignore
+                abi=self.clob_abi,  # type: ignore
             )
 
             func, params = contract.decode_function_input(tx_input)
@@ -317,7 +435,7 @@ class CopyTradingEngine:
                     price=Decimal(str(params.get("price", 0))) / Decimal("1e6"),
                     tx_hash=tx.get("hash", ""),
                     block_number=tx.get("blockNumber", 0),
-                    is_opening=True
+                    is_opening=True,
                 )
 
         except Exception as e:
@@ -371,10 +489,14 @@ class CopyTradingEngine:
         """
         # Get whale's estimated balance
         whale_balances = self.config.get("whale_balances", {})
-        whale_balance = Decimal(str(whale_balances.get(
-            signal.address,
-            100000  # Default estimate if unknown
-        )))
+        whale_balance = Decimal(
+            str(
+                whale_balances.get(
+                    signal.address,
+                    100000,  # Default estimate if unknown
+                )
+            )
+        )
 
         # Calculate conviction ratio
         conviction = signal.amount / whale_balance
@@ -392,10 +514,7 @@ class CopyTradingEngine:
 
         return min(base_size, max_size)
 
-    async def _handle_whale_exit(
-        self,
-        signal: WhaleSignal
-    ) -> Optional[Dict[str, Any]]:
+    async def _handle_whale_exit(self, signal: WhaleSignal) -> Optional[Dict[str, Any]]:
         """Handle whale exiting a position - close our position too.
 
         When a whale closes their position, we should also exit our
@@ -429,17 +548,25 @@ class CopyTradingEngine:
         # Opposite side to close
         exit_side = "SELL" if signal.side == "BUY" else "BUY"
 
-        result = await self.executor.execute(
-            market_id=signal.market_id,
-            side=exit_side,
-            size=float(our_position.size),
-            price=float(signal.price),
-            mode="rest"
-        )
+        if self.mode == "paper":
+            result = await self._execute_paper_close(
+                market_id=signal.market_id,
+                side=exit_side,
+                size=our_position.size,
+                price=signal.price,
+            )
+        else:
+            result = await self.executor.execute(
+                market_id=signal.market_id,
+                side=exit_side,
+                size=float(our_position.size),
+                price=float(signal.price),
+                mode="rest",
+            )
 
         if result.get("success"):
             self.stats["positions_closed"] += 1
-            
+
             # Calculate PnL
             entry = our_position.entry_price
             exit_price = Decimal(str(result.get("fill_price", signal.price)))
@@ -466,6 +593,7 @@ class CopyTradingEngine:
                 pnl=str(pnl),
                 entry=str(entry),
                 exit=str(exit_price),
+                mode=self.mode,
             )
 
         return result
@@ -489,7 +617,9 @@ class CopyTradingEngine:
             "timestamp": signal.timestamp,
         }
 
-    def add_whale(self, address: str, estimated_balance: Decimal = Decimal("100000")) -> None:
+    def add_whale(
+        self, address: str, estimated_balance: Decimal = Decimal("100000")
+    ) -> None:
         """Add a whale to track.
 
         Args:
@@ -498,12 +628,12 @@ class CopyTradingEngine:
         """
         addr_lower = address.lower()
         self.tracked_whales.add(addr_lower)
-        
+
         # Store balance
         if "whale_balances" not in self.config:
             self.config["whale_balances"] = {}
         self.config["whale_balances"][addr_lower] = estimated_balance
-        
+
         logger.info(
             "whale_added",
             address=addr_lower[:10],
@@ -518,11 +648,11 @@ class CopyTradingEngine:
         """
         addr_lower = address.lower()
         self.tracked_whales.discard(addr_lower)
-        
+
         # Clean up position tracking
         if addr_lower in self.whale_positions:
             del self.whale_positions[addr_lower]
-        
+
         logger.info("whale_removed", address=addr_lower[:10])
 
     def get_tracked_whales(self) -> list[str]:
@@ -553,7 +683,7 @@ class CopyTradingEngine:
                 - total_pnl: Realized PnL
         """
         total_exposure = sum(p.size for p in self.positions.values())
-        
+
         return {
             "tracked_whales": len(self.tracked_whales),
             "open_positions": len(self.positions),
@@ -579,8 +709,8 @@ class CopyTradingEngine:
                     {"name": "tokenId", "type": "uint256"},
                     {"name": "side", "type": "uint8"},
                     {"name": "amount", "type": "uint256"},
-                    {"name": "price", "type": "uint256"}
-                ]
+                    {"name": "price", "type": "uint256"},
+                ],
             },
             {
                 "name": "fillOrder",
@@ -589,7 +719,7 @@ class CopyTradingEngine:
                     {"name": "tokenId", "type": "uint256"},
                     {"name": "side", "type": "uint8"},
                     {"name": "amount", "type": "uint256"},
-                    {"name": "price", "type": "uint256"}
-                ]
-            }
+                    {"name": "price", "type": "uint256"},
+                ],
+            },
         ]

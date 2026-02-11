@@ -359,3 +359,77 @@ To test with real Polymarket data:
 - `mock_polymarket_server.py` - NEW (for testing)
 - `test_websocket_mock.py` - NEW (integration test)
 - `get_active_tokens.py` - NEW (API exploration tool)
+
+---
+
+## [MILESTONE] v0.4.0 - 2026-02-07 - Virtual Bankroll & Paper Trading
+
+### 🤖 Development (from Development Chat)
+**Summary:** Virtual Bankroll Tracker implementation for 7-day paper trading validation
+
+#### Added
+- **`src/strategy/virtual_bankroll.py`** - VirtualBankroll class
+  - Virtual trade execution without real trades
+  - PnL calculation on position close
+  - Fee accounting (commission + gas)
+  - Balance history tracking
+  - Success criteria validation ($125 target, >60% win rate, ≤3 consecutive losses)
+  - PostgreSQL integration for persistence
+  - BankrollStats dataclass for statistics
+
+- **`src/main_paper_trading.py`** - Paper Trading Runner
+  - 7-day (168 hours) minimum paper trading
+  - Daily statistics reporting
+  - Real-time criteria monitoring
+  - Demo mode for quick testing
+  - Command-line interface with arguments
+
+#### Changed
+- **`src/execution/copy_trading_engine.py`**
+  - Added `mode` parameter ("paper" or "live")
+  - Added `virtual_bankroll` parameter
+  - `_execute_paper_trade()` method for virtual trade execution
+  - `_execute_paper_close()` method for virtual position closing
+  - Paper mode calls VirtualBankroll instead of real executor
+  - Live mode uses existing executor logic
+
+#### Technical Details
+- **Virtual Bankroll**: Starts at $100, tracks all virtual trades
+- **Position Sizing**: Uses CopyTradingEngine proportional sizing
+- **PnL Calculation**: Gross PnL - Commissions - Gas costs
+- **Success Criteria**:
+  - Balance ≥ $125 (25% ROI)
+  - Win rate ≥ 60%
+  - No consecutive losses > 3
+  - Minimum 168 hours paper trading
+- **Database Schema**:
+  - `virtual_trades`: All executed virtual trades
+  - `virtual_bankroll_history`: Balance changes over time
+
+#### Files Changed
+- `src/strategy/virtual_bankroll.py` - NEW (400+ lines)
+- `src/strategy/__init__.py` - Added VirtualBankroll exports
+- `src/execution/copy_trading_engine.py` - Added paper mode support
+- `src/main_paper_trading.py` - NEW (500+ lines)
+- `scripts/init_db.sql` - Added virtual_trades, virtual_bankroll_history tables
+- `tests/unit/test_virtual_bankroll.py` - NEW (40+ tests)
+- `docs/changelogs/development.md` - This entry
+
+#### Dependencies
+- Added: SQLAlchemy (database persistence)
+- No breaking changes to existing dependencies
+
+#### Breaking Changes
+- None
+
+#### Testing
+- 40+ unit tests covering:
+  - Virtual trade execution
+  - Position closing with PnL
+  - Fee accounting
+  - Balance updates
+  - Statistics tracking
+  - Success criteria validation
+  - Error handling (insufficient balance)
+  - Reset functionality
+  - ROI calculation
