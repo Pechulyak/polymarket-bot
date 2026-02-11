@@ -203,6 +203,10 @@ class VirtualBankroll:
         opened_at: datetime,
         closed_at: Optional[datetime],
         strategy: str,
+        gross_pnl: Decimal = Decimal("0"),
+        total_fees: Decimal = Decimal("0"),
+        fiat_fees: Decimal = Decimal("0"),
+        opportunity_id: Optional[str] = None,
     ) -> None:
         """Save virtual trade to PostgreSQL.
 
@@ -219,25 +223,37 @@ class VirtualBankroll:
             opened_at: Opening timestamp
             closed_at: Closing timestamp (None if open)
             strategy: Trading strategy
+            gross_pnl: Gross profit/loss before fees
+            total_fees: Total fees (commission + gas)
+            fiat_fees: Fiat fees
+            opportunity_id: Associated opportunity ID
         """
         await self._ensure_database()
 
         if not self._Session:
             return
 
+        total_fees = commission + gas_cost
         session = self._Session()
         try:
             query = text("""
                 INSERT INTO trades (
                     trade_id, market_id, side, size, price, exchange,
                     commission, gas_cost_eth, gas_cost_usd, net_pnl,
-                    status, executed_at, settled_at
+                    status, executed_at, settled_at, opportunity_id,
+                    fiat_fees, gross_pnl, total_fees
                 ) VALUES (
                     :trade_id, :market_id, :side, :size, :price, :exchange,
                     :commission, :gas_cost_eth, :gas_cost_usd, :net_pnl,
-                    :status, :executed_at, :settled_at
+                    :status, :executed_at, :settled_at, :opportunity_id,
+                    :fiat_fees, :gross_pnl, :total_fees
                 )
-                ON CONFLICT (trade_id) DO NOTHING
+                ON CONFLICT (trade_id) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    settled_at = EXCLUDED.settled_at,
+                    gross_pnl = EXCLUDED.gross_pnl,
+                    total_fees = EXCLUDED.total_fees,
+                    net_pnl = EXCLUDED.net_pnl
             """)
             session.execute(
                 query,
@@ -255,6 +271,10 @@ class VirtualBankroll:
                     "status": "open" if is_open else "closed",
                     "executed_at": opened_at,
                     "settled_at": closed_at,
+                    "opportunity_id": opportunity_id,
+                    "fiat_fees": float(fiat_fees) if fiat_fees else None,
+                    "gross_pnl": float(gross_pnl) if gross_pnl else None,
+                    "total_fees": float(total_fees),
                 },
             )
             session.commit()
@@ -368,6 +388,7 @@ class VirtualBankroll:
             )
             self._open_positions[market_id] = position
             net_pnl = Decimal("0")
+            gross_pnl = Decimal("0")
             is_open = True
 
         elif side.lower() == "sell":
@@ -418,6 +439,12 @@ class VirtualBankroll:
             strategy=strategy,
         )
 
+        total_fees = (
+            fees + gas + position.commission + position.gas_cost
+            if side.lower() == "sell"
+            else fees + gas
+        )
+
         await self._save_virtual_trade(
             trade_id=result.trade_id,
             market_id=result.market_id,
@@ -431,6 +458,8 @@ class VirtualBankroll:
             opened_at=result.opened_at,
             closed_at=result.closed_at,
             strategy=result.strategy,
+            gross_pnl=gross_pnl,
+            total_fees=total_fees,
         )
 
         await self._save_bankroll_history(
@@ -533,6 +562,8 @@ class VirtualBankroll:
             opened_at=result.opened_at,
             closed_at=result.closed_at,
             strategy=result.strategy,
+            gross_pnl=gross_pnl,
+            total_fees=total_fees,
         )
 
         await self._save_bankroll_history(
