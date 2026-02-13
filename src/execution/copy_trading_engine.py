@@ -506,15 +506,17 @@ class CopyTradingEngine:
         return False  # Closing/reducing position
 
     def _calculate_copy_size(self, signal: WhaleSignal) -> Decimal:
-        """Calculate proportional copy size based on whale conviction.
+        """Calculate Kelly-based copy size using whale win rate.
 
-        Uses proportional sizing formula:
-            conviction = whale_trade_size / whale_estimated_balance
-            copy_size = my_balance * conviction
+        Formula: f* = (b * p - q) / b
+        Where:
+        - b = payout ratio (odds received)
+        - p = probability of winning (whale's win rate)
+        - q = probability of losing (1 - p)
 
-        Example:
-            - Whale balance: $100,000, trades $5,000 (5% conviction)
-            - My balance: $70 → copy $3.50 (5% conviction)
+        Applies quarter Kelly (0.25) for safety, with min/max limits:
+        - Min position: 1% of bankroll
+        - Max position: 5% of bankroll
 
         Args:
             signal: The whale trade signal
@@ -522,30 +524,120 @@ class CopyTradingEngine:
         Returns:
             Calculated copy size in USD, or 0 if below minimum
         """
-        # Get whale's estimated balance
+        bankroll = Decimal(str(self.config.get("copy_capital", Decimal("70.0"))))
+
+        whale_stats = self.whale_stats.get(signal.address.lower())
+        if not whale_stats:
+            logger.debug(
+                "no_whale_stats_using_proportional",
+                address=signal.address[:10],
+            )
+            return self._calculate_proportional_size(signal)
+
+        win_probability = whale_stats.win_rate
+        if win_probability <= Decimal("0"):
+            logger.debug(
+                "zero_win_probability",
+                address=signal.address[:10],
+            )
+            return Decimal("0")
+
+        payout_ratio = (
+            Decimal("1") / signal.price if signal.price > Decimal("0") else Decimal("1")
+        )
+        p = win_probability
+        q = Decimal("1") - p
+
+        b = payout_ratio - Decimal("1")
+
+        if b <= Decimal("0"):
+            logger.debug(
+                "negative_payout_using_proportional",
+                address=signal.address[:10],
+            )
+            return self._calculate_proportional_size(signal)
+
+        kelly_fraction = (b * p - q) / b
+
+        if kelly_fraction <= Decimal("0"):
+            logger.debug(
+                "negative_kelly_no_edge",
+                address=signal.address[:10],
+                win_prob=str(win_probability),
+                payout=str(payout_ratio),
+            )
+            return Decimal("0")
+
+        quarter_kelly = kelly_fraction * Decimal("0.25")
+
+        min_fraction = Decimal("0.01")
+        max_fraction = Decimal("0.05")
+
+        final_fraction = max(min_fraction, min(quarter_kelly, max_fraction))
+
+        kelly_size = bankroll * final_fraction
+
+        min_size = Decimal(
+            str(self.config.get("min_copy_size", bankroll * min_fraction))
+        )
+        max_size = Decimal(
+            str(self.config.get("max_copy_size", bankroll * max_fraction))
+        )
+
+        if kelly_size < min_size:
+            logger.debug(
+                "kelly_size_below_min",
+                kelly_size=str(kelly_size),
+                min_size=str(min_size),
+            )
+            return Decimal("0")
+
+        result = min(kelly_size, max_size)
+
+        logger.info(
+            "kelly_size_calculated",
+            whale=signal.address[:10],
+            win_rate=str(win_probability),
+            payout=str(payout_ratio),
+            kelly_fraction=str(kelly_fraction),
+            quarter_kelly=str(quarter_kelly),
+            final_fraction=str(final_fraction),
+            size=str(result),
+            bankroll=str(bankroll),
+        )
+
+        return result
+
+    def _calculate_proportional_size(self, signal: WhaleSignal) -> Decimal:
+        """Calculate proportional copy size based on whale conviction.
+
+        Fallback method when whale stats unavailable.
+
+        Args:
+            signal: The whale trade signal
+
+        Returns:
+            Calculated copy size in USD, or 0 if below minimum
+        """
         whale_balances = self.config.get("whale_balances", {})
         whale_balance = Decimal(
             str(
                 whale_balances.get(
                     signal.address,
-                    100000,  # Default estimate if unknown
+                    100000,
                 )
             )
         )
 
-        # Calculate conviction ratio
         conviction = signal.amount / whale_balance
-
-        # Apply to our capital
         my_balance = Decimal(str(self.config.get("copy_capital", Decimal("70.0"))))
         base_size = my_balance * conviction
 
-        # Apply limits
         min_size = Decimal(str(self.config.get("min_copy_size", Decimal("5.0"))))
         max_size = Decimal(str(self.config.get("max_copy_size", Decimal("20.0"))))
 
         if base_size < min_size:
-            return Decimal("0")  # Too small
+            return Decimal("0")
 
         return min(base_size, max_size)
 
