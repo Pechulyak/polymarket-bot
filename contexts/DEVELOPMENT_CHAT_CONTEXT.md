@@ -9,7 +9,18 @@ High-frequency arbitrage trading bot для Polymarket prediction markets с н�
 1. **Copy Trading (70%)** — копирование сделок успешных трейдеров (китов)
 2. **Cross-Platform Arbitrage (25%)** — арбитраж между Polymarket и другими платформами
 
-### Технологический стек
+### Текущий Статус Проекта (2026-02-13):
+- API Key: 31ca7c79-d501-c84b-8605-ab0e955ddf5c
+- Wallet: 0x55826e52129F4014Bdb02F6ffc42C34D299F8CbE
+- Balance: $9.90 USDC
+- Win rate: 3-45% (низкий, нужна интеграция whale detection)
+- Блокер: Builder API нужен для автоматических ордеров
+
+### Whale Detection Система:
+- Таблицы БД: `whales`, `whale_trades` (готовы в init_db.sql)
+- Data API: GET /positions?user=0xADDRESS, GET /trades?user=0xADDRESS
+- Критерии quality whale: win_rate >60%, 100+ trades, $50+ avg size
+- docs/research/whale_detection_guide.md создан
 - **Python 3.11+** — основной язык
 - **Web3.py** — взаимодействие с блокчейном
 - **aiohttp** — async HTTP клиент
@@ -28,6 +39,7 @@ High-frequency arbitrage trading bot для Polymarket prediction markets с н�
 - Polymarket Client
 - WebSocket Manager
 - Data ingestion modules
+- **Whale Tracker** (NEW)
 
 ✅ **Интеграция API:**
 - Polymarket CLOB API

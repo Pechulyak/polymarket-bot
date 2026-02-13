@@ -1,5 +1,50 @@
 # Master Changelog
 
+## [MILESTONE] v0.5.0 - 2026-02-13 - Polymarket Wallet Integration
+
+### 🎯 Current Status
+
+#### Wallet Configuration (ACTIVE)
+| Component | Address | Notes |
+|-----------|---------|-------|
+| **MetaMask Proxy** (Polymarket) | `0x55826e52129F4014Bdb02F6FFC42C34D299F8CbE` | Used for trading |
+| **MetaMask EOA** (signing) | `0x58Aa55659FC6134BcFE43D3a4a59d1a3Cd40BAD1` | Signs transactions |
+| **Private Key** | `0x28a5ed9da8a7ba...` | In `.env` file |
+
+#### API Credentials (ACTIVE)
+- **API Key**: `31ca7c79-d501-c84b-8605-ab0e955ddf5c`
+- **API Secret**: `72aBldVc6GJJGEnhhC9jNGbTfnYrxQwxV6NRqy2hhFo=`
+- **Passphrase**: `19e7ad7f7b9b45b7561f1175827995acb5ab092ceaa013bc3c156d034d878513`
+
+#### Balance Status
+| Type | Amount |
+|------|--------|
+| USDC (Polygon) | $9.90 |
+| Current Position | 1.7241 shares (Dortmund Over 2.5, ~$0.99) |
+
+### ⚠️ LIMITATIONS
+
+#### Current Trading Method: MANUAL + UI
+- ✅ Can read markets, prices, positions via API
+- ✅ Can place orders manually through Polymarket UI
+- ❌ **Cannot place orders programmatically** - API returns "invalid signature" error
+- ❌ MetaMask confirmation required for automated trading
+
+#### Why Automated Trading Blocked
+1. MetaMask requires transaction confirmation (cannot be disabled)
+2. API credentials work for reading data but signature for orders fails
+3. **Solution requires**: Polymarket Builder API for gasless/proxy transactions
+
+#### Next Steps for Automation
+1. Apply for [Polymarket Builders Program](https://builders.polymarket.com)
+2. Get Builder API credentials (for gasless transactions)
+3. Use Relayer for automated trading without MetaMask
+
+### 📝 Files Updated
+- `.env` - Updated with MetaMask proxy wallet credentials
+
+---
+
 ## [MILESTONE] v0.2.0 - 2026-02-11 - Polymarket Integration Complete
 
 ### 🎯 Goals Achieved

@@ -431,7 +431,6 @@ async def run_demo_paper_trading():
     print(f"  Win Rate > 60%: {criteria['win_rate_above_min']}")
     print(f"  Consecutive Losses ≤ 3: {criteria['consecutive_losses_acceptable']}")
     print(f"  ALL CRITERIA MET: {criteria['all_criteria_met']}")
-    print()
 
     return runner
 

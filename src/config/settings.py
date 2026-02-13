@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # API Keys
     polymarket_api_key: str = ""
     polymarket_api_secret: str = ""
+    polymarket_passphrase: str = ""
+    polymarket_private_key: str = ""
+    polymarket_funder_address: str = ""
     bybit_api_key: str = ""
     bybit_api_secret: str = ""
 
@@ -59,6 +62,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "allow"
 
 
 settings = Settings()

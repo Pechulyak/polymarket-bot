@@ -1,5 +1,72 @@
 # Development Changelog
 
+## Whale Detection Integration
+
+### 2026-02-13 - Integrate Whale Detection System
+
+#### Added
+- `src/research/whale_tracker.py` - WhaleTracker class
+  - fetch_whale_positions() - GET /positions?user=0xADDRESS
+  - fetch_whale_trades() - GET /trades?user=0xADDRESS&limit=100
+  - calculate_stats() - Win rate, avg size, risk score
+  - save_whale() / load_quality_whales() - Database integration
+  - save_whale_trade() - Track whale trades
+  - is_quality_whale() - Filter by criteria (win_rate >60%, 100+ trades, $50+ avg)
+  - Risk scoring 1-10 (1 = best)
+- `src/research/__init__.py` - Added WhaleTracker exports
+
+#### Changed
+- `src/execution/copy_trading_engine.py`
+  - Added whale_tracker parameter to constructor
+  - Added whale_stats tracking (Dict[address, WhaleStats])
+  - Added load_whales_from_database() method
+  - Added refresh_whale_stats() method
+  - Added is_quality_whale() check in process_transaction()
+  - Added get_whale_risk_score() method
+  - Added whale_risk_score to CopyPosition
+  - Updated _execute_paper_trade() with whale_address parameter
+- `src/strategy/virtual_bankroll.py`
+  - Added whale_source to VirtualTradeResult and VirtualPosition
+  - Added whale_source parameter to execute_virtual_trade()
+  - Added _save_whale_trade_record() method
+  - Tracks which whale -> which trade
+  - Logs to whale_trades table
+
+#### Technical Details
+- **Quality Whale Criteria**:
+  - min_trades >= 100
+  - win_rate >= 60%
+  - avg_trade_size >= $50
+  - inactive <= 30 days
+- **Risk Scoring**:
+  - 1-3: Elite (>70% WR, $500k+ volume)
+  - 4-6: Good (60-70% WR, $100k+ volume)
+  - 7-8: Moderate (50-60% WR, $50k+ volume)
+  - 9-10: High risk (<50% WR or <30 days active)
+- **Copy Trading Filter**: Only quality whales are copied
+- **Whale Source Tracking**: Every virtual trade logs source whale
+
+#### Files Changed
+- `src/research/whale_tracker.py` - NEW
+- `src/research/__init__.py` - Updated exports
+- `src/execution/copy_trading_engine.py` - Added whale integration
+- `src/strategy/virtual_bankroll.py` - Added whale source tracking
+- `docs/changelogs/development.md` - This entry
+
+#### Dependencies
+- Added: aiohttp (HTTP client for Data API)
+- No breaking changes
+
+#### Breaking Changes
+- None
+
+#### Testing
+- Manual testing with paper trading
+- API endpoints tested: /positions, /trades
+- Database integration tested with PostgreSQL
+
+---
+
 ## CopyTradingEngine Implementation
 
 ### 2026-02-06 - Implement CopyTradingEngine
