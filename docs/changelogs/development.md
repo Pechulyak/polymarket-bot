@@ -1,5 +1,42 @@
 # Development Changelog
 
+## Real-time Whale Tracking
+
+### 2026-02-13 - Real-time Whale Monitor with WebSocket
+
+#### Added
+- `src/research/real_time_whale_monitor.py` - RealTimeWhaleMonitor class
+  - WebSocket connection to Polymarket
+  - Real-time trade detection from WebSocket messages
+  - Configurable min_trade_size filter (default $100)
+  - Delay tracking (trade time → detection time)
+  - Alert when delay > 10 seconds
+  - Database logging of whale signals
+  - WhaleSignalBuffer for deduplication
+
+#### Changed
+- `src/execution/copy_trading_engine.py`
+  - Added process_whale_signal() method
+  - Added _calculate_copy_size_from_signal() method
+  - Integration with RealTimeWhaleMonitor
+  - Delay logging in trade execution
+
+#### Technical Details
+- **Target Latency**: 5-10 seconds from whale trade to our execution
+- **Max Acceptable Delay**: 10 seconds (alerts triggered above)
+- **Signal Flow**: WebSocket → Monitor → CopyEngine → Execution
+- **Deduplication**: 5-second window to avoid duplicate signals
+
+#### Files Changed
+- `src/research/real_time_whale_monitor.py` - NEW
+- `src/research/__init__.py` - Updated exports
+- `src/execution/copy_trading_engine.py` - Signal processing
+
+#### Testing
+- ruff check: passed
+
+---
+
 ## Kelly Criterion Integration
 
 ### 2026-02-13 - Integrate Kelly Criterion for Position Sizing
