@@ -102,6 +102,69 @@
 
 ---
 
+## [2026-02-13] - Polymarket Builder API Research
+
+### Research Question
+Как получить Builder API key для автоматических gasless ордеров?
+
+### Status
+✅ COMPLETE - Процесс документирован
+
+### Analyzed
+- Официальная документация Polymarket Builder Program
+- Builder Tiers и лимиты
+- Процесс создания ключей
+- Альтернативы (Safe Wallet, Direct PK, Custom Relayer)
+
+### Findings
+
+#### Builder API Benefits
+- Gasless transactions - Polymarket платит gas
+- Order attribution - ордера атрибутируются к builder
+- Fee share - доля от комиссий
+- Safe/Proxy wallets - авто-деплой кошельков
+
+#### Builder Tiers
+| Tier | Daily Limit | Notes |
+|------|-------------|-------|
+| Unverified | 100/day | Permissionless (доступен всем) |
+| Verified | 3,000/day | Требует approval |
+| Partner | Unlimited | Partnership |
+
+#### Как получить ключ
+1. Перейти: polymarket.com/settings?tab=builder
+2. Builder Keys → Create Key
+3. Получить: key, secret, passphrase
+
+#### Альтернативы
+- Safe Wallet: multi-sig, не gasless
+- Direct Private Key: менее безопасно
+- Custom Relayer: своя инфраструктура
+
+### Breaking Changes / Blockers
+- **NONE**: Builder API permissionless (Unverified tier доступен всем)
+
+### Recommendations
+1. ✅ Создать Builder API key через polymarket.com/settings?tab=builder
+2. ✅ Начать с Unverified tier (100/day достаточно для тестов)
+3. ⚠️ Для production: подать заявку на Verified tier
+
+### Data Sources
+1. [Builder Program](https://docs.polymarket.com/developers/builders/builder-intro) - Official docs
+2. [Builder Tiers](https://docs.polymarket.com/developers/builders/builder-tiers) - Rate limits
+3. [Builder Profile & Keys](https://docs.polymarket.com/developers/builders/builder-profile) - Key creation
+4. [Builder Signing SDK](https://github.com/Polymarket/builder-signing-sdk) - GitHub
+
+### Deliverables
+- ✅ `docs/research/polymarket_api_guide.md` - Обновлён с Builder API секцией
+- ✅ `docs/changelogs/research.md` - Этот entry
+
+### Impact
+- **HIGH**: Позволяет автоматизировать торговлю (gasless)
+- Блокер устранён: Builder API доступен без верификации
+
+---
+
 ## [2026-02-07] - Polymarket API Key Research
 
 ### Research Question
