@@ -1,5 +1,46 @@
 # Development Changelog
 
+## Kelly Criterion Integration
+
+### 2026-02-13 - Integrate Kelly Criterion for Position Sizing
+
+#### Added
+- `tests/unit/test_kelly.py` - Kelly Criterion tests
+  - calculate_kelly_fraction() - Kelly formula: f* = (b*p - q) / b
+  - calculate_kelly_size() - Kelly with limits
+  - 15 test cases covering edge cases
+
+#### Changed
+- `src/execution/copy_trading_engine.py`
+  - Replaced _calculate_copy_size() with Kelly-based calculation
+  - Added _calculate_proportional_size() as fallback
+  - Uses whale win_rate as p (probability)
+  - Uses payout ratio (1/price) as b (odds)
+  - Quarter Kelly (0.25 multiplier) for safety
+  - Min position: 1% bankroll
+  - Max position: 5% bankroll
+
+#### Technical Details
+- **Kelly Formula**: f* = (b * p - q) / b
+  - b = payout_ratio - 1 (net odds)
+  - p = win probability (whale's win_rate)
+  - q = 1 - p
+- **Safety Limits**:
+  - Quarter Kelly (0.25x) reduces volatility
+  - Max 5% bankroll per trade
+  - Min 1% bankroll per trade
+- **Fallback**: Proportional sizing when whale stats unavailable
+
+#### Files Changed
+- `src/execution/copy_trading_engine.py` - Kelly integration
+- `tests/unit/test_kelly.py` - 15 tests
+
+#### Testing
+- pytest tests/unit/test_kelly.py: 15/15 passed
+- ruff check: passed
+
+---
+
 ## Whale Detection Integration
 
 ### 2026-02-13 - Integrate Whale Detection System
