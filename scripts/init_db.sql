@@ -151,6 +151,48 @@ INSERT INTO fee_schedule (exchange, fee_type, fee_percentage, fixed_fee, currenc
 ('ethereum', 'gas', NULL, NULL, 'ETH')
 ON CONFLICT DO NOTHING;
 
+-- Whales tracking table
+CREATE TABLE IF NOT EXISTS whales (
+    id SERIAL PRIMARY KEY,
+    wallet_address VARCHAR(66) NOT NULL UNIQUE,
+    first_seen_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    total_trades INTEGER NOT NULL DEFAULT 0,
+    win_rate DECIMAL(5, 4) NOT NULL DEFAULT 0,
+    total_profit_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    avg_trade_size_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    last_active_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    risk_score INTEGER NOT NULL DEFAULT 5 CHECK (risk_score >= 1 AND risk_score <= 10),
+    
+    -- Additional metadata
+    source VARCHAR(50),
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_whales_address ON whales(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_whales_winrate ON whales(win_rate DESC);
+CREATE INDEX IF NOT EXISTS idx_whales_active ON whales(is_active, last_active_at);
+CREATE INDEX IF NOT EXISTS idx_whales_risk ON whales(risk_score);
+
+-- Whale trades history (for analysis)
+CREATE TABLE IF NOT EXISTS whale_trades (
+    id SERIAL PRIMARY KEY,
+    whale_id INTEGER NOT NULL REFERENCES whales(id),
+    market_id VARCHAR(255) NOT NULL,
+    side VARCHAR(10) NOT NULL CHECK (side IN ('buy', 'sell')),
+    size_usd DECIMAL(20, 8) NOT NULL,
+    price DECIMAL(20, 8) NOT NULL,
+    outcome VARCHAR(50),
+    is_winner BOOLEAN,
+    profit_usd DECIMAL(20, 8),
+    traded_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_whale_trades_whale ON whale_trades(whale_id, traded_at);
+CREATE INDEX IF NOT EXISTS idx_whale_trades_market ON whale_trades(market_id, traded_at);
+
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
 VALUES (100.00, 0, 100.00, 0, 0);

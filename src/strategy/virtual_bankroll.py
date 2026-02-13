@@ -21,8 +21,7 @@ Example:
     >>> print(result.pnl)
 """
 
-import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Optional
@@ -52,6 +51,7 @@ class VirtualTradeResult:
         opened_at: Timestamp when position was opened
         closed_at: Timestamp when position was closed (None if open)
         strategy: Strategy that generated this trade
+        whale_source: Source whale address (if copy trading)
     """
 
     trade_id: str
@@ -66,6 +66,7 @@ class VirtualTradeResult:
     opened_at: datetime
     closed_at: Optional[datetime] = None
     strategy: str = "unknown"
+    whale_source: str = ""
 
 
 @dataclass
@@ -82,6 +83,7 @@ class VirtualPosition:
         gas_cost: Gas cost on entry
         opened_at: Timestamp when position was opened
         strategy: Strategy that opened this position
+        whale_source: Source whale address (if copy trading)
     """
 
     trade_id: str
@@ -93,6 +95,7 @@ class VirtualPosition:
     gas_cost: Decimal
     opened_at: datetime
     strategy: str
+    whale_source: str = ""
 
 
 @dataclass
@@ -207,6 +210,7 @@ class VirtualBankroll:
         total_fees: Decimal = Decimal("0"),
         fiat_fees: Decimal = Decimal("0"),
         opportunity_id: Optional[str] = None,
+        whale_source: str = "",
     ) -> None:
         """Save virtual trade to PostgreSQL.
 
@@ -330,6 +334,70 @@ class VirtualBankroll:
         finally:
             session.close()
 
+    async def _save_whale_trade_record(
+        self,
+        whale_address: str,
+        market_id: str,
+        side: str,
+        size_usd: Decimal,
+        price: Decimal,
+    ) -> None:
+        """Save whale trade record for tracking copy trading source.
+
+        Args:
+            whale_address: Source whale wallet address
+            market_id: Market identifier
+            side: Trade side
+            size_usd: Trade size in USD
+            price: Execution price
+        """
+        await self._ensure_database()
+
+        if not self._Session or not whale_address:
+            return
+
+        session = self._Session()
+        try:
+            query = text("""
+                SELECT id FROM whales WHERE wallet_address = :address
+            """)
+            result = session.execute(query, {"address": whale_address.lower()})
+            row = result.fetchone()
+
+            if not row:
+                logger.debug("whale_not_in_database", address=whale_address[:10])
+                return
+
+            whale_id = row[0]
+
+            insert_query = text("""
+                INSERT INTO whale_trades (
+                    whale_id, market_id, side, size_usd, price, traded_at
+                ) VALUES (
+                    :whale_id, :market_id, :side, :size_usd, :price, NOW()
+                )
+            """)
+            session.execute(
+                insert_query,
+                {
+                    "whale_id": whale_id,
+                    "market_id": market_id,
+                    "side": side,
+                    "size_usd": float(size_usd),
+                    "price": float(price),
+                },
+            )
+            session.commit()
+            logger.debug(
+                "whale_trade_recorded", whale_id=whale_id, market=market_id[:20]
+            )
+
+        except Exception as e:
+            logger.error("whale_trade_save_failed", error=str(e))
+            session.rollback()
+        finally:
+            session.close()
+
     async def execute_virtual_trade(
         self,
         market_id: str,
@@ -339,6 +407,7 @@ class VirtualBankroll:
         strategy: str,
         fees: Decimal = Decimal("0.00"),
         gas: Decimal = Decimal("0.00"),
+        whale_source: str = "",
     ) -> VirtualTradeResult:
         """Execute a virtual trade (does NOT execute real trade).
 
@@ -352,6 +421,7 @@ class VirtualBankroll:
             strategy: Trading strategy name
             fees: Trading commission (default: $0)
             gas: Gas cost (default: $0)
+            whale_source: Source whale address for copy trading tracking
 
         Returns:
             VirtualTradeResult with trade details
@@ -385,6 +455,7 @@ class VirtualBankroll:
                 gas_cost=gas,
                 opened_at=now,
                 strategy=strategy,
+                whale_source=whale_source,
             )
             self._open_positions[market_id] = position
             net_pnl = Decimal("0")
@@ -405,7 +476,6 @@ class VirtualBankroll:
 
                 self.balance += exit_value - fees - gas
                 is_open = False
-                closed_at = now
             else:
                 raise ValueError(f"No open position for market {market_id}")
         else:
@@ -437,6 +507,7 @@ class VirtualBankroll:
             opened_at=now,
             closed_at=now if not is_open else None,
             strategy=strategy,
+            whale_source=whale_source,
         )
 
         total_fees = (
@@ -460,7 +531,17 @@ class VirtualBankroll:
             strategy=result.strategy,
             gross_pnl=gross_pnl,
             total_fees=total_fees,
+            whale_source=whale_source,
         )
+
+        if whale_source:
+            await self._save_whale_trade_record(
+                whale_address=whale_source,
+                market_id=market_id,
+                side=side.lower(),
+                size_usd=size,
+                price=price,
+            )
 
         await self._save_bankroll_history(
             balance=self.balance, trade_id=trade_id, action=f"trade_{side.lower()}"
@@ -476,6 +557,7 @@ class VirtualBankroll:
             new_balance=str(self.balance),
             is_open=is_open,
             strategy=strategy,
+            whale_source=whale_source[:10] if whale_source else "",
         )
 
         return result
@@ -547,6 +629,7 @@ class VirtualBankroll:
             opened_at=position.opened_at,
             closed_at=now,
             strategy=position.strategy,
+            whale_source=position.whale_source,
         )
 
         await self._save_virtual_trade(
@@ -564,7 +647,17 @@ class VirtualBankroll:
             strategy=result.strategy,
             gross_pnl=gross_pnl,
             total_fees=total_fees,
+            whale_source=position.whale_source,
         )
+
+        if position.whale_source:
+            await self._save_whale_trade_record(
+                whale_address=position.whale_source,
+                market_id=market_id,
+                side="sell" if position.side == "buy" else "buy",
+                size_usd=position.size,
+                price=close_price,
+            )
 
         await self._save_bankroll_history(
             balance=self.balance, trade_id=position.trade_id, action="position_close"
@@ -578,6 +671,7 @@ class VirtualBankroll:
             close_price=str(close_price),
             pnl=str(net_pnl),
             new_balance=str(self.balance),
+            whale_source=position.whale_source[:10] if position.whale_source else "",
         )
 
         return result

@@ -31,10 +31,12 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 import structlog
 from web3 import Web3
+
+from research.whale_tracker import WhaleTracker, WhaleStats
 
 logger = structlog.get_logger(__name__)
 
@@ -75,6 +77,7 @@ class CopyPosition:
         entry_price: Entry price
         size: Position size in USD
         whale_address: Address of whale being copied
+        whale_risk_score: Risk score of whale (1-10)
         entry_time: Unix timestamp of entry
         pnl: Realized PnL (updated on exit)
         exit_price: Exit price (set on close)
@@ -85,7 +88,8 @@ class CopyPosition:
     entry_price: Decimal
     size: Decimal
     whale_address: str
-    entry_time: float
+    whale_risk_score: int = 5
+    entry_time: float = field(default_factory=lambda: datetime.now().timestamp())
     pnl: Decimal = Decimal("0")
     exit_price: Optional[Decimal] = None
     exit_time: Optional[float] = None
@@ -103,7 +107,6 @@ class CopyTradingEngine:
         mode: Trading mode ("paper" or "live")
     """
 
-    # Polymarket CLOB contract (Polygon mainnet)
     CLOB_ADDRESS = "0x4bFb41d5B3570DeFd03C39a9A4dE6Bd8B8982E"
 
     def __init__(
@@ -114,6 +117,7 @@ class CopyTradingEngine:
         w3: Optional[Web3] = None,
         mode: str = "paper",
         virtual_bankroll: Optional[Any] = None,
+        whale_tracker: Optional[WhaleTracker] = None,
     ) -> None:
         """Initialize Copy Trading Engine.
 
@@ -129,6 +133,7 @@ class CopyTradingEngine:
             w3: Optional Web3 instance for transaction decoding
             mode: Trading mode ("paper" or "live")
             virtual_bankroll: Optional VirtualBankroll instance for paper trading
+            whale_tracker: Optional WhaleTracker instance for whale data
         """
         self.config = config
         self.risk_manager = risk_manager
@@ -136,10 +141,29 @@ class CopyTradingEngine:
         self.w3 = w3
         self.mode = mode
         self.virtual_bankroll = virtual_bankroll
+        self.whale_tracker = whale_tracker
 
-        # Tracked whales (lowercase for comparison)
         self.tracked_whales: Set[str] = set(
             addr.lower() for addr in config.get("whale_addresses", [])
+        )
+
+        self.whale_stats: Dict[str, WhaleStats] = {}
+
+        self.whale_positions: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+        self.positions: Dict[str, CopyPosition] = {}
+
+        self.stats: Dict[str, Union[int, Decimal]] = {
+            "signals_processed": 0,
+            "trades_executed": 0,
+            "positions_closed": 0,
+            "total_pnl": Decimal("0"),
+        }
+
+        self.clob_abi = self._get_clob_abi()
+
+        logger.info(
+            "copy_trading_engine_initialized",
         )
 
         # Whale position tracking (what whales currently hold)
@@ -178,17 +202,22 @@ class CopyTradingEngine:
         """
         self.stats["signals_processed"] += 1
 
-        # Check if from tracked whale
         sender = tx.get("from", "").lower()
         if sender not in self.tracked_whales:
             return None
 
-        # Check if to CLOB contract
+        if not self.is_quality_whale(sender):
+            logger.debug(
+                "whale_not_quality",
+                whale=sender[:10],
+                reason="below quality threshold",
+            )
+            return None
+
         to_addr = tx.get("to", "").lower()
         if to_addr != self.CLOB_ADDRESS.lower():
             return None
 
-        # Decode the trade
         signal = self._decode_trade(tx, sender)
         if not signal:
             logger.debug(
@@ -207,14 +236,11 @@ class CopyTradingEngine:
             market=signal.market_id[:20],
         )
 
-        # Determine if opening or closing
         signal.is_opening = self._is_opening_trade(signal)
 
         if not signal.is_opening:
-            # Whale is closing - check if we should exit too
             return await self._handle_whale_exit(signal)
 
-        # Calculate copy size
         copy_size = self._calculate_copy_size(signal)
         if copy_size == Decimal("0"):
             logger.info(
@@ -224,7 +250,6 @@ class CopyTradingEngine:
             )
             return None
 
-        # Risk check
         can_trade, reason = self.risk_manager.can_trade(
             market_id=signal.market_id, size=float(copy_size), strategy="copy"
         )
@@ -236,7 +261,6 @@ class CopyTradingEngine:
             )
             return None
 
-        # Execute copy trade
         logger.info(
             "executing_copy_trade",
             side=signal.side,
@@ -252,6 +276,7 @@ class CopyTradingEngine:
                 size=copy_size,
                 price=signal.price,
                 strategy="copy",
+                whale_address=sender,
             )
         else:
             result = await self.executor.execute(
@@ -267,23 +292,23 @@ class CopyTradingEngine:
             side=signal.side,
             size=float(copy_size),
             price=float(signal.price),
-            mode="rest",  # Copy trading uses REST (latency less critical)
+            mode="rest",
         )
 
         if result.get("success"):
             self.stats["trades_executed"] += 1
 
-            # Track our position
             fill_price = Decimal(str(result.get("fill_price", signal.price)))
+            whale_risk_score = self.get_whale_risk_score(sender)
             self.positions[signal.market_id] = CopyPosition(
                 market_id=signal.market_id,
                 entry_price=fill_price,
                 size=copy_size,
-                whale_address=signal.address,
+                whale_address=sender,
+                whale_risk_score=whale_risk_score,
                 entry_time=asyncio.get_event_loop().time(),
             )
 
-            # Update whale position tracking
             self._update_whale_position(signal)
 
             logger.info(
@@ -291,12 +316,19 @@ class CopyTradingEngine:
                 order_id=result.get("order_id"),
                 fill_price=str(fill_price),
                 size=str(copy_size),
+                whale_risk_score=whale_risk_score,
             )
 
         return result
 
     async def _execute_paper_trade(
-        self, market_id: str, side: str, size: Decimal, price: Decimal, strategy: str
+        self,
+        market_id: str,
+        side: str,
+        size: Decimal,
+        price: Decimal,
+        strategy: str,
+        whale_address: str = "",
     ) -> Dict[str, Any]:
         """Execute a virtual trade in paper mode.
 
@@ -308,6 +340,7 @@ class CopyTradingEngine:
             size: Position size in USD
             price: Execution price
             strategy: Trading strategy name
+            whale_address: Source whale address for tracking
 
         Returns:
             Dict with success status and trade details
@@ -328,6 +361,7 @@ class CopyTradingEngine:
                 strategy=strategy,
                 fees=fees,
                 gas=gas,
+                whale_source=whale_address,
             )
 
             logger.info(
@@ -338,6 +372,7 @@ class CopyTradingEngine:
                 size=str(size),
                 price=str(price),
                 new_balance=str(self.virtual_bankroll.balance),
+                whale_address=whale_address[:10] if whale_address else "",
             )
 
             return {
@@ -662,6 +697,120 @@ class CopyTradingEngine:
             List of lowercase whale addresses
         """
         return list(self.tracked_whales)
+
+    async def load_whales_from_database(
+        self,
+        database_url: str,
+        min_win_rate: Decimal = Decimal("0.60"),
+        min_trades: int = 100,
+        max_risk_score: int = 6,
+    ) -> List[WhaleStats]:
+        """Load quality whales from database.
+
+        Args:
+            database_url: PostgreSQL connection URL
+            min_win_rate: Minimum win rate (default: 60%)
+            min_trades: Minimum total trades (default: 100)
+            max_risk_score: Maximum risk score (default: 6)
+
+        Returns:
+            List of qualified WhaleStats
+        """
+        if not self.whale_tracker:
+            self.whale_tracker = WhaleTracker(database_url=database_url)
+
+        whales = await self.whale_tracker.load_quality_whales(
+            min_win_rate=min_win_rate,
+            min_trades=min_trades,
+            max_risk_score=max_risk_score,
+        )
+
+        self.whale_stats = {w.wallet_address.lower(): w for w in whales}
+        self.tracked_whales = set(self.whale_stats.keys())
+
+        logger.info(
+            "whales_loaded_from_database",
+            count=len(whales),
+            min_win_rate=str(min_win_rate),
+            min_trades=min_trades,
+            max_risk_score=max_risk_score,
+        )
+
+        return whales
+
+    async def refresh_whale_stats(self) -> None:
+        """Refresh statistics for all tracked whales from API."""
+        if not self.whale_tracker:
+            logger.warning("whale_tracker_not_configured")
+            return
+
+        for address in list(self.tracked_whales):
+            try:
+                stats = await self.whale_tracker.calculate_stats(address)
+                self.whale_stats[address.lower()] = stats
+
+                await self.whale_tracker.save_whale(stats)
+
+                logger.debug(
+                    "whale_stats_refreshed",
+                    address=address[:10],
+                    win_rate=str(stats.win_rate),
+                    risk_score=stats.risk_score,
+                )
+
+            except Exception as e:
+                logger.error(
+                    "whale_stats_refresh_failed",
+                    address=address[:10],
+                    error=str(e),
+                )
+
+            await asyncio.sleep(0.5)
+
+    def get_whale_risk_score(self, address: str) -> int:
+        """Get risk score for a whale.
+
+        Args:
+            address: Whale wallet address
+
+        Returns:
+            Risk score 1-10 (1 = best), default 5 if unknown
+        """
+        stats = self.whale_stats.get(address.lower())
+        return stats.risk_score if stats else 5
+
+    def is_quality_whale(self, address: str) -> bool:
+        """Check if address is a quality whale.
+
+        Args:
+            address: Whale wallet address
+
+        Returns:
+            True if whale meets quality criteria
+        """
+        stats = self.whale_stats.get(address.lower())
+        if not stats:
+            return False
+
+        if self.whale_tracker:
+            return self.whale_tracker.is_quality_whale(stats)
+
+        return stats.win_rate >= Decimal("0.60") and stats.total_trades >= 100
+
+    async def get_whale_positions(self, address: str) -> List[Any]:
+        """Fetch current positions for a whale.
+
+        Args:
+            address: Whale wallet address
+
+        Returns:
+            List of whale positions
+        """
+        if not self.whale_tracker:
+            logger.warning("whale_tracker_not_configured")
+            return []
+
+        return await self.whale_tracker.fetch_whale_positions(address)
 
     def get_positions(self) -> Dict[str, CopyPosition]:
         """Get current copy positions.

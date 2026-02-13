@@ -1,5 +1,61 @@
 # Changelog - Testing
 
+## [2026-02-13] - Whale Paper Trading Simulation
+
+### Simulation Results
+
+**Configuration:**
+- Initial Balance: $100
+- Target: $125 (25% ROI)
+- Whale Win Rate: 65%
+- Whale Avg Payout: 4%
+- Trades/Day: 5
+- Duration: 7 days
+
+### Results
+
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| Final Balance | $70.34 | ≥ $125.00 | ❌ |
+| Win Rate | 71.4% | ≥ 60% | ✅ |
+| Max Consecutive Losses | 3 | ≤ 3 | ✅ |
+| Total Trades | 35 | - | - |
+| ROI | -29.66% | +25% | ❌ |
+
+### Analysis
+- Win rate target met (71.4% > 60%)
+- Consecutive losses within limit (3)
+- **Problem**: Balance dropped due to losses exceeding wins
+- Need better position sizing (Kelly Criterion) or higher payouts
+
+### Next Steps
+1. Implement Kelly Criterion for position sizing
+2. Increase win rate simulation to 70%+
+3. Add stop-loss mechanism
+
+---
+
+## [2026-02-13] - Real Trading Integration
+
+### Wallet & API Status
+
+**Active Configuration:**
+- MetaMask Proxy: `0x55826e52129F4014Bdb02F6FFC42C34D299F8CbE`
+- API Key: `31ca7c79-d501-c84b-8605-ab0e955ddf5c`
+- Balance: $9.90 USDC
+
+**Test Results:**
+- ✅ API authentication working
+- ✅ Can read markets, prices, positions
+- ✅ Manual orders via UI work
+- ❌ Programmatic orders fail ("invalid signature")
+- ⚠️ MetaMask confirmation blocks automation
+
+### Current Limitation
+Automated trading requires Polymarket Builder API (for gasless proxy transactions). Manual trading through UI works.
+
+---
+
 ## [2026-02-11] - Real Market Paper Trading Integration
 
 ### Polymarket API Integration
