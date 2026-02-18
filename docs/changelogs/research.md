@@ -1,5 +1,48 @@
 # Changelog - Research
 
+## [2026-02-13] - Whale Address Discovery Methods
+
+### Research Question
+Как получить адреса китов без предварительного знания? WebSocket не даёт адреса.
+
+### Status
+✅ COMPLETE - Найден способ получения всех сделок с адресами
+
+### Findings
+
+#### 1. Bitquery (РЕКОМЕНДУЕТСЯ)
+- GraphQL API для Polymarket на Polygon
+- Получить ВСЕ сделки с адресами трейдеров
+- Real-time данные
+- Smart Contracts:
+  - CTF Exchange: 0xC5d563A36AE78145C45a50134d48A1215220f80a
+  - Legacy: 0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
+- Rate limits: 10,000 credits/day (free tier)
+- Docs: docs.bitquery.io/docs/examples/polymarket-api/
+
+#### 2. Dune Analytics
+- SQL queries для топ трейдеров по объёму
+- dune.com/polymarket_analytics
+- Требует аккаунт
+
+#### 3. Subgraph (The Graph)
+- 6c58N5U4MtQE2Y8njfVrrAfRykzfqajMGeTMEvMmskVz
+- Ограничено: нужно знать адрес заранее
+
+### Recommendations
+1. ✅ Использовать Bitquery для обнаружения китов
+2. ✅ Фильтровать по size > $1000 для whale сделок
+3. ✅ Агрегировать по адресу для расчёта статистики
+
+### Deliverables
+- ✅ `docs/research/whale_detection_guide.md` - Обновлён с Bitquery секцией
+- ✅ `docs/changelogs/research.md` - Этот entry
+
+### Impact
+- **HIGH**: Теперь можем обнаруживать китов без предварительного списка
+
+---
+
 ## [2026-02-13] - Real Whales Discovery
 
 ### Research Question
