@@ -1,5 +1,221 @@
 # Development Changelog
 
+### 2026-02-18 - WebSocket Subscription FIXED - Real-time Data Flowing
+
+#### ✅ COMPLETED - Whale Detection Now Receiving Live Data
+
+- **Root Cause Found**: 
+  - CLOB API (`clob.polymarket.com/markets`) returns OLD historical markets (2022-2024)
+  - Solution: Use Gamma API (`gamma-api.polymarket.com/events?closed=false`) for current markets
+
+#### Fixed
+- `src/run_whale_detection.py`
+  - Added `fetch_active_token_ids()` using Gamma API
+  - Extracts `clobTokenIds` + `conditionId` for WebSocket subscription
+  - Subscribes to top 50 markets by default
+  - Auto-installs brotli package if missing
+
+- `src/data/ingestion/websocket_client.py`
+  - Fixed subscription format: `{"assets_ids": [...], "type": "market"}`
+  - Fixed PING interval: 5 seconds (not 10 as originally coded)
+  - Fixed message parsing for list responses `[{...}, {...}]`
+  - Added debug logging for message content
+
+- `src/research/real_time_whale_monitor.py`
+  - Fixed `_process_single_message()` to handle new WebSocket list format
+
+#### Results
+- 20 active events detected (2025-2026): Macron out, Trump deport, DOGE cut, UK election, etc.
+- 400+ token IDs collected
+- WebSocket subscribes to 50 markets
+- Real-time data flowing: price_changes, orderbook updates, trades
+
+#### Technical Details
+- **Gamma API**: `https://gamma-api.polymarket.com/events?closed=false`
+- **WebSocket**: `wss://ws-subscriptions-clob.polymarket.com/ws/market`
+- **Brotli**: Polymarket uses brotli compression - requires `brotli` Python package
+- **Message Format**: Server returns list `[{event_type: "trade"|"order"|"price_change", ...}]`
+- **PING**: 5 seconds (not 10 as documented)
+
+#### Testing
+- ruff check: passed
+- Live WebSocket: Connected and receiving data
+
+---
+
+### 2026-02-18 - Builder API Integration & Market Discovery
+
+#### Added
+- `src/execution/polymarket/builder_client.py` - NEW
+  - BuilderClient class for gasless transactions via Builder API
+  - Uses py-builder-signing-sdk when available
+  - Fallback to manual HMAC-SHA256 signing when SDK not available
+  - Order placement, cancellation, status checking
+  - Daily rate limit tracking (100 orders/day for unverified tier)
+  - BuilderClientWrapper for fallback execution
+  - create_builder_client_from_settings() factory function
+
+- `src/config/settings.py`
+  - Added builder_api_key, builder_api_secret, builder_api_passphrase
+  - Added builder_api_url and builder_enabled settings
+  - Added backwards compatibility for BUILDER_API_KEY env vars
+
+#### Changed
+- `src/execution/copy_trading_engine.py`
+  - Added builder_client parameter to constructor
+  - Added use_builder flag for Builder API mode
+  - Added _execute_live_trade() method with Builder fallback
+  - Updated process_transaction() to use Builder when available
+  - Updated _handle_whale_exit() to use Builder
+  - Updated process_whale_signal() to use Builder
+
+- `src/execution/polymarket/__init__.py`
+  - Added BuilderClient, BuilderClientWrapper, BuilderResult exports
+  - Added create_builder_client_from_settings factory
+
+#### Technical Details
+- **Builder API**: https://docs.polymarket.com/developers/builders/builder-intro
+- **SDK**: py-builder-signing-sdk (pip install py-builder-signing-sdk)
+- **Fallback**: Manual HMAC signing when SDK not available
+- **Gasless**: Works only for USDC transactions
+- **Rate Limit**: 100 orders/day (unverified tier)
+
+#### Testing
+- ruff check: passed
+- Builder client initialization: verified with .env credentials
+
+#### Market Discovery
+- Found AC Milan vs Como 1907 market (Feb 18, 2026)
+- Token IDs extracted from website HTML:
+  - Milan Win (Yes): `5923241876029574237270706547707492214117291808608009492162072960912385835013`
+  - Como Win (No): `100218648813557612339313522945200615767556058060573173479484795306287241494404`
+- Condition ID: `0xe1449910a5d1673873d00469c7fd4bd82e138914add104db9b0fa71fe67bab37`
+- Current prices: Milan 0.59, Como 0.41
+
+#### ⚠️ Known Issue - Geo-blocking
+- Polymarket API returns 403 "Trading restricted in your region"
+- Requires VPN/proxy to bypass geo-blocking
+- Even with VPN enabled on computer, API requests are blocked
+
+---
+
+### 2026-02-13 - WebSocket Subscription Fixed (v2)
+
+#### Fixed
+- `src/run_whale_detection.py`
+  - Fixed brotli encoding support (install brotli package)
+  - Fixed token extraction from CLOB API response structure (`tokens` array)
+  - Subscribe to top 50 markets by default
+  - Added proper UTF-8 encoding for Windows
+
+- `src/data/ingestion/websocket_client.py`
+  - Fixed subscription format: always use `{"assets_ids": [...], "type": "market"}`
+  - Added PING every 5 seconds (as per Polymarket docs)
+  - Added debug logging for message content
+
+#### Technical Details
+- Uses CLOB API: `https://clob.polymarket.com/markets?active=true`
+- Extracts token_ids from `market.tokens[].token_id`
+- WebSocket: `wss://ws-subscriptions-clob.polymarket.com/ws/market`
+- Server returns empty list `[]` when no activity on markets (normal)
+
+#### Testing
+- WebSocket connects successfully
+- Subscribes to 96 token IDs
+- No errors in logs
+
+#### Note
+- Empty responses from WebSocket are normal when no trading activity
+- Demo mode works for testing whale detection logic
+
+---
+
+### 2026-02-13 - WebSocket Subscription Fixed
+
+#### ✅ Working Components
+- `src/research/whale_tracker.py` - Polymarket Data API integration
+  - fetch_whale_positions(), fetch_whale_trades(), calculate_stats()
+  - Database integration for whale storage
+  - Quality filtering (win_rate >60%, 100+ trades)
+
+- `src/research/whale_detector.py` - Auto-detection
+  - Trade stream monitoring
+  - Quality scoring 1-10
+  - Auto-save to database
+
+- `src/run_whale_detection.py` - Launcher script
+  - Connects to WebSocket
+  - Processes whale signals
+  - Shows stats every 10 seconds
+
+#### ⚠️ Known Issues
+- WebSocket connects but no data received
+- Need to subscribe to specific markets
+- Demo mode works (test trades processed)
+
+#### Files Created/Modified
+- `src/research/whale_tracker.py` - NEW
+- `src/research/whale_detector.py` - NEW
+- `src/research/real_time_whale_monitor.py` - NEW
+- `src/data/ingestion/websocket_client.py` - Refactored
+- `src/run_whale_detection.py` - NEW
+- `src/execution/copy_trading_engine.py` - Added detector integration
+- `docs/changelogs/development.md` - Updated
+
+#### Testing
+- ruff check: passed
+- Demo mode: working (test trades processed)
+- Database: connected
+
+#### Next Steps (Not Implemented)
+- Get active markets list from API
+- Subscribe to markets via WebSocket
+- Real whale detection from live data
+
+---
+
+## Automatic Whale Detection
+
+### 2026-02-13 - Whale Detector Module
+
+#### Added
+- `src/research/whale_detector.py` - WhaleDetector class
+  - Automatic whale identification from trade streams
+  - Detection criteria:
+    - Large trades: >$50
+    - Repeated activity: 5+ trades/day
+    - Profitability tracking
+  - Quality scoring (1-10):
+    - Score 1-3: Elite (>70% WR, >$1000 volume)
+    - Score 4-6: Good (60-70% WR)
+    - Score 7-10: Need more data
+  - Auto-add to database with stats
+  - DetectedWhale, DetectionConfig dataclasses
+  - Real-time stats updates
+
+#### Changed
+- `src/research/__init__.py` - Added WhaleDetector exports
+- `src/execution/copy_trading_engine.py`
+  - Added integrate_whale_detector() method
+  - Added get_quality_whale_addresses() method
+
+#### Technical Details
+- **Min trade size**: $50 (configurable)
+- **Min trades for quality**: 10 (configurable)
+- **Daily trade threshold**: 5 (configurable)
+- **Quality win rate**: 60% (configurable)
+- **Auto-save to DB**: When daily_trades >= threshold
+
+#### Files Changed
+- `src/research/whale_detector.py` - NEW
+- `src/research/__init__.py` - Updated exports
+- `src/execution/copy_trading_engine.py` - Detector integration
+
+#### Testing
+- ruff check: passed
+
+---
+
 ## Real-time Whale Tracking
 
 ### 2026-02-13 - Real-time Whale Monitor with WebSocket

@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     bybit_api_key: str = ""
     bybit_api_secret: str = ""
 
+    # Builder API (gasless transactions) - support both naming conventions
+    builder_api_key: str = ""
+    builder_api_secret: str = ""
+    builder_api_passphrase: str = ""
+    builder_api_url: str = "https://clob.polymarket.com"
+    builder_enabled: bool = True
+
+    # Alternative env var names (for backwards compatibility)
+    BUILDER_API_KEY: str = ""
+    BUILDER_API_SECRET: str = ""
+    BUILDER_PASSPHRASE: str = ""
+
     # Web3
     metamask_private_key: str = ""
     ethereum_rpc_url: str = ""
@@ -63,6 +75,16 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "allow"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Handle alternative env var names (snake_case vs SCREAMING_SNAKE_CASE)
+        if not self.builder_api_key and self.BUILDER_API_KEY:
+            self.builder_api_key = self.BUILDER_API_KEY
+        if not self.builder_api_secret and self.BUILDER_API_SECRET:
+            self.builder_api_secret = self.BUILDER_API_SECRET
+        if not self.builder_api_passphrase and self.BUILDER_PASSPHRASE:
+            self.builder_api_passphrase = self.BUILDER_PASSPHRASE
 
 
 settings = Settings()
