@@ -1,5 +1,54 @@
 # Changelog - Research
 
+## [2026-02-13] - Real Whales Discovery
+
+### Research Question
+Где найти реальных profitable whale-адресов Polymarket для тестирования?
+
+### Status
+✅ COMPLETE - Найдено 2+ подтверждённых адреса
+
+### Analyzed
+- PANews анализ (January 2026) - 27,000 транзакций топ-10 китов
+- Polymarket профили (DrPufferfish, 0xafEe)
+- Whale tracking сервисы
+
+### Findings
+
+#### Подтверждённые адреса
+| Username | Wallet Address | Dec Profit | WR |
+|----------|---------------|------------|-----|
+| DrPufferfish | 0xdB27Bf2Ac5D428a9c63dbc914611036855a6c56E | $2.06M | 50.9% |
+| 0xafEe | 0xee50a31c3f5a7c77824b12a941a54388a2827ed6 | $929k | 69.5% |
+
+#### Топ-10 китов (PANews, Dec 2025)
+1. SeriouslySirius - $3.29M (53.3% real WR)
+2. DrPufferfish - $2.06M (50.9%)
+3. gmanas - $1.97M (51.8%)
+4. simonbanza - $1.04M (57.6%)
+5. gmpm - $2.93M total (56.16%)
+6. Swisstony - $860k (high-freq)
+7. 0xafEe - $929k (69.5%)
+8. 0x006cc - $1.27M (54%)
+9. RN1 - NEGATIVE (-$920k, 42% WR)
+10. Cavs2 - $630k (50.4%)
+
+#### Key Insights
+- **"Zombie orders"**: Реальный WR на 20-30% ниже исторического
+- **Hedging**: Сложные стратегии, а не простое YES+NO
+- **Liquidity**: Арбитраж ограничен ликвидностью
+- **Copy trading**: Не рекомендуется из-за искажённых данных
+
+### Deliverables
+- ✅ `docs/research/known_whales.md` - Список китов с адресами
+- ✅ `docs/changelogs/research.md` - Этот entry
+
+### Impact
+- **HIGH**: Есть реальные адреса для тестирования
+- Следующий шаг: Загрузить в БД через whale_tracker.py
+
+---
+
 ## [2026-02-13] - Whale Detection System Research
 
 ### Research Question

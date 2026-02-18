@@ -184,7 +184,7 @@ class RealTimeWhaleMonitor:
             if token_ids:
                 await self._ws.subscribe_tokens(token_ids)
 
-            self._task = asyncio.create_task(self._monitor_loop())
+            self._task = asyncio.create_task(self._ws.start_listening())
 
         except Exception as e:
             logger.error("whale_monitor_start_failed", error=str(e))
@@ -227,13 +227,56 @@ class RealTimeWhaleMonitor:
         if not data:
             return
 
+        if isinstance(data, list):
+            for item in data:
+                self._process_single_message(item, msg.timestamp)
+            return
+
         try:
-            if "trades" in data or "size" in data:
-                self._process_trade_data(data, msg.timestamp)
-            elif "price" in data and "size" in data:
-                self._process_orderbook_update(data, msg.timestamp)
+            self._process_single_message(data, msg.timestamp)
         except Exception as e:
             logger.debug("message_handling_error", error=str(e))
+
+    def _process_single_message(self, data: Dict[str, Any], received_at: float) -> None:
+        """Process a single message item."""
+        try:
+            event_type = data.get("event_type", "")
+
+            if event_type == "trade":
+                self._process_ws_trade(data, received_at)
+            elif event_type == "order" or "bids" in data or "asks" in data:
+                self._process_orderbook_update(data, received_at)
+            elif "price_changes" in data:
+                pass  # Price updates, not trades
+            elif "last_trade_price" in data:
+                pass  # Orderbook snapshot, not trade
+        except Exception as e:
+            logger.debug("item_handling_error", error=str(e))
+
+    def _process_ws_trade(self, data: Dict[str, Any], received_at: float) -> None:
+        """Process trade from WebSocket message."""
+        asset_id = data.get("asset_id", "")
+        price = Decimal(str(data.get("price", 0)))
+        size = Decimal(str(data.get("size", 0)))
+        side = data.get("side", "buy").lower()
+
+        if size * price < self.min_trade_size:
+            return
+
+        timestamp = data.get("timestamp", received_at)
+
+        signal = WhaleTradeSignal(
+            signal_id=str(uuid4()),
+            market_id=data.get("market", asset_id),
+            side=side,
+            size_usd=size * price,
+            price=price,
+            trader_address=data.get("address", data.get("owner", "unknown")),
+            timestamp=timestamp,
+            delay_ms=(received_at - timestamp) * 1000 if timestamp else 0,
+        )
+
+        asyncio.create_task(self._handle_whale_signal(signal))
 
     def _process_trade_data(self, data: Dict[str, Any], received_at: float) -> None:
         """Process trade data from WebSocket message.

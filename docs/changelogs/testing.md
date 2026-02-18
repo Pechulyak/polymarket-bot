@@ -1,5 +1,35 @@
 # Changelog - Testing
 
+## [2026-02-18] - Real-time Whale Detection
+
+### Test Results
+
+**Status: RUNNING**
+
+- WebSocket: ✅ Connected to Polymarket
+- Markets subscribed: 400 token IDs
+- Active events: 20
+- Known whales: 2
+
+| Whale | Trades | Win Rate | Profit | Avg Size | Risk |
+|-------|--------|----------|--------|-----------|------|
+| 0xdb27...6c56e | 5000 | 50.9% | $2.06M | $500 | 5 |
+| 0xee50...827ed | 200 | 69.5% | $929K | $5000 | 3 |
+
+### WebSocket Data Stream
+
+- ✅ Price updates: receiving
+- ⚠️ Trade events with addresses: NOT AVAILABLE via WebSocket
+- ⚠️ Alternative: Use historical data API for whale detection
+
+### Quality Criteria (not met yet)
+
+- [ ] min_trades: 100+ (need more data)
+- [ ] win_rate: >60% (need more data)  
+- [ ] min_trade_size: $50+ (need more data)
+
+---
+
 ## [2026-02-13] - Whale Paper Trading Simulation
 
 ### Whale Strategy Results

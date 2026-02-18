@@ -118,6 +118,7 @@ class CopyTradingEngine:
         mode: str = "paper",
         virtual_bankroll: Optional[Any] = None,
         whale_tracker: Optional[WhaleTracker] = None,
+        builder_client: Optional[Any] = None,
     ) -> None:
         """Initialize Copy Trading Engine.
 
@@ -134,6 +135,7 @@ class CopyTradingEngine:
             mode: Trading mode ("paper" or "live")
             virtual_bankroll: Optional VirtualBankroll instance for paper trading
             whale_tracker: Optional WhaleTracker instance for whale data
+            builder_client: Optional BuilderClient for gasless execution
         """
         self.config = config
         self.risk_manager = risk_manager
@@ -142,6 +144,8 @@ class CopyTradingEngine:
         self.mode = mode
         self.virtual_bankroll = virtual_bankroll
         self.whale_tracker = whale_tracker
+        self.builder_client = builder_client
+        self.use_builder = builder_client is not None
 
         self.tracked_whales: Set[str] = set(
             addr.lower() for addr in config.get("whale_addresses", [])
@@ -279,21 +283,12 @@ class CopyTradingEngine:
                 whale_address=sender,
             )
         else:
-            result = await self.executor.execute(
+            result = await self._execute_live_trade(
                 market_id=signal.market_id,
                 side=signal.side,
-                size=float(copy_size),
-                price=float(signal.price),
-                mode="rest",
+                size=copy_size,
+                price=signal.price,
             )
-
-        result = await self.executor.execute(
-            market_id=signal.market_id,
-            side=signal.side,
-            size=float(copy_size),
-            price=float(signal.price),
-            mode="rest",
-        )
 
         if result.get("success"):
             self.stats["trades_executed"] += 1
@@ -428,6 +423,78 @@ class CopyTradingEngine:
         except Exception as e:
             logger.error("paper_close_error", error=str(e))
             return {"success": False, "error": str(e)}
+
+    async def _execute_live_trade(
+        self,
+        market_id: str,
+        side: str,
+        size: Decimal,
+        price: Decimal,
+    ) -> Dict[str, Any]:
+        """Execute a live trade with Builder API if available.
+
+        Uses BuilderClient for gasless execution when available,
+        falls back to regular executor otherwise.
+
+        Args:
+            market_id: Market identifier
+            side: Trade side ("BUY" or "SELL")
+            size: Position size in USD
+            price: Execution price
+
+        Returns:
+            Dict with success status and trade details
+        """
+        from execution.polymarket.builder_client import BuilderClient  # noqa: F401
+
+        if self.use_builder and self.builder_client:
+            try:
+                result = await self.builder_client.place_order(
+                    token_id=market_id,
+                    side=side,
+                    size=float(size),
+                    price=float(price),
+                )
+
+                logger.info(
+                    "live_trade_executed_via_builder",
+                    mode="builder",
+                    success=result.success,
+                    order_id=result.order_id,
+                    filled=result.filled,
+                )
+
+                return {
+                    "success": result.success,
+                    "order_id": result.order_id,
+                    "fill_price": float(result.fill_price)
+                    if result.fill_price
+                    else float(price),
+                    "size": float(size),
+                    "mode": "builder",
+                    "error": result.error,
+                }
+            except Exception as e:
+                logger.error("builder_trade_failed_using_fallback", error=str(e))
+                if self.executor:
+                    return await self.executor.execute(
+                        market_id=market_id,
+                        side=side,
+                        size=float(size),
+                        price=float(price),
+                        mode="rest",
+                    )
+                return {"success": False, "error": str(e)}
+        else:
+            if self.executor:
+                return await self.executor.execute(
+                    market_id=market_id,
+                    side=side,
+                    size=float(size),
+                    price=float(price),
+                    mode="rest",
+                )
+            return {"success": False, "error": "No executor configured"}
 
     def _decode_trade(self, tx: Dict[str, Any], sender: str) -> Optional[WhaleSignal]:
         """Decode Polymarket CLOB transaction.
@@ -683,12 +750,11 @@ class CopyTradingEngine:
                 price=signal.price,
             )
         else:
-            result = await self.executor.execute(
+            result = await self._execute_live_trade(
                 market_id=signal.market_id,
                 side=exit_side,
-                size=float(our_position.size),
-                price=float(signal.price),
-                mode="rest",
+                size=our_position.size,
+                price=signal.price,
             )
 
         if result.get("success"):
@@ -904,6 +970,171 @@ class CopyTradingEngine:
 
         return await self.whale_tracker.fetch_whale_positions(address)
 
+    async def process_whale_signal(
+        self,
+        signal: Any,
+    ) -> Optional[Dict[str, Any]]:
+        """Process whale trade signal from real-time monitor.
+
+        Takes a WhaleTradeSignal from WebSocket monitor and executes
+        a copy trade.
+
+        Args:
+            signal: WhaleTradeSignal from RealTimeWhaleMonitor
+
+        Returns:
+            Trade result dict if copied, None otherwise
+        """
+        from research.real_time_whale_monitor import WhaleTradeSignal
+
+        if not isinstance(signal, WhaleTradeSignal):
+            logger.warning("invalid_signal_type", type=type(signal))
+            return None
+
+        self.stats["signals_processed"] += 1
+
+        trader = signal.trader_address.lower()
+        if trader not in self.tracked_whales:
+            return None
+
+        if not self.is_quality_whale(trader):
+            logger.debug(
+                "whale_not_quality_skipping",
+                whale=trader[:10],
+                delay_ms=signal.delay_ms,
+            )
+            return None
+
+        logger.info(
+            "whale_signal_from_monitor",
+            signal_id=signal.signal_id[:8]
+            if hasattr(signal, "signal_id")
+            else "unknown",
+            whale=trader[:10],
+            side=signal.side,
+            size=str(signal.size_usd),
+            price=str(signal.price),
+            delay_ms=signal.delay_ms,
+            market=signal.market_id[:20],
+        )
+
+        copy_size = self._calculate_copy_size_from_signal(signal)
+        if copy_size == Decimal("0"):
+            logger.info("signal_size_too_small", size=str(signal.size_usd))
+            return None
+
+        can_trade, reason = self.risk_manager.can_trade(
+            market_id=signal.market_id, size=float(copy_size), strategy="copy"
+        )
+        if not can_trade:
+            logger.info("risk_check_failed", reason=reason)
+            return None
+
+        logger.info(
+            "executing_copy_trade_from_signal",
+            side=signal.side,
+            size=str(copy_size),
+            market=signal.market_id[:20],
+            mode=self.mode,
+        )
+
+        if self.mode == "paper":
+            result = await self._execute_paper_trade(
+                market_id=signal.market_id,
+                side=signal.side,
+                size=copy_size,
+                price=signal.price,
+                strategy="copy",
+                whale_address=trader,
+            )
+        else:
+            result = await self._execute_live_trade(
+                market_id=signal.market_id,
+                side=signal.side,
+                size=copy_size,
+                price=signal.price,
+            )
+
+        if result.get("success"):
+            self.stats["trades_executed"] += 1
+
+            fill_price = signal.price
+            whale_risk_score = self.get_whale_risk_score(trader)
+            self.positions[signal.market_id] = CopyPosition(
+                market_id=signal.market_id,
+                entry_price=fill_price,
+                size=copy_size,
+                whale_address=trader,
+                whale_risk_score=whale_risk_score,
+                entry_time=asyncio.get_event_loop().time(),
+            )
+
+            logger.info(
+                "copy_trade_executed_from_signal",
+                signal_id=signal.signal_id[:8]
+                if hasattr(signal, "signal_id")
+                else "unknown",
+                fill_price=str(fill_price),
+                size=str(copy_size),
+                delay_ms=signal.delay_ms,
+            )
+
+        return result
+
+    def _calculate_copy_size_from_signal(self, signal: Any) -> Decimal:
+        """Calculate copy size from whale trade signal.
+
+        Args:
+            signal: WhaleTradeSignal
+
+        Returns:
+            Calculated copy size
+        """
+        from research.real_time_whale_monitor import WhaleTradeSignal
+
+        if not isinstance(signal, WhaleTradeSignal):
+            return Decimal("0")
+
+        bankroll = Decimal(str(self.config.get("copy_capital", Decimal("70.0"))))
+
+        whale_stats = self.whale_stats.get(signal.trader_address.lower())
+        if not whale_stats:
+            min_fraction = Decimal("0.01")
+            max_fraction = Decimal("0.05")
+            return bankroll * Decimal("0.02")
+
+        win_probability = whale_stats.win_rate
+        if win_probability <= Decimal("0"):
+            return Decimal("0")
+
+        payout_ratio = (
+            Decimal("1") / signal.price if signal.price > Decimal("0") else Decimal("1")
+        )
+        p = win_probability
+        q = Decimal("1") - p
+        b = payout_ratio - Decimal("1")
+
+        if b <= Decimal("0"):
+            return bankroll * Decimal("0.02")
+
+        kelly_fraction = (b * p - q) / b
+
+        if kelly_fraction <= Decimal("0"):
+            return Decimal("0")
+
+        quarter_kelly = kelly_fraction * Decimal("0.25")
+
+        min_fraction = Decimal("0.01")
+        max_fraction = Decimal("0.05")
+
+        final_fraction = max(min_fraction, min(quarter_kelly, max_fraction))
+
+        kelly_size = bankroll * final_fraction
+
+        max_size = bankroll * max_fraction
+
+        return min(kelly_size, max_size)
+
     def get_positions(self) -> Dict[str, CopyPosition]:
         """Get current copy positions.
 
@@ -935,6 +1166,57 @@ class CopyTradingEngine:
             "trades_executed": self.stats["trades_executed"],
             "positions_closed": self.stats["positions_closed"],
         }
+
+    async def integrate_whale_detector(self, detector: Any) -> None:
+        """Integrate with WhaleDetector for automatic whale detection.
+
+        Args:
+            detector: WhaleDetector instance
+        """
+        from research.whale_detector import WhaleDetector
+
+        if not isinstance(detector, WhaleDetector):
+            logger.warning("invalid_detector_type")
+            return
+
+        async def on_whale_detected(whale: Any) -> None:
+            from research.whale_detector import DetectedWhale
+
+            if isinstance(whale, DetectedWhale):
+                address = whale.wallet_address.lower()
+                self.tracked_whales.add(address)
+
+                from research.whale_tracker import WhaleStats
+
+                self.whale_stats[address] = WhaleStats(
+                    wallet_address=address,
+                    total_trades=whale.total_trades,
+                    win_rate=whale.win_rate,
+                    avg_trade_size_usd=whale.avg_trade_size,
+                    risk_score=whale.risk_score,
+                )
+
+                logger.info(
+                    "whale_detector_integrated",
+                    address=address[:10],
+                    risk_score=whale.risk_score,
+                    is_quality=whale.is_quality,
+                )
+
+        detector.on_whale_detected = on_whale_detected
+        logger.info("whale_detector_integration_complete")
+
+    def get_quality_whale_addresses(self) -> List[str]:
+        """Get addresses of quality whales currently tracked.
+
+        Returns:
+            List of quality whale addresses
+        """
+        quality_addresses = []
+        for address in self.tracked_whales:
+            if self.is_quality_whale(address):
+                quality_addresses.append(address)
+        return quality_addresses
 
     def _get_clob_abi(self) -> list[Dict[str, Any]]:
         """Get simplified CLOB ABI for transaction decoding.
