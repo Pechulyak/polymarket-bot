@@ -2,19 +2,108 @@
 
 ## Executive Summary
 
-Система отслеживания "китов" (крупных трейдеров) на Polymarket для повышения win rate trading bot. Исследование выявило 5 основных источников данных и критерии quality whale (>60% win rate).
+Система отслеживания "китов" (крупных трейдеров) на Polymarket для повышения win rate trading bot. Исследование выявило способы получения адресов и критерии quality whale (>60% win rate).
+
+## ПРОБЛЕМА: Как получить адреса китов?
+
+WebSocket НЕ предоставляет адреса трейдеров. Data API требует адрес заранее.
+
+### Решения:
+1. **Bitquery** - получить ВСЕ сделки с адресами (рекомендуется)
+2. **Polymarket Subgraph** - query all trades
+3. **Dune Analytics** - топ трейдеры по объёму
+4. **Готовые сервисы** - Polywhaler, PolymarketScan
 
 ## Data Sources Overview
 
-| Source | Type | Cost | Real-time | Data Quality |
-|--------|------|------|-----------|--------------|
-| Polymarket Subgraph | On-chain | Free | ~15 min delay | High |
-| Data API | REST | Free | Yes | High |
-| Polywhaler | Web App | Free/Paid | Yes | High |
-| Dune Analytics | SQL | Free | Yes | Medium |
-| Twitter/X | Social | Free | Yes | Low |
+| Source | Type | Cost | Real-time | Addresses | Data Quality |
+|--------|------|------|-----------|-----------|--------------|
+| **Bitquery** | On-chain GraphQL | Free tier | Yes | Yes | High |
+| Polymarket Subgraph | On-chain | Free | ~15 min | Limited | High |
+| Data API | REST | Free | Yes | No* | High |
+| Polywhaler | Web App | Free/Paid | Yes | Yes | High |
+| Dune Analytics | SQL | Free | Yes | Yes | Medium |
 
-## 1. Polymarket Subgraph (The Graph)
+*Data API: требует адрес для запроса
+
+---
+
+## 1. Bitquery - ПОЛУЧИТЬ ВСЕ СДЕЛКИ С АДРЕСАМИ
+
+### Почему Bitquery:
+- Реальные адреса трейдеров из блокчейна
+- Real-time данные с Polygon
+- Можно фильтровать по size (size > $1000)
+- Бесплатный tier доступен
+
+### Smart Contracts
+```
+CTF Exchange (Current): 0xC5d563A36AE78145C45a50134d48A1215220f80a
+CTF Exchange (Legacy): 0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
+Main Contract:        0x4d97dcd97ec945f40cf65f87097ace5ea0476045
+```
+
+### Query: Получить все сделки с адресами (последние 24ч)
+```graphql
+{
+  EVM(dataset: realtime, network: matic) {
+    Events(
+      orderBy: {descending: Block_Time}
+      where: {
+        Block: {Time: {since_relative: {hours_ago: 24}}}
+        Log: {Signature: {in: ["OrderFilled"]}}
+        LogHeader: {
+          Address: {
+            in: [
+              "0xC5d563A36AE78145C45a50134d48A1215220f80a",
+              "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+            ]
+          }
+        }
+      }
+      limit: {count: 100}
+    ) {
+      Block {
+        Time
+        Number
+      }
+      Transaction {
+        Hash
+        Sender  # <-- АДРЕС ТРЕЙДЕРА
+      }
+      Arguments {
+        Name
+        Value {
+          ... on EVM_ABI_BigInt_Value_Arg {
+            bigInteger
+          }
+          ... on EVM_ABI_Address_Value_Arg {
+            address
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Query: Фильтр по size (только крупные сделки)
+```graphql
+# Пример: получить только сделки > $1000
+# (нужно декодировать amount из Arguments)
+```
+
+### Rate Limits (Bitquery)
+- Free tier: 10,000 credits/day
+-足 enough для ~1000 запросов
+
+### Документация
+- https://docs.bitquery.io/docs/examples/polymarket-api/
+- IDE: https://ide.bitquery.io/
+
+---
+
+## 2. Polymarket Subgraph (The Graph)
 
 ### Endpoint
 ```
