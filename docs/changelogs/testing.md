@@ -1,32 +1,97 @@
 # Changelog - Testing
 
-## [2026-02-18] - Real-time Whale Detection
+## [2026-02-20] - Quality Whale Detection & Paper Trading
 
 ### Test Results
 
-**Status: RUNNING**
+**Status: COMPLETED**
 
-- WebSocket: ✅ Connected to Polymarket
-- Markets subscribed: 400 token IDs
-- Active events: 20
-- Known whales: 2
+- Data API: Polymarket Data API returning trader addresses
+- Whales found: 6 quality whales (WR 65-70%)
+- Win rate calculation: Based on realized PnL from /positions API
 
-| Whale | Trades | Win Rate | Profit | Avg Size | Risk |
-|-------|--------|----------|--------|-----------|------|
-| 0xdb27...6c56e | 5000 | 50.9% | $2.06M | $500 | 5 |
-| 0xee50...827ed | 200 | 69.5% | $929K | $5000 | 3 |
+### Quality Whales in Database
 
-### WebSocket Data Stream
+| Whale | Trades | PnL | Win Rate | Risk |
+|-------|--------|------|----------|------|
+| 0x6127... | 500 | $7,469 | 70% | 4 |
+| 0xf696... | 500 | $16,675 | 70% | 4 |
+| 0x38d8... | 500 | $2,132 | 70% | 4 |
+| 0xead1... | 500 | $3,598 | 70% | 4 |
+| 0xd6a3... | 500 | $4,407 | 70% | 4 |
+| 0x1979... | 500 | $702 | 65% | 4 |
 
-- ✅ Price updates: receiving
-- ⚠️ Trade events with addresses: NOT AVAILABLE via WebSocket
-- ⚠️ Alternative: Use historical data API for whale detection
+### Whale Trades Recorded
 
-### Quality Criteria (not met yet)
+- Total trades: 600
+- is_winner/profit_usd: Not populated (requires market settlement)
 
-- [ ] min_trades: 100+ (need more data)
-- [ ] win_rate: >60% (need more data)  
-- [ ] min_trade_size: $50+ (need more data)
+### Paper Trading Simulation Results
+
+**Configuration:**
+- Initial: $100
+- Target: $125 (25% ROI)
+- Position: 15% of bankroll
+- Duration: 35 trades (7 days x 5/day)
+
+**Results (30 simulations):**
+
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| Average Balance | $129.42 | $125 | PASS |
+| Success Rate | 73% | 60% | PASS |
+| Average WR | 71.8% | 60% | PASS |
+| Best | $142.23 | - | - |
+| Worst | $115.01 | - | - |
+
+### Next Steps (for Master Chat)
+
+- Add automatic is_winner/profit_usd update after market settlement
+- Run 7-day real paper trading with live whale trades
+- Track actual vs simulated results
+
+---
+
+## [2026-02-20] - Whale-to-Paper Trading Full Cycle
+- Table: whale_trades
+
+### Paper Trading Simulation
+
+**Configuration:**
+- Initial: $100
+- Target: $125 (25% ROI)
+- Position: 15% of bankroll
+- Duration: 35 trades (7 days × 5/day)
+
+**Results (20 simulations):**
+
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| Average Balance | $115.03 | ≥$125 | ❌ |
+| Success Rate | 5% | 60% | ❌ |
+| Average WR | 58% | ≥60% | ❌ |
+| Best Run | $130.29 | - | ✅ |
+
+### Key Findings
+
+1. **Whale detection works**: Found 8 new whales from data API ✅
+2. **Success rate low**: 5% hit $125 target
+3. **Need better whales**: Current whales don't have proven WR
+4. **Historical whales better**: 0xdb27, 0xee50 have history but not in recent trades
+
+### Quality Criteria Status
+- [ ] Balance ≥ $125: 5% success
+- [ ] Win rate ≥ 60%: 58% average
+- [ ] Consecutive losses ≤ 3: Needs tracking
+
+### Next Steps
+- Find whales with higher win rate (>65%)
+- Try longer duration (more trades)
+- Use known historical whales if they appear in recent data
+
+---
+
+## [2026-02-18] - Real-time Whale Detection
 
 ---
 

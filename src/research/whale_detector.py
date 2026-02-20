@@ -31,6 +31,10 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from src.research.polymarket_data_client import (
+    PolymarketDataClient,
+)
+
 logger = structlog.get_logger(__name__)
 
 
@@ -128,6 +132,8 @@ class WhaleDetector:
         on_whale_detected: Optional[Callable[[DetectedWhale], Any]] = None,
         on_whale_updated: Optional[Callable[[DetectedWhale], Any]] = None,
         database_url: Optional[str] = None,
+        polymarket_client: Optional[PolymarketDataClient] = None,
+        polymarket_poll_interval_seconds: int = 60,
     ) -> None:
         """Initialize Whale Detector.
 
@@ -136,17 +142,18 @@ class WhaleDetector:
             on_whale_detected: Callback when new whale is detected
             on_whale_updated: Callback when whale stats are updated
             database_url: PostgreSQL connection URL
+            polymarket_client: Polymarket Data client for real-time trades
+            polymarket_poll_interval_seconds: How often to poll (default 60 sec)
         """
-        self.config = config or DetectionConfig()
-        self.on_whale_detected = on_whale_detected
-        self.on_whale_updated = on_whale_updated
-        self.database_url = database_url
+        self.polymarket_client = polymarket_client
+        self.polymarket_poll_interval = polymarket_poll_interval_seconds
 
         self._trades: Dict[str, List[TradeRecord]] = defaultdict(list)
         self._detected_whales: Dict[str, DetectedWhale] = {}
         self._known_whales: Set[str] = set()
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        self._polymarket_task: Optional[asyncio.Task] = None
         self._engine = None
         self._Session = None
         self._lock = asyncio.Lock()
@@ -184,11 +191,16 @@ class WhaleDetector:
 
         await self._load_known_whales()
 
+        if self.polymarket_client:
+            await self.start_polymarket_polling()
+
         logger.info("whale_detector_started")
 
     async def stop(self) -> None:
         """Stop the whale detector."""
         self._running = False
+
+        await self.stop_polymarket_polling()
 
         if self._task:
             self._task.cancel()
@@ -569,6 +581,130 @@ class WhaleDetector:
             True if known whale
         """
         return address.lower() in self._known_whales
+
+    def set_polymarket_client(self, client: PolymarketDataClient) -> None:
+        """Set Polymarket Data client for real-time whale detection.
+
+        Args:
+            client: PolymarketDataClient instance
+        """
+        self.polymarket_client = client
+        logger.info("polymarket_client_set")
+
+    async def start_polymarket_polling(self) -> None:
+        """Start polling Polymarket Data API for new whales."""
+        if not self.polymarket_client:
+            logger.warning("polymarket_polling_no_client")
+            return
+
+        if self._polymarket_task and not self._polymarket_task.done():
+            logger.warning("polymarket_polling_already_running")
+            return
+
+        self._polymarket_task = asyncio.create_task(self._polymarket_poll_loop())
+        logger.info(
+            "polymarket_polling_started",
+            interval_seconds=self.polymarket_poll_interval,
+        )
+
+    async def stop_polymarket_polling(self) -> None:
+        """Stop Polymarket Data API polling."""
+        if self._polymarket_task:
+            self._polymarket_task.cancel()
+            try:
+                await self._polymarket_task
+            except asyncio.CancelledError:
+                pass
+
+        logger.info("polymarket_polling_stopped")
+
+    async def _polymarket_poll_loop(self) -> None:
+        """Background loop to poll Polymarket Data API for whale data."""
+        while self._running:
+            try:
+                await self._fetch_polymarket_whales()
+                await asyncio.sleep(self.polymarket_poll_interval)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("polymarket_poll_error", error=str(e))
+                await asyncio.sleep(60)
+
+    async def _fetch_polymarket_whales(self) -> None:
+        """Fetch whales from Polymarket Data API and update database."""
+        if not self.polymarket_client:
+            return
+
+        try:
+            min_size = self.config.quality_volume
+            aggregated = await self.polymarket_client.aggregate_by_address(
+                limit=500,
+                min_size_usd=min_size,
+            )
+
+            new_whales = 0
+            for address, stats in aggregated.items():
+                if stats.total_trades < self.config.min_trades_for_quality:
+                    continue
+
+                if address.lower() in self._known_whales:
+                    continue
+
+                whale = DetectedWhale(
+                    wallet_address=address.lower(),
+                    first_seen=stats.last_seen if stats.last_seen else time.time(),
+                    total_trades=stats.total_trades,
+                    total_volume=stats.total_volume_usd,
+                    avg_trade_size=stats.avg_trade_size_usd,
+                )
+
+                if whale.daily_trades >= self.config.daily_trade_threshold:
+                    self._detected_whales[address.lower()] = whale
+                    await self._save_whale_to_db(whale)
+                    self._known_whales.add(address.lower())
+                    new_whales += 1
+
+                    logger.info(
+                        "polymarket_new_whale",
+                        address=address[:10],
+                        total_trades=stats.total_trades,
+                        volume_usd=str(stats.total_volume_usd),
+                    )
+
+                    if self.on_whale_detected:
+                        try:
+                            await self.on_whale_detected(whale)
+                        except Exception as e:
+                            logger.error(
+                                "polymarket_whale_callback_failed", error=str(e)
+                            )
+
+            if new_whales > 0:
+                logger.info(
+                    "polymarket_fetch_complete",
+                    new_whales=new_whales,
+                    total_traders=len(aggregated),
+                )
+
+        except Exception as e:
+            logger.error("polymarket_fetch_failed", error=str(e))
+
+    async def fetch_and_process_polymarket(self) -> List[DetectedWhale]:
+        """Manually fetch and process whales from Polymarket Data API.
+
+        Returns:
+            List of newly detected whales
+        """
+        if not self.polymarket_client:
+            logger.warning("polymarket_fetch_no_client")
+            return []
+
+        await self._fetch_polymarket_whales()
+        return [
+            w
+            for w in self._detected_whales.values()
+            if w.daily_trades >= self.config.daily_trade_threshold
+        ]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get detector statistics.
