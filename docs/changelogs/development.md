@@ -1,5 +1,64 @@
 # Development Changelog
 
+### 2026-02-20 - Polymarket Data API Integration (Real-time Whale Detection)
+
+#### Changed
+- **Replaced Bitquery with Polymarket Data API** - Free, real-time, includes trader addresses!
+
+- `src/research/polymarket_data_client.py` - NEW
+  - PolymarketDataClient for Data API access
+  - Fetches all trades with `proxyWallet` addresses
+  - Real-time data (no delay like The Graph)
+  - Free, no API key required
+  - TradeWithAddress, AggregatedTraderStats dataclasses
+  - aggregate_by_address() for whale detection
+
+- `src/research/whale_detector.py`
+  - Changed from Bitquery to PolymarketDataClient
+  - polymarket_client parameter instead of bitquery_client
+  - polymarket_poll_interval_seconds (default 60 sec)
+  - set_polymarket_client() / start_polymarket_polling() / stop_polymarket_polling()
+  - _fetch_polymarket_whales() for real-time whale detection
+
+- `src/research/__init__.py`
+  - Updated exports to PolymarketDataClient
+
+#### Database Integration (Already Implemented)
+- ✅ Saves whales to `whales` table via `_save_whale_to_db()`
+- ✅ Loads known whales from DB on startup via `_load_known_whales()`
+- ✅ Auto-cleanup of old trades (24h window) via `_cleanup_old_trades()`
+- ✅ Tracks: wallet_address, total_trades, win_rate, avg_trade_size, risk_score
+- ✅ Updates stats on each detection
+
+#### Removed
+- `src/research/bitquery_client.py` - Removed (API key had no Polygon access)
+
+#### Technical Details
+- **Data API**: https://data-api.polymarket.com/trades
+- **Real-time**: Yes (unlike The Graph ~15 min delay)
+- **Addresses**: proxyWallet field provides trader addresses
+- **Free**: No API key required for public endpoints
+- **Poll interval**: 60 seconds default (configurable)
+
+#### Testing
+- ruff check: passed
+- API test: Found top whale with $17,200 in single trade
+- 34 unique traders detected in 37 trades (limit=1000)
+
+#### Example Output
+```
+Unique traders (min $100): 34
+  0x89e75fd5... | 1 trades | $17200  <- BIG WHALE!
+  0xc88275f6... | 1 trades | $5381
+  0xbb7e8041... | 1 trades | $4985
+```
+
+---
+
+### 2026-02-20 - Bitquery Integration (FAILED - No Polygon Access)
+
+---
+
 ### 2026-02-18 - WebSocket Subscription FIXED - Real-time Data Flowing
 
 #### ✅ COMPLETED - Whale Detection Now Receiving Live Data

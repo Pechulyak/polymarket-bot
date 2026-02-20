@@ -1,25 +1,33 @@
 # -*- coding: utf-8 -*-
 """Research module for strategy analysis."""
 
+from .polymarket_data_client import (
+    PolymarketDataClient,
+    TradeWithAddress,
+    AggregatedTraderStats,
+    PolymarketDataError,
+    create_polymarket_data_client,
+)
 from .whale_tracker import WhaleTracker, WhalePosition, WhaleTrade, WhaleStats
-
-# Temporarily disabled due to import issues
-# from .real_time_whale_monitor import (
-#     RealTimeWhaleMonitor,
-#     WhaleTradeSignal,
-#     MonitorStats,
-# )
-# from .whale_detector import WhaleDetector, DetectedWhale, DetectionConfig
+from .whale_detector import (
+    WhaleDetector,
+    DetectedWhale,
+    DetectionConfig,
+    TradeRecord,
+)
 
 __all__ = [
+    "PolymarketDataClient",
+    "TradeWithAddress",
+    "AggregatedTraderStats",
+    "PolymarketDataError",
+    "create_polymarket_data_client",
     "WhaleTracker",
     "WhalePosition",
     "WhaleTrade",
     "WhaleStats",
-    # "RealTimeWhaleMonitor",
-    # "WhaleTradeSignal",
-    # "MonitorStats",
-    # "WhaleDetector",
-    # "DetectedWhale",
-    # "DetectionConfig",
+    "WhaleDetector",
+    "DetectedWhale",
+    "DetectionConfig",
+    "TradeRecord",
 ]
