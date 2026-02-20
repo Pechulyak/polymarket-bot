@@ -31,22 +31,42 @@ High-frequency arbitrage trading bot for Polymarket prediction markets. Focuses 
 ## Directory Structure
 
 ```
-master-chat/
-  src/
-    coordinator.py       # Milestone commit orchestration
-    changelog.py         # Aggregates module changelogs
-    git_manager.py       # GitHub milestone management
+src/
+  main.py                  # Main entry point
+  main_paper_trading.py   # Paper trading runner
+  run_whale_detection.py  # Whale detection runner
+
+config/
+  settings.py             # Configuration
+  risk_params.py          # Risk parameters
 
 research/
-  src/
-    scrapers/
-      github.py          # Strategy repos analysis
-      twitter.py         # X sentiment & alpha
-      linkedin.py        # Institutional signals
-      discord.py         # Community alpha
-      reddit.py          # r/wallstreetbets, r/polymarket
-    aggregators/
-      signal_processor.py # Normalize & weight signals
+  polymarket_data_client.py  # Data API client
+  whale_detector.py           # Whale detection
+  whale_tracker.py            # Whale tracking
+  real_time_whale_monitor.py # Real-time monitor
+
+execution/
+  copy_trading_engine.py     # Copy trading engine
+  polymarket/
+    client.py            # REST API client
+    builder_client.py    # Builder API (gasless)
+
+strategy/
+  virtual_bankroll.py    # Virtual bankroll tracker
+  selected_strategies.py # Strategy configs
+
+data/
+  ingestion/
+    websocket_client.py  # WebSocket client
+
+monitoring/
+  logger.py             # Logging
+
+scripts/
+  init_db.sql           # Database schema
+  test_infrastructure.py # Infra test
+```
     whale_detector.py    # Real-time whale detection
     polymarket_data_client.py # Polymarket Data API client
 
