@@ -1,6 +1,42 @@
 # Master Changelog
 
-## [MILESTONE] v0.5.0 - 2026-02-13 - Polymarket Wallet Integration
+## [MILESTONE] v0.8.0 - 2026-02-20 - Real-time Whale Detection
+
+### 📊 Research (from Research Chat)
+**Summary:** Found solution for whale address discovery
+
+- **Bitquery**: Initial solution (requires API key)
+- **Polymarket Data API**: Free, real-time, includes trader addresses!
+- Top whale: $17,200 in single trade
+- 34 unique traders detected in 37 trades
+
+### 🤖 Development (from Development Chat)
+**Summary:** Polymarket Data API integration for whale detection
+
+- Added: `polymarket_data_client.py` - PolymarketDataClient
+  - Fetches all trades with `proxyWallet` addresses
+  - Real-time data (no delay like The Graph)
+  - Free, no API key required
+  - aggregate_by_address() for whale detection
+
+- Changed: `whale_detector.py`
+  - Uses PolymarketDataClient instead of Bitquery
+  - Polling every 60 seconds
+  - Auto-saves whales to database
+
+- Added: Builder API integration ready
+
+### Testing
+- API test: Found top whale with $17,200
+- 34 unique traders detected
+
+### ⚠️ Current Issues
+- Geo-blocking: Needs EU IP for live trading
+- WebSocket doesn't provide trader addresses (use Data API instead)
+
+---
+
+## [MILESTONE] v0.7.0 - 2026-02-18 - WebSocket & Builder API
 
 ### 🎯 Current Status
 

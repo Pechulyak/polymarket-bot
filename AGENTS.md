@@ -5,7 +5,14 @@ High-frequency arbitrage trading bot for Polymarket prediction markets. Focuses 
 
 ## Architecture
 
-### Core Modules
+### Current Project Status (2026-02-20)
+
+### Recent Changes
+- Polymarket Data API: Free, real-time, includes trader addresses
+- Builder API: Integrated for gasless transactions
+- Whale Detection: Using PolymarketDataClient (no API key needed)
+- Top whale found: $17,200 in single trade
+- 34 unique traders detected in 37 trades
 
 - **Master-Chat**: Central coordinator for milestone commits, aggregates changelog across modules
 - **Research Module**: Strategy analysis via GitHub, Twitter/X, LinkedIn, Discord, Reddit scraping
@@ -40,6 +47,8 @@ research/
       reddit.py          # r/wallstreetbets, r/polymarket
     aggregators/
       signal_processor.py # Normalize & weight signals
+    whale_detector.py    # Real-time whale detection
+    polymarket_data_client.py # Polymarket Data API client
 
 strategy/
   src/
