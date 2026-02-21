@@ -10,8 +10,6 @@ from pathlib import Path
 
 def get_logger(name: str):
     """Get structured logger instance."""
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-
     log_dir = Path(__file__).parent.parent.parent / "logs"
     log_dir.mkdir(exist_ok=True)
 

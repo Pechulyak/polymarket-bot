@@ -48,7 +48,7 @@ async def fetch_active_token_ids(api_key: str = "") -> List[str]:
             subprocess.run(
                 [sys.executable, "-m", "pip", "install", "brotli"], check=True
             )
-            import brotli
+            import brotli  # noqa: F401
 
         timeout = aiohttp.ClientTimeout(total=30, connect=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:

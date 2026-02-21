@@ -21,16 +21,13 @@ import logging
 import signal
 from datetime import datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
 from typing import Optional
 
 import structlog
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 
 from config.settings import settings
 from strategy.virtual_bankroll import VirtualBankroll, BankrollStats
-from execution.copy_trading_engine import CopyTradingEngine, WhaleSignal
+from execution.copy_trading_engine import CopyTradingEngine
 
 logger = structlog.get_logger(__name__)
 
@@ -344,9 +341,9 @@ async def run_demo_paper_trading():
     bankroll = runner.virtual_bankroll
 
     print(f"\nInitial Balance: ${bankroll.balance:.2f}")
-    print(f"Target Balance: $125.00 (25% ROI)")
-    print(f"Minimum Win Rate: 60%")
-    print(f"Minimum Duration: 168 hours (7 days)")
+    print("Target Balance: $125.00 (25% ROI)")
+    print("Minimum Win Rate: 60%")
+    print("Minimum Duration: 168 hours (7 days)")
     print()
 
     mock_trades = [
