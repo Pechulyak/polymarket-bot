@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     polymarket_funder_address: str = ""
     bybit_api_key: str = ""
     bybit_api_secret: str = ""
+    bitquery_api_key: str = ""
 
     # Builder API (gasless transactions) - support both naming conventions
     builder_api_key: str = ""
@@ -60,6 +61,9 @@ class Settings(BaseSettings):
     # Monitoring
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
+    # Metrics
+    metrics_enabled: bool = True
+    metrics_port: int = 9090
     # Backwards-compatibility with legacy env vars used in tests
     polymarket_api_url: str = "https://api.polymarket.com"
     bybit_api_url: str = "https://api.bybit.com"
