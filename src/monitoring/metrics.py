@@ -2,8 +2,6 @@
 """Metrics collection for Prometheus monitoring."""
 
 import os
-from decimal import Decimal
-from typing import Dict, Optional
 
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 

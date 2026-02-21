@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 """Telegram alerts for trading bot monitoring."""
 
-import asyncio
 import os
 from datetime import datetime
-from decimal import Decimal
 from typing import Any, Dict, Optional
 
 import aiohttp

@@ -3,9 +3,7 @@
 
 import asyncio
 import argparse
-from decimal import Decimal
 
-from src.config import settings
 from src.monitoring import get_logger
 
 logger = get_logger(__name__)
