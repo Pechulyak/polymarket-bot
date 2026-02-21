@@ -74,7 +74,7 @@ jobs:
         run: |
           echo "SERVER_HOST: ${{ secrets.SERVER_HOST }}"
           echo "SERVER_USER: ${{ secrets.SERVER_USER }}"
-          echo "SSH_KEY_SET: ${{ if(secrets.SSH_PRIVATE_KEY, 'yes', 'no') }}"
+          echo "SSH_KEY_SET: ${{ secrets.SSH_PRIVATE_KEY != '' && 'yes' || 'no' }}"
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.0
