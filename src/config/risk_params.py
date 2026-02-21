@@ -8,7 +8,7 @@ from decimal import Decimal
 @dataclass
 class RiskParams:
     """Risk management configuration."""
-    
+
     max_single_trade_drawdown: Decimal = Decimal("0.05")  # 5%
     max_daily_drawdown: Decimal = Decimal("0.02")  # 2%
     max_position_size_pct: Decimal = Decimal("0.25")  # 25%
