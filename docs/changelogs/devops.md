@@ -1,5 +1,37 @@
 # Changelog - DevOps
 
+## [2026-02-21] - CI/CD Setup
+
+### Added
+- `.github/workflows/deploy.yml` - GitHub Actions workflow for automatic deployment:
+  - Runs on push to main branch
+  - Test job: linting (ruff) + pytest
+  - Build job: Docker image build
+  - Deploy job: SSH to server, docker-compose up
+  - Telegram notification on failure
+- `scripts/deploy.sh` - Deployment script with:
+  - Health checks for PostgreSQL, Redis, Bot
+  - Backup before deployment
+  - Logging to logs/deploy_*.log
+  - Cleanup old Docker images
+- `docs/CI_CD_SETUP.md` - Documentation for GitHub secrets setup
+
+### Infrastructure
+- **GitHub Actions** for CI/CD
+- **SSH deployment** to production server
+- **Automatic health checks** after deployment
+
+### Configuration
+- Required GitHub Secrets:
+  - `SERVER_HOST` - Server IP
+  - `SERVER_USER` - SSH username
+  - `SSH_PRIVATE_KEY` - Deploy key
+  - `TELEGRAM_BOT_TOKEN` (optional)
+  - `TELEGRAM_CHAT_ID` (optional)
+
+### Breaking Changes
+- None
+
 ## [2026-02-20] - Production Monitoring & Docker
 
 ### Added
