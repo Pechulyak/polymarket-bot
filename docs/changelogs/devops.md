@@ -1,5 +1,82 @@
 # Changelog - DevOps
 
+## [2026-02-20] - Production Monitoring & Docker
+
+### Added
+- `docker-compose.yml` - Added `bot` service for production deployment with health checks
+- `src/monitoring/telegram_alerts.py` - Telegram alerts integration for:
+  - Bot start/stop notifications
+  - Trade execution alerts
+  - Whale signal notifications
+  - PnL updates
+  - Risk events
+  - Kill switch activation
+- `src/monitoring/metrics.py` - Prometheus metrics collection:
+  - Balance gauge
+  - Trade counters (by side and status)
+  - PnL gauges (daily and total)
+  - Win rate gauge
+  - Error counters
+  - Whale signal counters
+  - Open positions gauge
+  - Execution time histogram
+  - API latency histogram
+- `.env.production.template` - Production environment template with all required variables
+
+### Changed
+- `docker-compose.yml` - Added bot service with:
+  - Build from docker/Dockerfile
+  - Environment variable configuration for DATABASE_URL and REDIS_URL
+  - Volume mount for logs (/app/logs)
+  - Health checks
+  - Resource limits (1 CPU, 1GB RAM)
+  - Restart policy (unless-stopped)
+- `src/monitoring/logger.py` - Enhanced logging:
+  - File output to logs/bot.log
+  - Error log to logs/error.log
+  - Console output in JSON format
+  - Configurable log level via LOG_LEVEL env var
+- `src/config/settings.py` - Added metrics configuration:
+  - `metrics_enabled` (default: true)
+  - `metrics_port` (default: 9090)
+- `src/execution/copy_trading_engine.py` - Integrated Telegram alerts:
+  - Trade execution notifications
+  - Whale signal alerts
+  - Position close with PnL
+
+### Infrastructure
+- **Docker Services**:
+  - PostgreSQL 15 (port 5433)
+  - Redis 7 (port 6379)
+  - Bot service (production mode)
+
+### Configuration
+- Production `.env` template with clear sections for:
+  - API Keys
+  - Database (Docker internal networking)
+  - Trading parameters
+  - Risk management
+  - Monitoring (Telegram, Sentry)
+  - Production settings
+
+### Monitoring
+- **Telegram Alerts**: Bot token and chat ID configuration
+- **Prometheus Metrics**: HTTP server on port 9090
+- **Logging**: Structured JSON to stdout + file output
+
+### Security
+- `.env.production.template` does not contain real secrets
+- Clear documentation for production deployment
+
+### Breaking Changes
+- None
+
+### Verified
+- Telegram alerts tested and working (2026-02-21)
+  - Bot token: 7713075797:AAGkXEt6FpaPEIT3Gg-...
+  - Chat ID: 946830266
+  - All message types sent successfully
+
 ## [2026-02-06] - Setup Local Infrastructure
 
 ### Added

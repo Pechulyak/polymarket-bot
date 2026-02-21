@@ -37,6 +37,7 @@ import structlog
 from web3 import Web3
 
 from research.whale_tracker import WhaleTracker, WhaleStats
+from monitoring.telegram_alerts import TelegramAlerts
 
 logger = structlog.get_logger(__name__)
 
@@ -146,6 +147,7 @@ class CopyTradingEngine:
         self.whale_tracker = whale_tracker
         self.builder_client = builder_client
         self.use_builder = builder_client is not None
+        self.telegram_alerts = TelegramAlerts()
 
         self.tracked_whales: Set[str] = set(
             addr.lower() for addr in config.get("whale_addresses", [])
@@ -368,6 +370,15 @@ class CopyTradingEngine:
                 price=str(price),
                 new_balance=str(self.virtual_bankroll.balance),
                 whale_address=whale_address[:10] if whale_address else "",
+            )
+
+            asyncio.create_task(
+                self.telegram_alerts.send_trade(
+                    side=side,
+                    size=float(size),
+                    price=float(price),
+                    market=market_id,
+                )
             )
 
             return {
@@ -763,11 +774,12 @@ class CopyTradingEngine:
             # Calculate PnL
             entry = our_position.entry_price
             exit_price = Decimal(str(result.get("fill_price", signal.price)))
+            fees = our_position.size * Decimal("0.002")
 
             if our_position.size > 0:  # Was long
-                pnl = (exit_price - entry) * our_position.size
+                pnl = (exit_price - entry) * our_position.size - fees
             else:
-                pnl = (entry - exit_price) * abs(our_position.size)
+                pnl = (entry - exit_price) * abs(our_position.size) - fees
 
             # Update position
             our_position.pnl = pnl
@@ -787,6 +799,17 @@ class CopyTradingEngine:
                 entry=str(entry),
                 exit=str(exit_price),
                 mode=self.mode,
+            )
+
+            asyncio.create_task(
+                self.telegram_alerts.send_trade(
+                    side=exit_side,
+                    size=float(our_position.size),
+                    price=float(exit_price),
+                    market=signal.market_id,
+                    pnl=float(pnl),
+                    fees=float(fees) if fees else None,
+                )
             )
 
         return result
@@ -1016,6 +1039,16 @@ class CopyTradingEngine:
             price=str(signal.price),
             delay_ms=signal.delay_ms,
             market=signal.market_id[:20],
+        )
+
+        asyncio.create_task(
+            self.telegram_alerts.send_whale_signal(
+                whale_address=trader,
+                side=signal.side,
+                size=float(signal.size_usd),
+                price=float(signal.price),
+                market=signal.market_id,
+            )
         )
 
         copy_size = self._calculate_copy_size_from_signal(signal)
