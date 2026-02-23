@@ -258,29 +258,59 @@ class TelegramAlerts:
     async def send_whale_signal(
         self,
         whale_address: str,
+        whale_name: str,
         side: str,
-        size: float,
+        our_size: float,
+        whale_size: float,
         price: float,
         market: str,
+        trade_type: str = "virtual",
+        status: str = "success",
+        error: str = None,
     ) -> None:
         """Send whale trade signal notification.
 
         Args:
             whale_address: Whale wallet address
-            side: Trade side
-            size: Trade size
+            whale_name: Whale name/username
+            side: Trade side (buy/sell)
+            our_size: Our trade size (after Kelly calculation)
+            whale_size: Whale's original trade size
             price: Trade price
-            market: Market ID
+            market: Market ID/title
+            trade_type: Type of trade (virtual/live)
+            status: Trade status (success/error)
+            error: Error message if failed
         """
-        message = f"""
-🐋 *Whale Signal*
+        from datetime import timezone, timedelta
+        
+        # UTC+3 timezone
+        utc_plus_3 = timezone(timedelta(hours=3))
+        now_utc3 = datetime.now(utc_plus_3)
+        
+        if status == "success":
+            message = f"""
+🐋 *WHALE TRADE - {trade_type.upper()}*
 
-*Whale:* `{whale_address[:6]}...{whale_address[-4:]}`
+*Whale:* {whale_name} (`{whale_address[:6]}...{whale_address[-4:]}`)
 *Side:* {side.upper()}
-*Size:* ${size:.2f}
-*Price:* ${price:.4f}
-*Market:* `{market[:20]}...`
-*Time:* {datetime.utcnow().strftime("%H:%M:%S UTC")}
+*Our Size:* ${our_size:,.2f} (whale: ${whale_size:,.2f})
+*Price:* {price:.4f}
+*Market:* {market[:50]}...
+*Time:* {now_utc3.strftime("%Y-%m-%d %H:%M:%S UTC+3")}
+*Status:* ✅ {status}
+"""
+        else:
+            message = f"""
+🐋 *WHALE TRADE ERROR*
+
+*Whale:* {whale_name} (`{whale_address[:6]}...{whale_address[-4:]}`)
+*Side:* {side.upper()}
+*Our Size:* ${our_size:,.2f}
+*Market:* {market[:50]}...
+*Time:* {now_utc3.strftime("%Y-%m-%d %H:%M:%S UTC+3")}
+*Status:* ❌ {status}
+*Error:* {error}
 """
         await self._send_message(message)
 
