@@ -22,6 +22,7 @@ import aiohttp
 from dotenv import load_dotenv
 
 from research.whale_detector import WhaleDetector, DetectionConfig
+from research.polymarket_data_client import PolymarketDataClient
 from research.real_time_whale_monitor import RealTimeWhaleMonitor
 
 
@@ -60,7 +61,7 @@ async def fetch_active_token_ids(api_key: str = "") -> List[str]:
 
             async with session.get(
                 "https://gamma-api.polymarket.com/events",
-                params={"closed": "false", "limit": "20"},
+                params={"closed": "false", "limit": "100"},
                 headers=headers,
             ) as resp:
                 if resp.status == 200:
@@ -72,7 +73,7 @@ async def fetch_active_token_ids(api_key: str = "") -> List[str]:
 
             condition_ids = []
 
-            for event in events[:10]:
+            for event in events:
                 event_id = event.get("id")
                 if not event_id:
                     continue
@@ -179,10 +180,15 @@ async def main():
     print(f"   Quality win rate: {config.quality_win_rate * 100}%")
     print(f"\n🔑 API Key: {'configured' if api_key else 'NOT SET'}")
 
-    # Create detector
+    # Create Polymarket Data API client (provides trader addresses)
+    polymarket_client = PolymarketDataClient()
+    
+    # Create detector with Data API client for whale detection
     detector = WhaleDetector(
         config=config,
         database_url=database_url,
+        polymarket_client=polymarket_client,
+        polymarket_poll_interval_seconds=60,
     )
 
     # Create WebSocket monitor with API credentials
