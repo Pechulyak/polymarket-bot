@@ -92,6 +92,23 @@ services:
     networks:
       - polymarket_network
 
+  whale-detector:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: polymarket_whale_detector
+    env_file:
+      - .env
+    command: python src/run_whale_detection.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - polymarket_network
+
 volumes:
   postgres_data:
     driver: local

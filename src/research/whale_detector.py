@@ -147,6 +147,8 @@ class WhaleDetector:
         """
         self.polymarket_client = polymarket_client
         self.polymarket_poll_interval = polymarket_poll_interval_seconds
+        self.config = config or DetectionConfig()
+        self.database_url = database_url
 
         self._trades: Dict[str, List[TradeRecord]] = defaultdict(list)
         self._detected_whales: Dict[str, DetectedWhale] = {}
