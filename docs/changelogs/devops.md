@@ -22,6 +22,25 @@
 - security_status: SECURE ✅
 - Firewall: пропущен по решению пользователя
 
+## [2026-02-28] - SSH Tunnel Migration
+
+### Security Hardening
+- Закрыт внешний доступ к PostgreSQL (порт 5433)
+- Закрыт внешний доступ к Redis (порт 6379)
+- БД теперь доступна только внутри Docker сети
+
+### New Files
+- `docs/SSH_TUNNEL.md` - инструкция по подключению через SSH туннель
+
+### Configuration
+- Удалены `ports` для postgres и redis из docker-compose.yml
+- DBeaver теперь требует SSH туннель
+
+### Status
+- db_port_exposed: NO
+- redis_port_exposed: NO
+- security_status: SECURE
+
 ### Security Fix - Password Leak
 - Исправлена утечка пароля БД в логах
 - Добавлена функция `_mask_database_url()` в:

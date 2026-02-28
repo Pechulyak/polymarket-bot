@@ -127,18 +127,18 @@ Live разрешен: НЕТ
 ## 11. БЕЗОПАСНОСТЬ (Security Verification)
 
 security_status: SECURE ✅
-db_port_exposed: YES (5433) - для DBeaver
-redis_port_exposed: YES (6379) - для локальной разработки
-postgres_password_rotated: YES (новый пароль установлен)
+db_port_exposed: NO (только внутри Docker)
+redis_port_exposed: NO (только внутри Docker)
+postgres_password_rotated: YES
 postgres_memory_limit: 1G ✅
-firewall_status: DISABLED (по решению пользователя)
+firewall_status: DISABLED
 last_security_check: 2026-02-28
 active_security_incidents: 0
 
 notes: |
+  - Порты 5432/5433 и 6379 закрыты для внешнего доступа
+  - БД доступна только внутри Docker сети
+  - Для DBeaver: использовать SSH туннель (docs/SSH_TUNNEL.md)
   - Пароль POSTGRES_PASSWORD обновлён
   - Лимит памяти PostgreSQL увеличен до 1G
-  - Контейнеры перезапущены с новым паролем
-  - Логи: подозрительных атак не обнаружено
-  - Firewall пропущен по решению пользователя
   - Исправлена утечка пароля в логах (_mask_database_url)
