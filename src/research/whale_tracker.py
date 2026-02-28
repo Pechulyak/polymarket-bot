@@ -15,9 +15,10 @@ Example:
 """
 
 import asyncio
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from decimal import Decimal
+from enum import Enum
 from typing import List, Optional
 
 import aiohttp
@@ -34,6 +35,34 @@ def _mask_database_url(url: str) -> str:
         return "None"
     import re
     return re.sub(r':([^@]+)@', ':****@', url)
+
+
+class StatsMode(Enum):
+    """Statistics calculation mode.
+    
+    Defines what data is available and how to calculate metrics:
+    
+    - REALIZED: Actual settled trades with known outcomes.
+      Requires: is_winner field from API (currently NOT available).
+      Status: NOT IMPLEMENTED - Polymarket Data API does not provide settlement data.
+    
+    - UNREALIZED_PROXY: Use unrealizedPnl from positions snapshot.
+      Pros: Real-time P&L from API.
+      Cons: Only shows current snapshot, not actual trading profit.
+    
+    - ACTIVITY_ONLY: Only activity metrics (trades count, avg size, turnover).
+      No P&L or win rate. Safest approach when outcomes unknown.
+      Always available regardless of API capabilities.
+    """
+    
+    # Not yet implemented - requires settlement data from API
+    REALIZED = "realized"
+    
+    # Use unrealizedPnl from positions (current snapshot)
+    UNREALIZED_PROXY = "unrealized_proxy"
+    
+    # Activity metrics only (trades count, avg size, turnover)
+    ACTIVITY_ONLY = "activity_only"
 
 
 @dataclass
@@ -85,22 +114,41 @@ class WhaleTrade:
 @dataclass
 class WhaleStats:
     """Statistical summary of a whale's trading activity.
+    
+    IMPORTANT: win_rate and total_profit_usd are NOT reliable because:
+    - Polymarket Data API does NOT provide `is_winner` field
+    - Trade outcomes are unknown until market settlement
+    - BUY != win, SELL != loss (incorrect assumption removed)
+    
+    Use stats_mode to understand what metrics are available:
+    - ACTIVITY_ONLY: Only activity metrics (safe default)
+    - UNREALIZED_PROXY: Uses unrealizedPnl from positions snapshot
 
     Attributes:
         wallet_address: Whale wallet address
+        stats_mode: How statistics were calculated (see StatsMode enum)
         total_trades: Total number of trades
-        win_rate: Win rate as decimal (0.0 to 1.0)
-        total_profit_usd: Total profit in USD
+        win_rate: DEPRECATED - always 0, kept for compatibility
+        total_profit_usd: DEPRECATED - use unrealized_pnl_usd instead
+        unrealized_pnl_usd: Unrealized P&L from positions snapshot (if available)
         avg_trade_size_usd: Average trade size in USD
+        total_volume_usd: Total trading volume in USD
+        trades_per_day: Average trades per day
         last_active_at: Last activity timestamp
         risk_score: Risk score 1-10 (1 = best)
     """
 
     wallet_address: str
+    stats_mode: StatsMode = StatsMode.ACTIVITY_ONLY
     total_trades: int = 0
+    # Deprecated fields - kept for backward compatibility
     win_rate: Decimal = Decimal("0")
     total_profit_usd: Decimal = Decimal("0")
+    # New fields with clear semantics
+    unrealized_pnl_usd: Decimal = Decimal("0")
     avg_trade_size_usd: Decimal = Decimal("0")
+    total_volume_usd: Decimal = Decimal("0")
+    trades_per_day: Decimal = Decimal("0")
     last_active_at: Optional[datetime] = None
     risk_score: int = 5
 
@@ -118,10 +166,12 @@ class WhaleTracker:
 
     DATA_API_URL = "https://data-api.polymarket.com"
 
+    # Criteria for quality whale detection
+    # NOTE: win_rate removed - API does not provide settlement outcomes
     QUALITY_WHALE_CRITERIA = {
-        "min_trades": 100,
-        "min_win_rate": Decimal("0.60"),
+        "min_trades": 50,  # Reduced from 100 (more inclusive)
         "min_avg_size": Decimal("50.0"),
+        "min_total_volume": Decimal("1000.0"),  # Add volume threshold
         "max_inactive_days": 30,
     }
 
@@ -299,17 +349,29 @@ class WhaleTracker:
 
         return []
 
-    async def calculate_stats(self, wallet_address: str) -> WhaleStats:
+    async def calculate_stats(
+        self,
+        wallet_address: str,
+        stats_mode: StatsMode = StatsMode.ACTIVITY_ONLY,
+    ) -> WhaleStats:
         """Calculate statistical summary for a whale.
-
-        Analyzes recent trades to calculate:
-        - Win rate
-        - Total profit
-        - Average trade size
-        - Risk score (1-10)
-
+        
+        IMPORTANT: This method no longer calculates win_rate or realized profit
+        because Polymarket Data API does NOT provide settlement outcomes.
+        
+        Available modes:
+        - ACTIVITY_ONLY (default): Activity metrics only (safe)
+        - UNREALIZED_PROXY: Add unrealizedPnl from positions snapshot
+        
+        Activity metrics (always available):
+        - total_trades: Number of trades
+        - avg_trade_size_usd: Average trade size
+        - total_volume_usd: Total trading volume
+        - trades_per_day: Trading frequency
+        
         Args:
             wallet_address: Whale wallet address
+            stats_mode: Statistics calculation mode (default: ACTIVITY_ONLY)
 
         Returns:
             WhaleStats object with calculated statistics
@@ -319,104 +381,171 @@ class WhaleTracker:
         if not trades:
             return WhaleStats(wallet_address=wallet_address)
 
-        wins = 0
-        total_profit = Decimal("0")
+        # === ACTIVITY METRICS (always available) ===
         total_size = Decimal("0")
-
         for trade in trades:
             total_size += trade.size_usd
 
-            if trade.side.lower() == "buy":
-                if trade.size_usd > 0:
-                    wins += 1
-                    total_profit += trade.size_usd * (Decimal("1") - trade.price)
-            else:
-                if trade.size_usd > 0:
-                    total_profit += trade.size_usd * trade.price
-
         total_trades = len(trades)
-        win_rate = (
-            Decimal(wins) / Decimal(total_trades) if total_trades > 0 else Decimal("0")
-        )
         avg_size = (
             total_size / Decimal(total_trades) if total_trades > 0 else Decimal("0")
         )
+        
+        # Calculate trades per day
+        time_span = trades[0].timestamp - trades[-1].timestamp
+        days_active = max(time_span.total_seconds() / 86400, 1)  # At least 1 day
+        trades_per_day = Decimal(total_trades) / Decimal(days_active)
 
+        # === UNREALIZED P&L (if requested and available) ===
+        unrealized_pnl = Decimal("0")
+        if stats_mode == StatsMode.UNREALIZED_PROXY:
+            positions = await self.fetch_whale_positions(wallet_address)
+            for position in positions:
+                unrealized_pnl += position.unrealized_pnl
+
+        # === RISK SCORE (based on activity metrics, not win_rate) ===
         risk_score = self._calculate_risk_score(
-            win_rate=win_rate,
             total_trades=total_trades,
             avg_trade_size=avg_size,
+            total_volume=total_size,
+            trades_per_day=trades_per_day,
             last_active=trades[0].timestamp if trades else None,
         )
 
         return WhaleStats(
             wallet_address=wallet_address,
+            stats_mode=stats_mode,
             total_trades=total_trades,
-            win_rate=win_rate,
-            total_profit_usd=total_profit,
+            # Deprecated fields - kept for compatibility but always 0
+            win_rate=Decimal("0"),
+            total_profit_usd=Decimal("0"),
+            # New fields
+            unrealized_pnl_usd=unrealized_pnl,
             avg_trade_size_usd=avg_size,
+            total_volume_usd=total_size,
+            trades_per_day=trades_per_day,
             last_active_at=trades[0].timestamp if trades else None,
             risk_score=risk_score,
         )
 
     def _calculate_risk_score(
         self,
-        win_rate: Decimal,
         total_trades: int,
         avg_trade_size: Decimal,
+        total_volume: Decimal,
+        trades_per_day: Decimal,
         last_active: Optional[datetime],
     ) -> int:
         """Calculate risk score (1-10) for a whale.
-
-        Scoring:
-        - 1-3: Elite (>70% WR, $500k+ volume)
-        - 4-6: Good (60-70% WR, $100k+ volume)
-        - 7-8: Moderate (50-60% WR, $50k+ volume)
-        - 9-10: High risk (<50% WR or <30 days active)
+        
+        NOTE: This scoring is based on ACTIVITY metrics only, since win_rate
+        is not available from Polymarket Data API (no settlement data).
+        
+        SOURCE-OF-TRUTH: This is the canonical risk_score implementation.
+        All other modules (WhaleDetector, copy_trading_engine, etc.) should
+        use this function to ensure consistent scoring.
+        
+        Scoring logic:
+        - 1-3: Elite (high volume, consistent activity)
+        - 4-6: Good (moderate volume/activity)
+        - 7-8: Low activity or small trades
+        - 9-10: High risk (inactive, low volume)
 
         Args:
-            win_rate: Win rate as decimal
             total_trades: Total number of trades
-            avg_trade_size: Average trade size
+            avg_trade_size: Average trade size in USD
+            total_volume: Total trading volume in USD
+            trades_per_day: Average trades per day
             last_active: Last active timestamp
 
         Returns:
             Risk score 1-10 (1 = best)
         """
-        score = 5
+        return calculate_risk_score(
+            total_trades=total_trades,
+            avg_trade_size=avg_trade_size,
+            total_volume=total_volume,
+            trades_per_day=trades_per_day,
+            last_active=last_active,
+        )
 
-        if win_rate >= Decimal("0.70"):
-            if total_trades >= 1000 and avg_trade_size >= Decimal("500"):
-                score = 1
-            elif total_trades >= 500:
-                score = 2
-            else:
-                score = 3
-        elif win_rate >= Decimal("0.60"):
-            if total_trades >= 500 and avg_trade_size >= Decimal("100"):
-                score = 4
-            elif total_trades >= 200:
-                score = 5
-            else:
-                score = 6
-        elif win_rate >= Decimal("0.50"):
-            score = 7
+
+def calculate_risk_score(
+    total_trades: int,
+    avg_trade_size: Decimal,
+    total_volume: Decimal,
+    trades_per_day: Decimal,
+    last_active: Optional[datetime] = None,
+) -> int:
+    """Calculate risk score (1-10) for a whale.
+    
+    NOTE: This scoring is based on ACTIVITY metrics only, since win_rate
+    is not available from Polymarket Data API (no settlement data).
+    
+    SOURCE-OF-TRUTH: This is the canonical risk_score implementation.
+    All other modules (WhaleDetector, copy_trading_engine, etc.) should
+    use this function to ensure consistent scoring.
+    
+    Scoring logic:
+    - 1-3: Elite (high volume, consistent activity)
+    - 4-6: Good (moderate volume/activity)
+    - 7-8: Low activity or small trades
+    - 9-10: High risk (inactive, low volume)
+
+    Args:
+        total_trades: Total number of trades
+        avg_trade_size: Average trade size in USD
+        total_volume: Total trading volume in USD
+        trades_per_day: Average trades per day
+        last_active: Last active timestamp
+
+    Returns:
+        Risk score 1-10 (1 = best)
+    """
+    score = 5
+
+    # Elite: High volume and consistent activity
+    if total_volume >= Decimal("500000") and total_trades >= 500:
+        if total_trades >= 1000 and trades_per_day >= Decimal("5"):
+            score = 1
         else:
-            score = 9
+            score = 2
+    # Good: Moderate volume
+    elif total_volume >= Decimal("100000") and total_trades >= 200:
+        if total_trades >= 500:
+            score = 3
+        else:
+            score = 4
+    # Moderate: Some activity
+    elif total_volume >= Decimal("50000") and total_trades >= 50:
+        score = 5
+    elif total_volume >= Decimal("10000") and total_trades >= 20:
+        score = 6
+    # Low activity
+    elif total_trades >= 10:
+        score = 7
+    else:
+        score = 8
 
-        if last_active:
-            days_inactive = (datetime.now() - last_active).days
-            if days_inactive > 30:
-                score = min(score + 1, 10)
+    # Inactivity penalty
+    if last_active:
+        days_inactive = (datetime.now() - last_active).days
+        if days_inactive > 30:
+            score = min(score + 2, 10)
+        elif days_inactive > 14:
+            score = min(score + 1, 10)
 
-        return score
+    return score
 
     def is_quality_whale(self, stats: WhaleStats) -> bool:
         """Check if whale meets quality criteria.
-
-        Criteria:
-        - min_trades >= 100
-        - win_rate >= 60%
+        
+        NOTE: win_rate is no longer used for quality assessment because
+        Polymarket Data API does not provide settlement outcomes.
+        
+        Criteria (based on ACTIVITY metrics):
+        - min_trades >= 50 (reduced from 100)
+        - min_total_volume >= $1000
         - min_avg_size >= $50
         - inactive <= 30 days
 
@@ -431,7 +560,8 @@ class WhaleTracker:
         if stats.total_trades < criteria["min_trades"]:
             return False
 
-        if stats.win_rate < criteria["min_win_rate"]:
+        # Use total_volume instead of win_rate
+        if stats.total_volume_usd < criteria.get("min_total_volume", Decimal("1000")):
             return False
 
         if stats.avg_trade_size_usd < criteria["min_avg_size"]:

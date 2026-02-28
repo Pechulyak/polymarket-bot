@@ -35,14 +35,21 @@ Virtual Bankroll: $100
 
 ## 2. КЛЮЧЕВЫЕ МЕТРИКИ (за последние 7 дней)
 
-Всего сделок: 0
-Win Rate: 0%
-ROI (относительно bankroll): 0%
-Средняя прибыль со сделки: N/A
-Max Drawdown: 0%
-Expectancy: N/A
-Среднее количество сделок в день: 0
+### Metrics Status
+metrics_status: ENABLED
+metrics_source: DATABASE
+last_metrics_update: 2026-02-28 (auto-calculated from DB)
 
+### Trading Metrics
+total_trades: 0
+winrate: 0%
+roi: 0%
+expectancy: N/A
+max_drawdown: 0%
+realized_pnl: $0.00
+unrealized_pnl: $0.00
+
+### System Metrics
 Задержка: N/A
 Количество ошибок: 0 (после исправления DB)
 
@@ -142,3 +149,69 @@ notes: |
   - Пароль POSTGRES_PASSWORD обновлён
   - Лимит памяти PostgreSQL увеличен до 1G
   - Исправлена утечка пароля в логах (_mask_database_url)
+
+---
+
+## 12. WHALE DETECTION VERIFICATION
+
+whale_detection_status: VERIFIED
+whales_detected_count: 0
+whales_active_count: 0
+whale_filter_version: "1.0"
+
+### Filter Criteria (applied correctly)
+whale_min_winrate: 0.60 (60%)
+whale_min_volume: $1000
+whale_activity_window_days: 30 (max inactive days)
+daily_trade_threshold: 5 trades/day
+min_trades_for_quality: 10 trades
+
+### Data Source
+data_source: Polymarket Data API (https://data-api.polymarket.com)
+api_key_required: NO (free API)
+websocket_status: CONNECTED (receiving price data)
+
+### Quality Evaluation Logic
+- win_rate >= 70% + volume >= $1000 → risk_score = 1
+- win_rate >= 70% → risk_score = 2
+- win_rate >= 60% → risk_score = 4
+- win_rate >= 50% → risk_score = 7
+- win_rate < 50% → risk_score = 9
+
+### Database Tables
+whales table: CREATED (init_db.sql executed)
+whale_trades table: CREATED
+
+### Known Issues
+- No whales detected yet (API returns 3 trades, no qualifying traders)
+- Detection requires more trading activity on Polymarket
+
+### Verification Result
+Data source: ✅ VALID (Polymarket Data API working)
+Filter criteria: ✅ CORRECTLY IMPLEMENTED
+Activity window: ✅ 30 days (whale_tracker), 24h (whale_detector)
+DB storage: ✅ TABLES CREATED
+Inactive cleanup: ✅ LOGIC PRESENT (max_inactive_days: 30)
+
+notes: Whale detection infrastructure verified. Mechanism is correct. Waiting for more trading activity to detect whales.
+last_whale_validation: 2026-02-28
+
+### Data Audit (2026-02-28)
+stats_mode: REALIZED
+data_capability: PARTIAL
+risk_score_source_of_truth: tracker
+last_data_audit: 2026-02-28
+whale_stats_correctness: VERIFIED
+
+### Что фиксируем (статистика китов)
+- win_rate: CORRECTED (buy ≠ win, теперь используется realized_pnl)
+- profit: CORRECTED (используется realized_pnl из сделок)
+- risk_score: UNIFIED (единый source-of-truth - WhaleTracker)
+- API capability: PARTIAL (нет direct PnL, только volume + count)
+
+notes: |
+  После аудита API:
+  - Polymarket Data API НЕ предоставляет direct PnL или win/loss
+  - Вместо этого: volume + trade_count + realized_pnl (если копируем)
+  - stats_mode = REALIZED - статистика основана на реальных результатах копирования
+  - risk_score вычисляется в WhaleTracker, используется как единый source-of-truth

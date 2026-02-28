@@ -34,6 +34,7 @@ from sqlalchemy.orm import sessionmaker
 from src.research.polymarket_data_client import (
     PolymarketDataClient,
 )
+from src.research.whale_tracker import calculate_risk_score
 
 logger = structlog.get_logger(__name__)
 
@@ -401,36 +402,34 @@ class WhaleDetector:
 
     def _evaluate_quality(self, whale: DetectedWhale) -> None:
         """Evaluate if whale meets quality criteria.
-
+        
+        NOTE: This method now uses calculate_risk_score from whale_tracker
+        as the SOURCE-OF-TRUTH for risk_score calculation.
+        
+        The risk_score is based on ACTIVITY metrics (not win_rate) because:
+        - Polymarket Data API does NOT provide settlement outcomes
+        - win_rate is always 0/unknown for prediction markets
+        
         Args:
             whale: Whale to evaluate
         """
-        if whale.total_trades < self.config.min_trades_for_quality:
-            whale.is_quality = False
-            whale.risk_score = 10
-            return
-
-        if whale.total_trades >= self.config.min_trades_for_quality:
-            if (
-                whale.win_rate >= Decimal("0.70")
-                and whale.total_volume >= self.config.quality_volume
-            ):
-                whale.risk_score = 1
-                whale.is_quality = True
-            elif whale.win_rate >= Decimal("0.70"):
-                whale.risk_score = 2
-                whale.is_quality = True
-            elif whale.win_rate >= Decimal("0.60"):
-                whale.risk_score = 4
-                whale.is_quality = True
-            elif whale.win_rate >= Decimal("0.50"):
-                whale.risk_score = 7
-                whale.is_quality = False
-            else:
-                whale.risk_score = 9
-                whale.is_quality = False
+        # Use unified risk_score calculation from WhaleTracker
+        # SOURCE-OF-TRUTH: ensures consistency across all modules
+        whale.risk_score = calculate_risk_score(
+            total_trades=whale.total_trades,
+            avg_trade_size=whale.avg_trade_size,
+            total_volume=whale.total_volume,
+            trades_per_day=Decimal(whale.daily_trades),
+            last_active=None,  # Not available in DetectedWhale
+        )
+        
+        # Quality status based on risk_score thresholds
+        # Lower score = better quality
+        if whale.risk_score <= 3:
+            whale.is_quality = True
+        elif whale.risk_score <= 6:
+            whale.is_quality = True
         else:
-            whale.risk_score = 8
             whale.is_quality = False
 
     async def _save_whale_to_db(self, whale: DetectedWhale) -> None:

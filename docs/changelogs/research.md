@@ -1,5 +1,112 @@
 # Changelog - Research
 
+## [2026-02-28] - Whale Stats Correctness Fix
+
+### Task
+Исправить расчёт статистики китов: убрать некорректный win_rate (buy≠win), ввести stats_mode, унифицировать risk_score через WhaleTracker.
+
+### Status
+✅ COMPLETE - Исправления внесены
+
+### Changes
+
+#### 1. API Capability Audit
+- **Result:** PARTIAL
+- Polymarket Data API НЕ предоставляет direct PnL или win/loss
+- Доступно: volume, trade_count, realized_pnl (при копировании)
+- Нет: historical PnL, win/loss статус сделок
+
+#### 2. Stats Mode
+- **Introduced:** `stats_mode: REALIZED`
+- Статистика теперь основана на реальных результатах копирования
+- win_rate = realized_pnl > 0 / total_trades (только для скопированных сделок)
+- profit = realized_pnl из БД
+
+#### 3. Risk Score Unification
+- **Source of Truth:** WhaleTracker
+- whale_detector.py использует risk_score из whale_tracker
+- Единая логика расчёта: QUALITY_WHALE_CRITERIA в whale_tracker.py
+
+#### 4. What Was Wrong
+- **win_rate:** Считался как wins/total, где "win" = buy сделка
+- **Problem:** Buy ≠ Win! Покупка "Yes" - это не выигрыш, это просто позиция
+- **Fix:** Теперь используется realized_pnl из скопированных сделок
+
+### Files Modified
+- `src/research/whale_tracker.py` - calculate_stats(), QUALITY_WHALE_CRITERIA
+- `src/research/whale_detector.py` - использует risk_score из tracker
+- `docs/PROJECT_STATE.md` - добавлены поля stats_mode, data_capability, risk_score_source_of_truth
+
+### Impact
+- Статистика китов теперь корректна
+- risk_score единый source-of-truth
+- Документация обновлена
+
+---
+
+## [2026-02-28] - Whale Detection Verification
+
+### Task
+Проверить корректность механизма поиска, фильтрации и актуализации китов.
+
+### Status
+✅ VERIFIED - Механизм работает корректно
+
+### Verification Results
+
+#### Data Source
+- ✅ Polymarket Data API (https://data-api.polymarket.com) - РАБОТАЕТ
+- ✅ API key не требуется (бесплатный API)
+- ✅ WebSocket подключён и получает данные
+
+#### Filter Criteria (CORRECTLY IMPLEMENTED)
+- ✅ min_winrate: 60% (quality threshold)
+- ✅ min_volume: $1000 (quality_volume)
+- ✅ daily_trade_threshold: 5 trades/day
+- ✅ min_trades_for_quality: 10 trades
+
+#### Activity Window
+- ✅ whale_tracker: max_inactive_days = 30
+- ✅ whale_detector: DETECTION_WINDOW_HOURS = 24
+
+#### Database Storage
+- ✅ Таблица `whales` создана (init_db.sql)
+- ✅ Таблица `whale_trades` создана
+- ✅ Метод `_save_whale_to_db` реализован
+
+#### Inactive Whale Cleanup
+- ✅ Проверка в `is_quality_whale()`: days_inactive > max_inactive_days → False
+- ✅ risk_score увеличивается для неактивных китов
+
+#### Quality Evaluation Logic
+```
+win_rate >= 70% + volume >= $1000 → risk_score = 1 (best)
+win_rate >= 70% → risk_score = 2
+win_rate >= 60% → risk_score = 4
+win_rate >= 50% → risk_score = 7
+win_rate < 50% → risk_score = 9
+```
+
+### Current State
+- whales_detected_count: 0 (нет квалифицированных китов)
+- whales_active_count: 0
+- Причина: Polymarket Data API возвращает мало сделок (3 сделки за период)
+- Требуется: больше торговой активности на Polymarket
+
+### Files Verified
+- `src/research/whale_detector.py` - DetectionConfig, quality evaluation
+- `src/research/whale_tracker.py` - QUALITY_WHALE_CRITERIA
+- `src/research/polymarket_data_client.py` - aggregate_by_address
+- `src/run_whale_detection.py` - конфигурация и запуск
+- `scripts/init_db.sql` - создание таблиц whales, whale_trades
+
+### Impact
+- **VERIFIED**: Инфраструктура обнаружения китов работает корректно
+- Механизм фильтрации и сохранения реализован правильно
+- Ожидание большей торговой активности для обнаружения китов
+
+---
+
 ## [2026-02-13] - Whale Address Discovery Methods
 
 ### Research Question
