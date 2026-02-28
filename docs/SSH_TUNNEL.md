@@ -1,18 +1,16 @@
 # SSH Tunnel для подключения к PostgreSQL
 
-## Вариант 1: SSH туннель с пробросом порта (рекомендуется)
+## Настройка DBeaver
 
-### На локальном компьютере:
+### Шаг 1: Создать SSH туннель на локальном компьютере
 
 ```bash
-# Создать SSH туннель
-ssh -L 5433:localhost:5433 -N -f user@your-server-ip
-
-# Или с кастомным портом SSH
-ssh -L 5433:localhost:5433 -p 22 -N -f user@your-server-ip
+ssh -L 5433:localhost:5432 -N -f root@212.192.11.92
 ```
 
-### Подключение в DBeaver:
+При первом подключении подтвердите ключ (yes).
+
+### Шаг 2: Подключение в DBeaver
 
 ```
 Host: localhost
@@ -22,33 +20,27 @@ Username: postgres
 Password: <ваш_пароль>
 ```
 
-## Вариант 2: Подключение через docker exec (временное)
+### Альтернатива: SSH туннель через DBeaver
+
+В DBeaver можно настроить SSH туннель напрямую:
+
+1. New Connection → PostgreSQL
+2. Вкладка "SSH" → включить
+3. Настройки:
+   - Host: 212.192.11.92
+   - Port: 22
+   - Username: root
+   - Authentication: Password или Key
+4. Вкладка "Main":
+   - Host: localhost
+   - Port: 5433
+   - Database: polymarket
+   - Username: postgres
+   - Password: <ваш_пароль>
+
+## Проверка
 
 ```bash
-# Проброс порта через docker
-docker compose exec -p 5433:5432 postgres bash
-```
-
-## Вариант 3: SSH туннель с ключом
-
-```bash
-# С SSH ключом
-ssh -i ~/.ssh/id_rsa -L 5433:localhost:5433 -N -f user@your-server-ip
-```
-
-## Проверка туннеля
-
-```bash
-# Проверить, что порт открыт локально
+# Проверить туннель
 ss -tulpn | grep 5433
-
-# Тест подключения
-psql -h localhost -p 5433 -U postgres -d polymarket
-```
-
-## Закрытие туннеля
-
-```bash
-# Найти и убить процесс
-pkill -f "ssh -L 5433"
 ```
