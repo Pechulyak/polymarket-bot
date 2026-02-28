@@ -44,7 +44,7 @@ Password: <ваш_пароль_БД>
    - Port: 22
    - Username: root
    - Authentication: Key
-   - Key: <путь_к_вашему_приватному_ключу>
+   - Key: (нажмите Browse и выберите файл)
 4. Вкладка "Main":
    - Host: localhost
    - Port: 5433
