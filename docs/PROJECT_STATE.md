@@ -200,10 +200,10 @@ whale_model_stage: DISCOVERY
 whale_model_status: ACTIVE
 
 ### Discovery Metrics
-whales_discovered_count: 0
+whales_discovered_count: 28
 whales_qualified_count: 0
 whales_rejected_count: 0
-last_discovery_refresh: 2026-02-28
+last_discovery_refresh: 2026-02-28 (auto-updated from DB)
 whale_discovery_status: ACTIVE
 
 ### Ranking Status
@@ -211,15 +211,22 @@ whale_ranking_status: ACTIVE
 top_whales_count: 0
 last_ranking_update: 2026-02-28
 
+### Qualification Blocker Report (DB Query)
+qualification_blocker: min_trades (10) - 14 whales blocked
+qualification_blocker: min_volume ($500) - 10 whales blocked
+qualification_blocker: trades_last_3_days (3) - 24 whales blocked
+qualification_blocker: days_active (1) - 24 whales blocked
+
 notes: |
   - Model v2: activity-based whale detection
   - Stage DISCOVERY: scanning for new whales via Polymarket Data API
-  - Top single trade detected: $17,200 (not yet saved to DB)
-  - Waiting for more trading activity to qualify whales
+  - **DB TRUTH:** 28 discovered, 0 qualified, 0 ranked (from DB query)
   - **STAGE 2 IMPLEMENTED:** Discovery → Qualification → Ranking pipeline
   - Qualification: 10+ trades, 3+ trades/3days, $500+ volume, 1+ day active
   - Ranking: get_top_whales(10) method with composite score
   - Ranking update: hourly in polling loop
+  - Persistence: whales saved to DB via upsert (ON CONFLICT DO UPDATE)
+  - on_whale_detected callback: FIXED (added to __init__)
 
 ---
 
@@ -232,8 +239,8 @@ kpi_status: BELOW_TARGET
 ### KPI Details
 - discovery_kpi_target: 50 unique traders to discover
 - qualification_kpi_target: 5 qualified whales (risk_score <= 4)
-- current: 0 discovered, 0 qualified
-- status: BELOW_TARGET (no whales in DB yet)
+- current: 28 discovered, 0 qualified (from DB)
+- status: BELOW_TARGET (waiting for qualification criteria)
 
 notes: |
   - KPI отслеживает прогресс discovery и qualification

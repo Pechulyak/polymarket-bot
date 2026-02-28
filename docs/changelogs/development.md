@@ -1,5 +1,76 @@
 # Development Changelog
 
+### 2026-02-28 - Stage 2 Completion Fix — DB Counters + Persistence + Output Verification (COMPLETED)
+
+#### Fixed Issues
+- **on_whale_detected callback stability**: Fixed AttributeError in WhaleDetector
+  - Added `self.on_whale_detected = on_whale_detected` in `__init__`
+  - Added `self.on_whale_updated = on_whale_updated` in `__init__`
+  - Container rebuilt and restarted successfully
+
+- **DB Truth Queries**: Created [`docs/db_queries/whale_queries.sql`](docs/db_queries/whale_queries.sql)
+  - Query for whale status counts (discovered/qualified/rejected)
+  - Query for top whales by volume
+  - Query for qualification blockers analysis
+  - Query for risk score distribution
+
+- **PROJECT_STATE Sync**: Updated with DB-derived counters
+  - whales_discovered_count: 28 (from DB)
+  - whales_qualified_count: 0 (from DB)
+  - whales_rejected_count: 0 (from DB)
+  - top_whales_count: 0 (from DB)
+
+- **Qualification Blockers Identified**:
+  - min_trades (10): 14 whales blocked
+  - min_volume ($500): 10 whales blocked
+  - trades_last_3_days (3): 24 whales blocked
+  - days_active (1): 24 whales blocked
+
+#### Verification
+- Whale detector running: Total tracked = 28, Quality whales = 0
+- get_top_whales(10) reads from DB correctly
+- Persistence: whales saved via upsert (ON CONFLICT DO UPDATE)
+- No errors in logs after fix
+
+#### Status: COMPLETED ✅
+
+---
+
+### 2026-02-28 - Paper Metrics Activation (COMPLETED)
+
+#### Implemented
+- **Metrics Aggregator**: Создан [`src/monitoring/metrics_aggregator.py`](src/monitoring/metrics_aggregator.py)
+  - Автоматический расчёт метрик из БД
+  - Поддержка 0-состояния (нет сделок = нулевые метрики)
+  - Рассчитывает: win_rate, roi, expectancy, max_drawdown, realized_pnl, unrealized_pnl
+
+- **Equity Snapshots**: Реализовано сохранение equity в bankroll table
+  - Автоматическое сохранение каждые 5 минут
+  - История equity для анализа drawdown
+
+- **Paper Trading Integration**: Обновлён [`src/main_paper_trading.py`](src/main_paper_trading.py)
+  - Добавлен MetricsAggregator в PaperTradingRunner
+  - Метод `update_metrics()` для расчёта и сохранения метрик
+  - Фоновая задача `_metrics_updater()` обновляет метрики каждые 5 минут
+
+#### Metrics Tracked
+- total_trades: Общее количество сделок
+- winrate: Процент выигрышных сделок
+- roi: Return on Investment
+- expectancy: Средняя прибыль со сделки
+- max_drawdown: Максимальная просадка
+- realized_pnl: Реализованный PnL
+- unrealized_pnl: Нереализованный PnL
+
+#### PROJECT_STATE Updated
+- metrics_status: ENABLED
+- metrics_source: DATABASE
+- last_metrics_update: 2026-02-28 (auto-calculated from DB)
+
+#### Status: COMPLETED ✅
+
+---
+
 ### 2026-02-28 - Architecture Verification (COMPLETED)
 
 #### Verified Components
