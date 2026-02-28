@@ -28,6 +28,14 @@ from sqlalchemy.orm import sessionmaker
 logger = structlog.get_logger(__name__)
 
 
+def _mask_database_url(url: str) -> str:
+    """Mask password in database URL for safe logging."""
+    if not url:
+        return "None"
+    import re
+    return re.sub(r':([^@]+)@', ':****@', url)
+
+
 @dataclass
 class WhalePosition:
     """Represents a whale's position in a market.
@@ -144,7 +152,7 @@ class WhaleTracker:
         self.database_url = database_url
         self._engine = create_engine(database_url)
         self._Session = sessionmaker(bind=self._engine)
-        logger.info("whale_tracker_database_configured", url=database_url[:50])
+        logger.info("whale_tracker_database_configured", url=_mask_database_url(database_url))
 
     async def _ensure_database(self) -> None:
         """Ensure database connection is available."""

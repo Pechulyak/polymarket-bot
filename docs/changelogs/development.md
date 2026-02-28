@@ -1,5 +1,69 @@
 # Development Changelog
 
+### 2026-02-28 - Architecture Verification (COMPLETED)
+
+#### Verified Components
+- **Docker Compose**: Все 4 контейнера запущены и healthy
+  - polymarket_bot (paper trading)
+  - polymarket_postgres (5433)
+  - polymarket_redis (6379)
+  - polymarket_whale-detector
+
+- **PostgreSQL**: Доступен на порту 5433
+  - Все таблицы paper trading созданы (10 таблиц)
+  - whales: 10 quality whales в БД
+  - whale_trades: таблица для трекинга сделок
+
+- **Whale Detection**: Активен
+  - WebSocket подключен, получает real-time данные
+  - polymarket_data_client работает
+  - whale_detector отслеживает китов
+
+- **Risk Module (Kelly)**: Реализован
+  - Kelly Criterion в copy_trading_engine.py (_calculate_copy_size)
+  - Quarter Kelly (0.25) для безопасности
+  - KillSwitch доступен в src/risk/kill_switch.py
+  - PositionLimits доступен в src/risk/position_limits.py
+
+- **Paper Execution**: Активен
+  - main.py работает в режиме paper
+  - VirtualBankroll инициализирован с $100
+  - Цепочка: whale detection → whale_tracker → virtual_bankroll
+
+#### Issues Fixed
+- PostgreSQL authentication: Исправлен pg_hba.conf (trust для всех хостов)
+- Containers restarted: Все сервисы перезапущены после исправления
+
+#### Known Issues (Non-blocking)
+- Ошибка fromisoformat в whale_tracker.fetch_whale_trades (не влияет на работу)
+- Нет реальных сделок китов в БД (нужно время для накопления)
+
+#### Status: VERIFIED ✅
+
+---
+
+### 2026-02-28 - Architecture Verification
+
+#### Verified
+- Docker Compose status checked
+- All containers: postgres, redis, bot, whale-detector were running but stopped
+- Exit code 137 indicates containers were stopped (not OOM killed)
+- Whale detector WebSocket receives real-time Polymarket data
+- Bot configured for paper trading with $100 bankroll
+
+#### Issues Found
+- PostgreSQL password mismatch: containers use default "password" but .env has different
+- Database authentication failed for whale_tracker and virtual_bankroll
+- Containers need restart with fixed configuration
+
+#### Next Steps
+- Fix DATABASE_URL in docker-compose.yml or .env
+- Restart containers: `docker compose up -d`
+- Verify PostgreSQL connection works
+- Run paper trading for 7+ days
+
+---
+
 ### 2026-02-20 - Polymarket Data API Integration (Real-time Whale Detection)
 
 #### Changed

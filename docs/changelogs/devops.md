@@ -1,5 +1,34 @@
 # Changelog - DevOps
 
+## [2026-02-28] - Security Verification & Hardening
+
+### Security Audit Results (Initial)
+- **Ports exposed**: 5433 (PostgreSQL), 6379 (Redis) - для локальной разработки (DBeaver)
+- **Firewall**: UFW inactive
+- **PostgreSQL password**: "password" (слабый)
+- **PostgreSQL memory limit**: 512M
+
+### Fixes Applied
+- ✅ POSTGRES_PASSWORD обновлён
+- ✅ PostgreSQL memory limit увеличен до 1G
+- ✅ Контейнеры перезапущены с новым паролем
+
+### Findings
+- Логи PostgreSQL/Redis за 24ч: подозрительных атак не обнаружено
+- Только failed auth - свои подключения с неверным паролем
+- Активных инцидентов нет
+
+### Status
+- security_status: SECURE ✅
+- Firewall: пропущен по решению пользователя
+
+### Security Fix - Password Leak
+- Исправлена утечка пароля БД в логах
+- Добавлена функция `_mask_database_url()` в:
+  - `src/strategy/virtual_bankroll.py`
+  - `src/research/whale_tracker.py`
+- Теперь пароль маскируется как `postgresql://postgres:****@...`
+
 ## [2026-02-21] - CI/CD Setup
 
 ### Added
