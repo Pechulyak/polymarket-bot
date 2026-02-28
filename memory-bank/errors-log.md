@@ -11,6 +11,40 @@
 
 ## Зафиксированные ошибки
 
+### [2026-02-28] Киты не сохраняются в БД (ИСПРАВЛЕНО)
+
+- **Симптом:** В памяти: 10-35 tracked whales, в БД: 0 записей. Логи показывают: `whale_save_failed error='column "total_volume_usd" of relation "whales" does not exist'`
+- **Причина:** Таблица `whales` в БД не имела колонок, требуемых кодом `_save_whale_to_db()` в whale_detector.py:
+  - total_volume_usd
+  - avg_trade_size_usd
+  - status
+  - trades_last_3_days
+  - days_active
+- **Решение:** Добавлены колонки через ALTER TABLE:
+  ```sql
+  ALTER TABLE whales ADD COLUMN IF NOT EXISTS total_volume_usd DECIMAL(20, 8) NOT NULL DEFAULT 0;
+  ALTER TABLE whales ADD COLUMN IF NOT EXISTS avg_trade_size_usd DECIMAL(20, 8) NOT NULL DEFAULT 0;
+  ALTER TABLE whales ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'discovered';
+  ALTER TABLE whales ADD COLUMN IF NOT EXISTS trades_last_3_days INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE whales ADD COLUMN IF NOT EXISTS days_active INTEGER NOT NULL DEFAULT 0;
+  ```
+- **Проверка:** COUNT(*) FROM whales = 15+, киты сохраняются со статусом discovered
+- **Правило:** Обновить scripts/init_db.sql чтобы схема соответствовала коду
+
+### [2026-02-28] Stage 2 — киты не сохраняются в БД
+
+- **Симптом:** В памяти 10 tracked whales, Quality=0, в БД 0 записей. Логи не показывают ошибок сохранения.
+- **Причина:**
+  1. `known_whales_loaded` показывало 10 whales — это из старой БД (кеш в памяти после перезапуска)
+  2. WhaleDetector использует `database_url` из env, но в whale-detector контейнере был неправильный DATABASE_URL
+  3. После исправления DATABASE_URL в docker-compose.yml — сохранение всё равно не работает
+  4. Возможная причина: whales не проходят `daily_trade_threshold` (5 trades/day), поэтому не попадают в tracked list
+- **Решение (в процессе):**
+  - Исправлен DATABASE_URL в docker-compose.yml: `postgresql://postgres:156136ar@postgres:5432/polymarket`
+  - Добавлены логи `save_whale_to_db` для диагностики
+  - Изменена логика: теперь сохраняются ВСЕ discovered киты, не только quality
+- **Правило:** Всегда проверять DATABASE_URL через `docker compose exec <service> env | grep DATABASE`
+
 ### [2026-02] PostgreSQL порт
 - **Симптом:** подключение к БД падало
 - **Причина:** стандартный порт 5432 вместо 5433

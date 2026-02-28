@@ -95,6 +95,8 @@ services:
     container_name: polymarket_whale_detector
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:156136ar@postgres:5432/polymarket
     command: python src/run_whale_detection.py
     depends_on:
       postgres:

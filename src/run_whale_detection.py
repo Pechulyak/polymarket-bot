@@ -167,7 +167,7 @@ async def main():
 
     config = DetectionConfig(
         min_trade_size=Decimal("50"),
-        min_trades_for_quality=10,
+        min_trades_for_quality=1,
         daily_trade_threshold=5,
         quality_win_rate=Decimal("0.60"),
         quality_volume=Decimal("1000"),

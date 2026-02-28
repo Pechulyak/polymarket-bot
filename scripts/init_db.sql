@@ -159,10 +159,18 @@ CREATE TABLE IF NOT EXISTS whales (
     total_trades INTEGER NOT NULL DEFAULT 0,
     win_rate DECIMAL(5, 4) NOT NULL DEFAULT 0,
     total_profit_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    total_volume_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
     avg_trade_size_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
     last_active_at TIMESTAMP NOT NULL DEFAULT NOW(),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     risk_score INTEGER NOT NULL DEFAULT 5 CHECK (risk_score >= 1 AND risk_score <= 10),
+    
+    -- Stage 2: Discovery + Qualification + Ranking
+    status VARCHAR(20) NOT NULL DEFAULT 'discovered' CHECK (status IN ('discovered', 'qualified', 'ranked')),
+    trades_last_3_days INTEGER NOT NULL DEFAULT 0,
+    days_active INTEGER NOT NULL DEFAULT 0,
+    last_qualified_at TIMESTAMP,
+    last_ranked_at TIMESTAMP,
     
     -- Additional metadata
     source VARCHAR(50),
@@ -175,6 +183,11 @@ CREATE INDEX IF NOT EXISTS idx_whales_address ON whales(wallet_address);
 CREATE INDEX IF NOT EXISTS idx_whales_winrate ON whales(win_rate DESC);
 CREATE INDEX IF NOT EXISTS idx_whales_active ON whales(is_active, last_active_at);
 CREATE INDEX IF NOT EXISTS idx_whales_risk ON whales(risk_score);
+-- Stage 2: Discovery + Qualification + Ranking indexes
+CREATE INDEX IF NOT EXISTS idx_whales_status ON whales(status);
+CREATE INDEX IF NOT EXISTS idx_whales_qualified ON whales(status, risk_score);
+CREATE INDEX IF NOT EXISTS idx_whales_ranked ON whales(status, last_ranked_at);
+CREATE INDEX IF NOT EXISTS idx_whales_trades_3days ON whales(trades_last_3_days DESC);
 
 -- Whale trades history (for analysis)
 CREATE TABLE IF NOT EXISTS whale_trades (
@@ -196,3 +209,21 @@ CREATE INDEX IF NOT EXISTS idx_whale_trades_market ON whale_trades(market_id, tr
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
 VALUES (100.00, 0, 100.00, 0, 0);
+
+-- ============================================================
+-- Stage 2: Whale Discovery + Qualification + Ranking Migration
+-- ============================================================
+
+-- Add missing columns to whales table
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS total_volume_usd DECIMAL(20, 8) NOT NULL DEFAULT 0;
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'discovered' CHECK (status IN ('discovered', 'qualified', 'ranked'));
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS trades_last_3_days INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS days_active INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS last_qualified_at TIMESTAMP;
+ALTER TABLE whales ADD NOT NULL CONSTRAINT whales_status_check CHECK (status IN ('discovered', 'qualified', 'ranked'));
+
+-- Add indexes for Stage 2 queries
+CREATE INDEX IF NOT EXISTS idx_whales_status ON whales(status);
+CREATE INDEX IF NOT EXISTS idx_whales_qualified ON whales(status, risk_score);
+CREATE INDEX IF NOT EXISTS idx_whales_ranked ON whales(status, last_qualified_at);
+CREATE INDEX IF NOT EXISTS idx_whales_trades_3days ON whales(trades_last_3_days DESC);

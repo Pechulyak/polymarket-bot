@@ -1,5 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-02-28
+Обновлено: 2026-02-28 (whale detection status)
+version: 1.1.0
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -158,6 +159,86 @@ whale_detection_status: VERIFIED
 whales_detected_count: 0
 whales_active_count: 0
 whale_filter_version: "1.0"
+
+---
+
+## 12.1. WHALE DETECTION (ИСПРАВЛЕНО)
+
+### Текущий статус
+- **Статус:** ✅ Работает (исправлено 2026-02-28)
+- **Tracked whales:** 38
+- **Quality whales:** 0
+- **В БД:** 18+ записей
+
+### Последняя проблема
+- **Проблема:** column "total_volume_usd" does not exist
+- **Дата:** 2026-02-28
+- **Решение:** Добавлены колонки total_volume_usd, volume_usd в БД (init_db.sql)
+
+### Технические детали
+- WebSocket: ✅ Подключен (получает price_changes)
+- Polymarket Data API: ✅ Работает
+- Whale discovery: ✅ Активен (38 discovered)
+- Qualification: В ожидании (нужно больше активности)
+
+### Известные ошибки
+- `'WhaleDetector' object has no attribute 'on_whale_detected'` — non-critical,不影响 основную работу
+
+### Логи (последние)
+```
+Total tracked: 38
+Quality whales: 0
+polymarket_new_whale: address=0x36747d58 volume_usd=1824.03
+```
+
+---
+
+## 13. WHALE MODEL
+
+whale_model_version: v2_activity_based
+whale_model_stage: DISCOVERY
+whale_model_status: ACTIVE
+
+### Discovery Metrics
+whales_discovered_count: 0
+whales_qualified_count: 0
+whales_rejected_count: 0
+last_discovery_refresh: 2026-02-28
+whale_discovery_status: ACTIVE
+
+### Ranking Status
+whale_ranking_status: ACTIVE
+top_whales_count: 0
+last_ranking_update: 2026-02-28
+
+notes: |
+  - Model v2: activity-based whale detection
+  - Stage DISCOVERY: scanning for new whales via Polymarket Data API
+  - Top single trade detected: $17,200 (not yet saved to DB)
+  - Waiting for more trading activity to qualify whales
+  - **STAGE 2 IMPLEMENTED:** Discovery → Qualification → Ranking pipeline
+  - Qualification: 10+ trades, 3+ trades/3days, $500+ volume, 1+ day active
+  - Ranking: get_top_whales(10) method with composite score
+  - Ranking update: hourly in polling loop
+
+---
+
+## 14. KPI МОНИТОРИНГ
+
+discovery_kpi_target: 50
+qualification_kpi_target: 5
+kpi_status: BELOW_TARGET
+
+### KPI Details
+- discovery_kpi_target: 50 unique traders to discover
+- qualification_kpi_target: 5 qualified whales (risk_score <= 4)
+- current: 0 discovered, 0 qualified
+- status: BELOW_TARGET (no whales in DB yet)
+
+notes: |
+  - KPI отслеживает прогресс discovery и qualification
+  - Status BELOW_TARGET до достижения минимум 5 qualified whales
+  - Требуется больше торговой активности на Polymarket
 
 ### Filter Criteria (applied correctly)
 whale_min_winrate: 0.60 (60%)

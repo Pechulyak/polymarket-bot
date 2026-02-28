@@ -93,6 +93,10 @@ class DetectedWhale:
     daily_trades: int = 0
     risk_score: int = 5
     is_quality: bool = False
+    # Stage 2: Discovery + Qualification + Ranking
+    status: str = "discovered"  # discovered | qualified | ranked
+    trades_last_3_days: int = 0
+    days_active: int = 0
 
 
 @dataclass
@@ -324,15 +328,20 @@ class WhaleDetector:
 
             self._update_whale_stats(whale)
 
-            if is_new and whale.daily_trades >= self.config.daily_trade_threshold:
-                await self._save_whale_to_db(whale)
+            # Stage 2: Save ALL discovered whales (not just quality ones)
+            # This ensures we track all candidates for qualification
+            await self._save_whale_to_db(whale)
+            
+            if is_new:
                 self._known_whales.add(trader)
 
                 logger.info(
-                    "new_whale_detected",
+                    "new_whale_discovered",
                     address=trader[:10],
                     daily_trades=whale.daily_trades,
+                    total_trades=whale.total_trades,
                     total_volume=str(whale.total_volume),
+                    status=whale.status,
                 )
 
                 if self.on_whale_detected:
@@ -343,13 +352,23 @@ class WhaleDetector:
 
                 return whale
 
+            # Update when quality status changes
             if whale.daily_trades >= self.config.daily_trade_threshold:
                 old_quality = whale.is_quality
+                old_status = whale.status
                 self._evaluate_quality(whale)
 
-                if whale.is_quality and not old_quality:
-                    await self._save_whale_to_db(whale)
+                # Log status change
+                if whale.status != old_status:
+                    logger.info(
+                        "whale_status_changed",
+                        address=trader[:10],
+                        old_status=old_status,
+                        new_status=whale.status,
+                        risk_score=whale.risk_score,
+                    )
 
+                if whale.is_quality and not old_quality:
                     logger.info(
                         "whale_became_quality",
                         address=trader[:10],
@@ -372,10 +391,14 @@ class WhaleDetector:
             whale: Whale to update
         """
         cutoff_24h = time.time() - 86400
+        cutoff_72h = time.time() - (3 * 86400)  # 3 days for qualification
         cutoff_window = time.time() - (self.DETECTION_WINDOW_HOURS * 3600)
 
         recent_trades = [
             t for t in self._trades[whale.wallet_address] if t.timestamp > cutoff_24h
+        ]
+        trades_last_3_days = [
+            t for t in self._trades[whale.wallet_address] if t.timestamp > cutoff_72h
         ]
         all_trades = [
             t for t in self._trades[whale.wallet_address] if t.timestamp > cutoff_window
@@ -383,6 +406,16 @@ class WhaleDetector:
 
         whale.total_trades = len(all_trades)
         whale.daily_trades = len(recent_trades)
+        whale.trades_last_3_days = len(trades_last_3_days)
+        
+        # Calculate days_active (unique trading days)
+        if all_trades:
+            trading_days = set()
+            for t in all_trades:
+                # Convert timestamp to date string
+                day = datetime.fromtimestamp(t.timestamp).strftime("%Y-%m-%d")
+                trading_days.add(day)
+            whale.days_active = len(trading_days)
 
         if all_trades:
             whale.total_volume = sum(t.size_usd for t in all_trades)
@@ -423,14 +456,47 @@ class WhaleDetector:
             last_active=None,  # Not available in DetectedWhale
         )
         
-        # Quality status based on risk_score thresholds
-        # Lower score = better quality
-        if whale.risk_score <= 3:
+        # Stage 2: Binary Qualification Gate
+        # Activity-based criteria (NOT ROI-based - no settlement data available)
+        #
+        # Qualified if ALL of:
+        # - total_trades >= 10 (lifetime)
+        # - trades_last_3_days >= 3
+        # - total_volume >= $500
+        # - days_active >= 1 (at least one trading day)
+        
+        qualification_criteria = {
+            "min_10_trades": whale.total_trades >= 10,
+            "min_3_trades_3days": whale.trades_last_3_days >= 3,
+            "min_500_volume": whale.total_volume >= Decimal("500"),
+            "min_1_day_active": whale.days_active >= 1,
+        }
+        
+        is_qualified = all(qualification_criteria.values())
+        
+        # Set status based on qualification
+        if is_qualified:
+            whale.status = "qualified"
             whale.is_quality = True
-        elif whale.risk_score <= 6:
-            whale.is_quality = True
+            logger.debug(
+                "whale_qualified",
+                address=whale.wallet_address[:10],
+                total_trades=whale.total_trades,
+                trades_last_3_days=whale.trades_last_3_days,
+                total_volume=str(whale.total_volume),
+                days_active=whale.days_active,
+            )
         else:
+            whale.status = "discovered"
             whale.is_quality = False
+            # Log why not qualified (for debugging)
+            failed_criteria = [k for k, v in qualification_criteria.items() if not v]
+            if failed_criteria:
+                logger.debug(
+                    "whale_not_qualified",
+                    address=whale.wallet_address[:10],
+                    failed_criteria=failed_criteria,
+                )
 
     async def _save_whale_to_db(self, whale: DetectedWhale) -> None:
         """Save whale to database.
@@ -440,24 +506,38 @@ class WhaleDetector:
         """
         await self._ensure_database()
         if not self._Session:
+            logger.warning("save_whale_db_no_session", address=whale.wallet_address[:10])
             return
+        
+        logger.info(
+            "save_whale_to_db",
+            address=whale.wallet_address[:10],
+            total_trades=whale.total_trades,
+            status=whale.status,
+        )
 
         session = self._Session()
         try:
             query = text("""
                 INSERT INTO whales (
                     wallet_address, total_trades, win_rate, total_profit_usd,
-                    avg_trade_size_usd, last_active_at, risk_score, source, updated_at
+                    total_volume_usd, avg_trade_size_usd, last_active_at, risk_score,
+                    status, trades_last_3_days, days_active, source, updated_at
                 ) VALUES (
                     :wallet_address, :total_trades, :win_rate, :total_profit,
-                    :avg_trade_size, NOW(), :risk_score, 'auto_detected', NOW()
+                    :total_volume, :avg_trade_size, NOW(), :risk_score,
+                    :status, :trades_last_3_days, :days_active, 'auto_detected', NOW()
                 )
                 ON CONFLICT (wallet_address) DO UPDATE SET
                     total_trades = EXCLUDED.total_trades,
                     win_rate = EXCLUDED.win_rate,
                     total_profit_usd = EXCLUDED.total_profit_usd,
+                    total_volume_usd = EXCLUDED.total_volume_usd,
                     avg_trade_size_usd = EXCLUDED.avg_trade_size_usd,
                     risk_score = EXCLUDED.risk_score,
+                    status = EXCLUDED.status,
+                    trades_last_3_days = EXCLUDED.trades_last_3_days,
+                    days_active = EXCLUDED.days_active,
                     last_active_at = NOW(),
                     updated_at = NOW()
             """)
@@ -470,8 +550,12 @@ class WhaleDetector:
                     "total_profit": float(
                         whale.total_volume * (whale.win_rate - Decimal("0.5")) * 2
                     ),
+                    "total_volume": float(whale.total_volume),
                     "avg_trade_size": float(whale.avg_trade_size),
                     "risk_score": whale.risk_score,
+                    "status": whale.status,
+                    "trades_last_3_days": whale.trades_last_3_days,
+                    "days_active": whale.days_active,
                 },
             )
             session.commit()
@@ -621,9 +705,26 @@ class WhaleDetector:
 
     async def _polymarket_poll_loop(self) -> None:
         """Background loop to poll Polymarket Data API for whale data."""
+        # Stage 2: Ranking update interval (every hour)
+        ranking_interval = 3600  # 1 hour
+        last_ranking_update = time.time()
+        
         while self._running:
             try:
                 await self._fetch_polymarket_whales()
+                
+                # Stage 2: Periodic ranking update every hour
+                current_time = time.time()
+                if current_time - last_ranking_update >= ranking_interval:
+                    top_whales = self.get_top_whales(limit=10)
+                    if top_whales:
+                        logger.info(
+                            "ranking_updated",
+                            top_count=len(top_whales),
+                            top_addresses=[w.wallet_address[:10] for w in top_whales[:3]],
+                        )
+                    last_ranking_update = current_time
+                
                 await asyncio.sleep(self.polymarket_poll_interval)
             except asyncio.CancelledError:
                 break
@@ -645,10 +746,19 @@ class WhaleDetector:
 
             new_whales = 0
             for address, stats in aggregated.items():
+                logger.info(
+                    "whale_check",
+                    address=address[:10],
+                    total_trades=stats.total_trades,
+                    min_required=self.config.min_trades_for_quality,
+                    is_known=address.lower() in self._known_whales,
+                )
                 if stats.total_trades < self.config.min_trades_for_quality:
+                    logger.info("whale_skipped_min_trades", address=address[:10], total_trades=stats.total_trades)
                     continue
 
                 if address.lower() in self._known_whales:
+                    logger.info("whale_skipped_known", address=address[:10])
                     continue
 
                 whale = DetectedWhale(
@@ -659,7 +769,7 @@ class WhaleDetector:
                     avg_trade_size=stats.avg_trade_size_usd,
                 )
 
-                if whale.daily_trades >= self.config.daily_trade_threshold:
+                if stats.total_trades >= self.config.min_trades_for_quality:
                     self._detected_whales[address.lower()] = whale
                     await self._save_whale_to_db(whale)
                     self._known_whales.add(address.lower())
@@ -719,3 +829,48 @@ class WhaleDetector:
             "quality_whales": len(quality),
             "known_whales": len(self._known_whales),
         }
+
+    def get_top_whales(self, limit: int = 10) -> List[DetectedWhale]:
+        """Get top ranked whales by activity score.
+        
+        Ranking is based on a composite score:
+        - Lower risk_score = better
+        - Higher trades_last_3_days = better
+        - Higher total_volume = better
+        
+        Only returns whales with status='qualified' or 'ranked'.
+
+        Args:
+            limit: Maximum number of whales to return (default: 10)
+
+        Returns:
+            List of top whales sorted by rank score (best first)
+        """
+        # Get all qualified whales
+        qualified = [
+            w for w in self._detected_whales.values()
+            if w.status in ("qualified", "ranked")
+        ]
+        
+        if not qualified:
+            return []
+        
+        # Calculate rank score (higher = better)
+        def rank_score(whale: DetectedWhale) -> float:
+            # Invert risk_score (lower is better, so 10-risk gives higher for better)
+            risk_component = (10 - whale.risk_score) * 10
+            # Activity component: trades in last 3 days
+            activity_component = whale.trades_last_3_days * 5
+            # Volume component (log scale for large volumes)
+            volume_component = float(whale.total_volume) / 1000 if whale.total_volume > 0 else 0
+            return risk_component + activity_component + volume_component
+        
+        # Sort by rank score descending
+        ranked = sorted(qualified, key=rank_score, reverse=True)
+        
+        # Update status to 'ranked' for top N
+        for i, whale in enumerate(ranked[:limit]):
+            if whale.status != "ranked":
+                whale.status = "ranked"
+        
+        return ranked[:limit]
