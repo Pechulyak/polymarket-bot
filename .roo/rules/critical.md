@@ -50,17 +50,20 @@ echo "new config" > requirements.txt
 
 ---
 
-## 4. НЕ удалять контейнеры без проверки ownership
+## 4.  НЕ удалять контейнеры без проверки принадлежности к polymarket-bot
 
-Перед удалением:
+Перед удалением любого контейнера или volume:
 
 1. Проверить labels:
 docker inspect <container> --format '{{.Config.Labels}}'
 
-2. Убедиться, что ресурс относится к betting-bot
+2. Убедиться, что контейнер относится к docker-compose проекту polymarket-bot:
+   label com.docker.compose.project=polymarket-bot
 
+3. Если label отсутствует — остановиться и уточнить у пользователя.
+
+Удалять контейнеры, не относящиеся к polymarket-bot, запрещено.
 Удаление “всего подряд” запрещено.
-
 ---
 
 ## 5. НЕ работать над чужими проектами
