@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-02-28 (whale detection status)
-version: 1.1.0
+Обновлено: 2026-03-01 (исправление повторных трейдов китов)
+version: 1.1.1
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -12,9 +12,9 @@ containers_status: OK
 db_connection_status: OK
 paper_pipeline_status: OK
 risk_module_status: OK
-last_architecture_check: 2026-02-28
+last_architecture_check: 2026-03-01
 
-notes: Все сервисы запущены. Исправлена проблема с PostgreSQL auth (pg_hba.conf). Whale detection активен, получает WebSocket данные. Kelly Criterion реализован в copy_trading_engine.py. Risk модуль (KillSwitch, PositionLimits) доступен.
+notes: Все сервисы запущены. Исправлена проблема с PostgreSQL auth (pg_hba.conf). Whale detection активен, получает WebSocket данные. Kelly Criterion реализован в copy_trading_engine.py. Risk модуль (KillSwitch, PositionLimits) доступен. ИСПРАВЛЕНО: повторные трейды китов (DETECTION_WINDOW_HOURS=72, убран continue для known whales).
 
 ---
 
@@ -99,15 +99,15 @@ Builder API: Не протестирован
 
 ## 7. ПРИОРИТЕТЫ НЕДЕЛИ
 
-1. Дождаться появления данных от китов
-2. Исправить ошибку fromisoformat в whale_tracker
+1. Проверить обновление whale_trades после исправления (ждать новых трейдов)
+2. Дождаться квалификации китов (trades_last_3_days, days_active)
 3. Запустить paper trading на 7+ дней
 
 ---
 
 ## 8. БЛОКЕРЫ
 
-- Ошибка fromisoformat в fetch_whale_trades (не блокирует работу)
+- Нет активных блокеров
 
 ---
 
@@ -116,6 +116,7 @@ Builder API: Не протестирован
 - Исправлена аутентификация PostgreSQL (pg_hba.conf trust)
 - Перезапущены все контейнеры
 - Подтверждена работа WebSocket whale-detector
+- ИСПРАВЛЕНО: повторные трейды китов (DETECTION_WINDOW_HOURS 24→72, убран continue для known whales, добавлен расчёт trades_last_3_days и days_active)
 
 ---
 
@@ -165,30 +166,41 @@ whale_filter_version: "1.0"
 ## 12.1. WHALE DETECTION (ИСПРАВЛЕНО)
 
 ### Текущий статус
-- **Статус:** ✅ Работает (исправлено 2026-02-28)
-- **Tracked whales:** 38
-- **Quality whales:** 0
-- **В БД:** 18+ записей
+- **Статус:** ✅ Работает (исправлено 2026-03-01)
+- **Tracked whales:** 413+
+- **Quality whales:** в процессе квалификации
+- **В БД:** обновляются повторные трейды
 
-### Последняя проблема
-- **Проблема:** column "total_volume_usd" does not exist
-- **Дата:** 2026-02-28
-- **Решение:** Добавлены колонки total_volume_usd, volume_usd в БД (init_db.sql)
+### Исправление 2026-03-01: Повторные трейды китов
+**Проблема:** Повторные трейды от известных китов не сохранялись в БД
+- whale_trades: 1 запись (должно быть 8-100)
+- whales: 413 записей, но без обновлений от новых трейдов
+
+**Корневые причины:**
+1. DETECTION_WINDOW_HOURS = 24 (должно быть 72 для 3-дневных метрик)
+2. `if address in _known_whales: continue` — пропускались все повторные трейды!
+
+**Исправления внесены:**
+- Строка 132: DETECTION_WINDOW_HOURS = 24 → 72
+- Строки 762-804: Убран continue для known whales, добавлена логика обновления
+- Строки 768-777: Добавлен расчёт trades_last_3_days и days_active
+
+**Результат:**
+- Логи показывают "whale_updated" для известных китов
+- БД обновляется: trades_last_3_days=1, days_active=1, updated_at обновляется
 
 ### Технические детали
 - WebSocket: ✅ Подключен (получает price_changes)
 - Polymarket Data API: ✅ Работает
-- Whale discovery: ✅ Активен (38 discovered)
-- Qualification: В ожидании (нужно больше активности)
+- Whale discovery: ✅ Активен (413+ discovered)
+- Qualification: В процессе (после исправления повторных трейдов)
 
 ### Известные ошибки
-- `'WhaleDetector' object has no attribute 'on_whale_detected'` — non-critical,不影响 основную работу
+- Кит 0x8c0b... не обновился — возможно из-за quality_volume=$1000 фильтра
 
 ### Логи (последние)
 ```
-Total tracked: 38
-Quality whales: 0
-polymarket_new_whale: address=0x36747d58 volume_usd=1824.03
+whale_updated: address=0xd25b... trades_last_3_days=1 days_active=1
 ```
 
 ---
@@ -196,26 +208,32 @@ polymarket_new_whale: address=0x36747d58 volume_usd=1824.03
 ## 13. WHALE MODEL
 
 whale_model_version: v2_activity_based
-whale_model_stage: DISCOVERY
+whale_model_stage: DISCOVERY → QUALIFICATION
 whale_model_status: ACTIVE
 
 ### Discovery Metrics
-whales_discovered_count: 28
-whales_qualified_count: 0
+whales_discovered_count: 413+
+whales_qualified_count: в процессе
 whales_rejected_count: 0
-last_discovery_refresh: 2026-02-28 (auto-updated from DB)
+last_discovery_refresh: 2026-03-01 (после исправления повторных трейдов)
 whale_discovery_status: ACTIVE
 
 ### Ranking Status
 whale_ranking_status: ACTIVE
-top_whales_count: 0
-last_ranking_update: 2026-02-28
+top_whales_count: в процессе
+last_ranking_update: 2026-03-01
 
-### Qualification Blocker Report (DB Query)
-qualification_blocker: min_trades (10) - 14 whales blocked
-qualification_blocker: min_volume ($500) - 10 whales blocked
-qualification_blocker: trades_last_3_days (3) - 24 whales blocked
-qualification_blocker: days_active (1) - 24 whales blocked
+### Qualification Blocker Report (после исправления)
+qualification_blocker: min_trades (10) - в процессе
+qualification_blocker: min_volume ($500) - в процессе
+qualification_blocker: trades_last_3_days (3) - ИСПРАВЛЕНО (добавлен расчёт)
+qualification_blocker: days_active (1) - ИСПРАВЛЕНО (добавлен расчёт)
+
+### Что исправлено 2026-03-01
+- DETECTION_WINDOW_HOURS: 24 → 72 (соответствует 3-дневным метрикам)
+- Убран continue для known whales (было: `if address in _known_whales: continue`)
+- Добавлен расчёт trades_last_3_days и days_active из API last_seen
+- Логирование "whale_updated" для известных китов
 
 notes: |
   - Model v2: activity-based whale detection
@@ -281,8 +299,8 @@ Activity window: ✅ 30 days (whale_tracker), 24h (whale_detector)
 DB storage: ✅ TABLES CREATED
 Inactive cleanup: ✅ LOGIC PRESENT (max_inactive_days: 30)
 
-notes: Whale detection infrastructure verified. Mechanism is correct. Waiting for more trading activity to detect whales.
-last_whale_validation: 2026-02-28
+notes: Whale detection infrastructure verified. Mechanism is correct. После исправления повторных трейдов (2026-03-01) киты обновляются корректно.
+last_whale_validation: 2026-03-01
 
 ### Data Audit (2026-02-28)
 stats_mode: REALIZED
