@@ -252,6 +252,23 @@ class WhaleTracker:
                 positions = []
 
                 for item in data:
+                    # Handle timestamp - could be ISO string or Unix timestamp (int)
+                    timestamp_val = item.get("timestamp")
+                    if timestamp_val is None:
+                        opened_at = datetime.now()
+                    elif isinstance(timestamp_val, (int, float)):
+                        # Unix timestamp
+                        opened_at = datetime.fromtimestamp(timestamp_val)
+                    elif isinstance(timestamp_val, datetime):
+                        # Already a datetime object
+                        opened_at = timestamp_val
+                    else:
+                        # ISO string - ensure it's a string
+                        try:
+                            opened_at = datetime.fromisoformat(str(timestamp_val))
+                        except (ValueError, TypeError):
+                            opened_at = datetime.now()
+
                     position = WhalePosition(
                         market_id=item.get("conditionId", item.get("tokenId", "")),
                         outcome=item.get("outcome", "Yes"),
@@ -259,9 +276,7 @@ class WhaleTracker:
                         entry_price=Decimal(str(item.get("avgPrice", 0))),
                         current_price=Decimal(str(item.get("currentPrice", 0))),
                         unrealized_pnl=Decimal(str(item.get("unrealizedPnl", 0))),
-                        opened_at=datetime.fromisoformat(
-                            item.get("timestamp", datetime.now().isoformat())
-                        ),
+                        opened_at=opened_at,
                     )
                     positions.append(position)
 
@@ -318,15 +333,30 @@ class WhaleTracker:
                 trades = []
 
                 for item in data:
+                    # Handle timestamp - could be ISO string or Unix timestamp (int)
+                    timestamp_val = item.get("timestamp")
+                    if timestamp_val is None:
+                        trade_timestamp = datetime.now()
+                    elif isinstance(timestamp_val, (int, float)):
+                        # Unix timestamp
+                        trade_timestamp = datetime.fromtimestamp(timestamp_val)
+                    elif isinstance(timestamp_val, datetime):
+                        # Already a datetime object
+                        trade_timestamp = timestamp_val
+                    else:
+                        # ISO string - ensure it's a string
+                        try:
+                            trade_timestamp = datetime.fromisoformat(str(timestamp_val))
+                        except (ValueError, TypeError):
+                            trade_timestamp = datetime.now()
+
                     trade = WhaleTrade(
                         trade_id=item.get("id", ""),
                         market_id=item.get("conditionId", item.get("tokenId", "")),
                         side=item.get("side", "buy").lower(),
                         size_usd=Decimal(str(item.get("amount", 0))),
                         price=Decimal(str(item.get("price", 0))),
-                        timestamp=datetime.fromisoformat(
-                            item.get("timestamp", datetime.now().isoformat())
-                        ),
+                        timestamp=trade_timestamp,
                         fee=Decimal(str(item.get("fee", 0))),
                     )
                     trades.append(trade)
@@ -468,74 +498,6 @@ class WhaleTracker:
             trades_per_day=trades_per_day,
             last_active=last_active,
         )
-
-
-def calculate_risk_score(
-    total_trades: int,
-    avg_trade_size: Decimal,
-    total_volume: Decimal,
-    trades_per_day: Decimal,
-    last_active: Optional[datetime] = None,
-) -> int:
-    """Calculate risk score (1-10) for a whale.
-    
-    NOTE: This scoring is based on ACTIVITY metrics only, since win_rate
-    is not available from Polymarket Data API (no settlement data).
-    
-    SOURCE-OF-TRUTH: This is the canonical risk_score implementation.
-    All other modules (WhaleDetector, copy_trading_engine, etc.) should
-    use this function to ensure consistent scoring.
-    
-    Scoring logic:
-    - 1-3: Elite (high volume, consistent activity)
-    - 4-6: Good (moderate volume/activity)
-    - 7-8: Low activity or small trades
-    - 9-10: High risk (inactive, low volume)
-
-    Args:
-        total_trades: Total number of trades
-        avg_trade_size: Average trade size in USD
-        total_volume: Total trading volume in USD
-        trades_per_day: Average trades per day
-        last_active: Last active timestamp
-
-    Returns:
-        Risk score 1-10 (1 = best)
-    """
-    score = 5
-
-    # Elite: High volume and consistent activity
-    if total_volume >= Decimal("500000") and total_trades >= 500:
-        if total_trades >= 1000 and trades_per_day >= Decimal("5"):
-            score = 1
-        else:
-            score = 2
-    # Good: Moderate volume
-    elif total_volume >= Decimal("100000") and total_trades >= 200:
-        if total_trades >= 500:
-            score = 3
-        else:
-            score = 4
-    # Moderate: Some activity
-    elif total_volume >= Decimal("50000") and total_trades >= 50:
-        score = 5
-    elif total_volume >= Decimal("10000") and total_trades >= 20:
-        score = 6
-    # Low activity
-    elif total_trades >= 10:
-        score = 7
-    else:
-        score = 8
-
-    # Inactivity penalty
-    if last_active:
-        days_inactive = (datetime.now() - last_active).days
-        if days_inactive > 30:
-            score = min(score + 2, 10)
-        elif days_inactive > 14:
-            score = min(score + 1, 10)
-
-    return score
 
     def is_quality_whale(self, stats: WhaleStats) -> bool:
         """Check if whale meets quality criteria.
@@ -788,3 +750,72 @@ def calculate_risk_score(
         """Clean up resources."""
         if self._http_session and not self._http_session.closed:
             await self._http_session.close()
+
+
+# Standalone function for external use (e.g., testing)
+def calculate_risk_score(
+    total_trades: int,
+    avg_trade_size: Decimal,
+    total_volume: Decimal,
+    trades_per_day: Decimal,
+    last_active: Optional[datetime] = None,
+) -> int:
+    """Calculate risk score (1-10) for a whale.
+    
+    NOTE: This scoring is based on ACTIVITY metrics only, since win_rate
+    is not available from Polymarket Data API (no settlement data).
+    
+    SOURCE-OF-TRUTH: This is the canonical risk_score implementation.
+    All other modules (WhaleDetector, copy_trading_engine, etc.) should
+    use this function to ensure consistent scoring.
+    
+    Scoring logic:
+    - 1-3: Elite (high volume, consistent activity)
+    - 4-6: Good (moderate volume/activity)
+    - 7-8: Low activity or small trades
+    - 9-10: High risk (inactive, low volume)
+
+    Args:
+        total_trades: Total number of trades
+        avg_trade_size: Average trade size in USD
+        total_volume: Total trading volume in USD
+        trades_per_day: Average trades per day
+        last_active: Last active timestamp
+
+    Returns:
+        Risk score 1-10 (1 = best)
+    """
+    score = 5
+
+    # Elite: High volume and consistent activity
+    if total_volume >= Decimal("500000") and total_trades >= 500:
+        if total_trades >= 1000 and trades_per_day >= Decimal("5"):
+            score = 1
+        else:
+            score = 2
+    # Good: Moderate volume
+    elif total_volume >= Decimal("100000") and total_trades >= 200:
+        if total_trades >= 500:
+            score = 3
+        else:
+            score = 4
+    # Moderate: Some activity
+    elif total_volume >= Decimal("50000") and total_trades >= 50:
+        score = 5
+    elif total_volume >= Decimal("10000") and total_trades >= 20:
+        score = 6
+    # Low activity
+    elif total_trades >= 10:
+        score = 7
+    else:
+        score = 8
+
+    # Inactivity penalty
+    if last_active:
+        days_inactive = (datetime.now() - last_active).days
+        if days_inactive > 30:
+            score = min(score + 2, 10)
+        elif days_inactive > 14:
+            score = min(score + 1, 10)
+
+    return score

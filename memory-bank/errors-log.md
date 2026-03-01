@@ -61,6 +61,22 @@
 
 ---
 
+### [2026-03-01] E2E Test — fromisoformat error в whale_tracker.py
+
+- **Симптом:** E2E тест падал с ошибкой `TypeError: fromisoformat() argument must be str, datetime or None`
+- **Причина:** whale_tracker.py вызывал `datetime.fromisoformat()` без проверки типа данных, полученных из БД
+- **Решение:** Добавлена проверка типа данных и преобразование через `ast.literal_eval()` для кортежей
+- **Правило:** Всегда проверять тип данных полученных из БД перед вызовом методов datetime
+
+### [2026-03-01] E2E Test — AttributeError в WhaleTracker
+
+- **Симптом:** Ошибка `AttributeError: 'WhaleTracker' object has no attribute 'config'`
+- **Причина:** WhaleTracker.__init__ не инициализировал self.config
+- **Решение:** Добавлена инициализация self.config = config в WhaleTracker.__init__
+- **Правило:** При создании класса всегда проверять что все параметры __init__ сохраняются в self
+
+---
+
 ### [2026-02-28] Whale Stats Incorrect — win_rate и profit были некорректны
 
 #### Проблема 1: Некорректный win_rate
