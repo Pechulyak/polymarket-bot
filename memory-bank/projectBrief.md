@@ -32,3 +32,17 @@ Live trading: выключен.
 ### Следующий шаг
 Дождаться появления первых китов в статистике (Quality whales > 0),
 затем интегрировать whale detection сигналы в main.py (copy trading engine)
+
+---
+
+# 9. GOVERNANCE
+
+Модель управления проектом зафиксирована в:
+
+dosc/CHAT GOVERNANCE.md
+
+Версия: v1.0
+Статус: ACTIVE
+
+STRATEGY является единственным оркестратором.
+Любые задачи Roo формируются исключительно через STRATEGY.

@@ -1,5 +1,12 @@
 # Master Changelog
 
+## [MILESTONE] v0.9.0 - 2026-03-02
+  ### 📋 Governance
+  - Интегрирован CHAT_GOVERNANCE.md в ключевые документы проекта
+  - Добавлен раздел 9 GOVERNANCE в memory-bank/projectBrief.md
+  - Добавлен подпункт Governance Model в PROJECT_OVERVIEW_2.0.md (раздел 5)
+  - Добавлен раздел 16 GOVERNANCE STATUS в docs/PROJECT_STATE.md
+
 ## [MILESTONE] v0.8.0 - 2026-02-20 - Real-time Whale Detection
 
 ### 📊 Research (from Research Chat)

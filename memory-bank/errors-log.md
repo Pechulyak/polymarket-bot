@@ -48,6 +48,17 @@
 ### [2026-02] PostgreSQL порт
 - **Симптом:** подключение к БД падало
 - **Причина:** стандартный порт 5432 вместо 5433
+
+### [2026-03-02] Подключение к неправильной БД — postgres вместо polymarket
+
+- **Симптом:** При выполнении SQL-запросов к таблице `whales` получал 0 записей: `SELECT COUNT(*) FROM whales;` → 0
+- **Причина:** Использовал базу данных `postgres` по умолчанию, хотя проект использует БД `polymarket`
+- **Решение:** Указал правильную БД в psql: `-d polymarket`
+  ```bash
+  docker exec -i polymarket_postgres psql -U postgres -d polymarket -c "SELECT COUNT(*) FROM whales;"
+  # Результат: 1084
+  ```
+- **Правило:** Всегда указывать `-d polymarket` при подключении к PostgreSQL в этом проекте. Имя БД указано в docker-compose.yml
 - **Решение:** исправить DATABASE_URL на порт 5433
 - **Правило:** PostgreSQL всегда на 5433 в этом проекте
 

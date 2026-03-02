@@ -28,6 +28,7 @@ import structlog
 from config.settings import settings
 from strategy.virtual_bankroll import VirtualBankroll, BankrollStats
 from execution.copy_trading_engine import CopyTradingEngine
+from monitoring.metrics_aggregator import MetricsAggregator
 
 logger = structlog.get_logger(__name__)
 
@@ -84,10 +85,17 @@ class PaperTradingRunner:
             database_url=database_url or settings.database_url,
         )
 
+        # Initialize metrics aggregator
+        self.metrics_aggregator = MetricsAggregator(
+            database_url=database_url or settings.database_url,
+            initial_balance=initial_balance,
+        )
+
         self.is_running = False
         self.start_time: Optional[datetime] = None
         self.last_stats_time: Optional[datetime] = None
         self.copy_trading_engine: Optional[CopyTradingEngine] = None
+        self.last_metrics_update: Optional[datetime] = None
 
         self.daily_stats: list[dict] = []
 
@@ -107,6 +115,60 @@ class PaperTradingRunner:
         """
         self.copy_trading_engine = engine
         logger.info("copy_trading_engine_configured_for_paper")
+
+    async def update_metrics(self) -> dict:
+        """Calculate and store current metrics from database.
+
+        Returns:
+            Dict with current metrics
+        """
+        try:
+            # Calculate metrics from database
+            metrics = await self.metrics_aggregator.calculate_metrics()
+
+            # Save equity snapshot
+            await self.metrics_aggregator.save_equity_snapshot(
+                balance=metrics.current_balance,
+                realized_pnl=metrics.realized_pnl,
+                unrealized_pnl=metrics.unrealized_pnl,
+            )
+
+            self.last_metrics_update = datetime.now()
+
+            logger.info(
+                "metrics_updated",
+                total_trades=metrics.total_trades,
+                win_rate=str(metrics.win_rate),
+                roi=str(metrics.roi),
+                realized_pnl=str(metrics.realized_pnl),
+                current_balance=str(metrics.current_balance),
+            )
+
+            return {
+                "total_trades": metrics.total_trades,
+                "win_rate": float(metrics.win_rate),
+                "roi": float(metrics.roi),
+                "expectancy": float(metrics.expectancy),
+                "max_drawdown": float(metrics.max_drawdown),
+                "realized_pnl": float(metrics.realized_pnl),
+                "unrealized_pnl": float(metrics.unrealized_pnl),
+                "current_balance": float(metrics.current_balance),
+                "last_update": metrics.last_update.isoformat() if metrics.last_update else None,
+            }
+
+        except Exception as e:
+            logger.error("metrics_update_failed", error=str(e))
+            return {
+                "total_trades": 0,
+                "win_rate": 0.0,
+                "roi": 0.0,
+                "expectancy": 0.0,
+                "max_drawdown": 0.0,
+                "realized_pnl": 0.0,
+                "unrealized_pnl": 0.0,
+                "current_balance": float(self.initial_balance),
+                "last_update": None,
+            }
 
     async def start(self, duration_hours: Optional[int] = None) -> dict:
         """Start paper trading simulation.
@@ -151,6 +213,7 @@ class PaperTradingRunner:
 
         stats_task = asyncio.create_task(self._stats_printer(stop_event))
         criteria_task = asyncio.create_task(self._criteria_monitor(stop_event))
+        metrics_task = asyncio.create_task(self._metrics_updater(stop_event))
 
         await stop_event.wait()
 
@@ -158,8 +221,22 @@ class PaperTradingRunner:
 
         stats_task.cancel()
         criteria_task.cancel()
+        metrics_task.cancel()
 
         return await self.get_final_results()
+
+    async def _metrics_updater(self, stop_event: asyncio.Event) -> None:
+        """Update metrics and save equity snapshots periodically."""
+        while not stop_event.is_set():
+            # Update metrics every 5 minutes
+            await asyncio.sleep(300)
+            if not self.is_running:
+                break
+
+            try:
+                await self.update_metrics()
+            except Exception as e:
+                logger.error("metrics_update_in_loop_failed", error=str(e))
 
     async def _stats_printer(self, stop_event: asyncio.Event) -> None:
         """Print statistics every 24 hours."""

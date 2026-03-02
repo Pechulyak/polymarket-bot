@@ -1,5 +1,96 @@
 # Changelog - Research
 
+## [2026-02-28] - Stage 2: Discovery + Qualification + Ranking Implementation
+
+### Task
+Реализовать полноценный слой Discovery → Activity-Based Qualification → Daily Top N Ranking
+
+### Status
+✅ COMPLETE
+
+### Changes
+
+#### 1. Database Schema (scripts/init_db.sql)
+- Добавлено поле `status` в таблицу `whales`: `discovered | qualified | ranked`
+- Добавлены поля:
+  - `total_volume_usd DECIMAL(20, 8)` - общий объём
+  - `trades_last_3_days INTEGER` - сделок за последние 3 дня
+  - `days_active INTEGER` - активных дней
+  - `last_qualified_at TIMESTAMP` - время квалификации
+  - `last_ranked_at TIMESTAMP` - время ранжирования
+- Добавлены индексы для быстрого поиска по status/risk_score
+
+#### 2. Qualification Layer (src/research/whale_detector.py)
+Binary Gate критерии:
+- ✅ `total_trades >= 10` (lifetime)
+- ✅ `trades_last_3_days >= 3`
+- ✅ `total_volume >= $500`
+- ✅ `days_active >= 1`
+
+#### 3. Ranking Layer (src/research/whale_detector.py)
+- Добавлен метод `get_top_whales(limit=10)`
+- Composite score: risk_score (inverted) + activity + volume
+- Periodic ranking update every hour in polling loop
+
+#### 4. Rolling Refresh
+- Ranking update каждые 1 час (в polling loop)
+- Discovery работает каждые 60 сек (из конфига)
+
+### Files Modified
+- `scripts/init_db.sql` - schema updates
+- `src/research/whale_detector.py` - qualification + ranking logic
+
+### Impact
+- Полная pipeline Discovery → Qualification → Ranking
+- Activity-based квалификация (без ROI данных)
+- Top-N whales теперь доступны через `get_top_whales()`
+
+---
+
+## [2026-02-28] - Whale Model v2 Activation
+
+### Task
+Активировать whale model v2 (activity_based), добавить discovery/ranking метрики и KPI мониторинг.
+
+### Status
+✅ COMPLETE - Поля добавлены в PROJECT_STATE.md
+
+### Changes
+
+#### 1. Whale Model Configuration
+- **whale_model_version:** v2_activity_based
+- **whale_model_stage:** DISCOVERY
+- **whale_model_status:** ACTIVE
+
+#### 2. Discovery Metrics
+- **whales_discovered_count:** 0 (из БД)
+- **whales_qualified_count:** 0 (risk_score <= 4)
+- **whales_rejected_count:** 0 (risk_score > 4)
+- **last_discovery_refresh:** 2026-02-28
+- **whale_discovery_status:** ACTIVE
+
+#### 3. Ranking Status
+- **whale_ranking_status:** ACTIVE
+- **top_whales_count:** 0
+- **last_ranking_update:** 2026-02-28
+- **Top single trade detected:** $17,200 (в логах, не сохранён в БД)
+
+#### 4. KPI Monitoring
+- **discovery_kpi_target:** 50 (уникальных трейдеров)
+- **qualification_kpi_target:** 5 (квалифицированных китов)
+- **kpi_status:** BELOW_TARGET
+
+### Files Modified
+- `docs/PROJECT_STATE.md` - добавлены секции 13 (Whale Model) и 14 (KPI Monitoring)
+- `docs/changelogs/research.md` - добавлен этот changelog
+
+### Impact
+- Добавлена структура для отслеживания прогресса whale discovery
+- Добавлены KPI для оценки готовности к live trading
+- Статус: система в стадии активного discovery
+
+---
+
 ## [2026-02-28] - Whale Stats Correctness Fix
 
 ### Task

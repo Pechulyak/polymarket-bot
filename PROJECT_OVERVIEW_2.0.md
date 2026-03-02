@@ -95,6 +95,13 @@ GitHub:
 
 ChatGPT получает snapshot состояния через PROJECT_STATE.md.
 
+Governance Model:
+Проект управляется согласно документу:
+dosc/CHAT GOVERNANCE.md (v1.0, ACTIVE)
+
+STRATEGY — единственный источник постановки задач Roo.
+Research и другие чаты не взаимодействуют с Roo напрямую.
+
 ---
 
 # 6. РИСК-ПРИНЦИПЫ

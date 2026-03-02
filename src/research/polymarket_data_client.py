@@ -44,6 +44,7 @@ class TradeWithAddress:
         timestamp: Trade timestamp
         market_title: Market question/title
         outcome: Outcome name (Yes/No)
+        name: Trader's name from Polymarket profile
     """
 
     trader: str
@@ -57,6 +58,7 @@ class TradeWithAddress:
     timestamp: int
     market_title: str
     outcome: str
+    name: str = ""
 
 
 @dataclass
@@ -71,6 +73,7 @@ class AggregatedTraderStats:
         buy_count: Number of buy trades
         sell_count: Number of sell trades
         last_seen: Last trade timestamp
+        name: Trader's name from Polymarket profile
     """
 
     address: str
@@ -80,6 +83,7 @@ class AggregatedTraderStats:
     buy_count: int = 0
     sell_count: int = 0
     last_seen: Optional[int] = None
+    name: str = ""
 
 
 class PolymarketDataError(Exception):
@@ -226,6 +230,7 @@ class PolymarketDataClient:
                     timestamp=int(item.get("timestamp", 0)),
                     market_title=item.get("title", ""),
                     outcome=item.get("outcome", ""),
+                    name=item.get("name", ""),
                 )
                 trades.append(trade)
 
@@ -306,6 +311,9 @@ class PolymarketDataClient:
             address = trade.trader
             if address not in aggregated:
                 aggregated[address] = AggregatedTraderStats(address=address)
+                # Collect name from first trade
+                if trade.name:
+                    aggregated[address].name = trade.name
 
             stats = aggregated[address]
             stats.total_trades += 1

@@ -97,6 +97,7 @@ class DetectedWhale:
     status: str = "discovered"  # discovered | qualified | ranked
     trades_last_3_days: int = 0
     days_active: int = 0
+    name: str = ""  # Trader's name from Polymarket profile
 
 
 @dataclass
@@ -129,7 +130,7 @@ class WhaleDetector:
         DETECTION_WINDOW_HOURS: Hours to track before quality assessment
     """
 
-    DETECTION_WINDOW_HOURS = 24
+    DETECTION_WINDOW_HOURS = 72  # Must be >= 3 days for trades_last_3_days calculation
 
     def __init__(
         self,
@@ -524,11 +525,11 @@ class WhaleDetector:
                 INSERT INTO whales (
                     wallet_address, total_trades, win_rate, total_profit_usd,
                     total_volume_usd, avg_trade_size_usd, last_active_at, risk_score,
-                    status, trades_last_3_days, days_active, source, updated_at
+                    status, trades_last_3_days, days_active, source, updated_at, notes
                 ) VALUES (
                     :wallet_address, :total_trades, :win_rate, :total_profit,
                     :total_volume, :avg_trade_size, NOW(), :risk_score,
-                    :status, :trades_last_3_days, :days_active, 'auto_detected', NOW()
+                    :status, :trades_last_3_days, :days_active, 'auto_detected', NOW(), :notes
                 )
                 ON CONFLICT (wallet_address) DO UPDATE SET
                     total_trades = EXCLUDED.total_trades,
@@ -541,7 +542,8 @@ class WhaleDetector:
                     trades_last_3_days = EXCLUDED.trades_last_3_days,
                     days_active = EXCLUDED.days_active,
                     last_active_at = NOW(),
-                    updated_at = NOW()
+                    updated_at = NOW(),
+                    notes = EXCLUDED.notes
             """)
             session.execute(
                 query,
@@ -558,6 +560,7 @@ class WhaleDetector:
                     "status": whale.status,
                     "trades_last_3_days": whale.trades_last_3_days,
                     "days_active": whale.days_active,
+                    "notes": whale.name if whale.name else None,
                 },
             )
             session.commit()
@@ -759,23 +762,54 @@ class WhaleDetector:
                     logger.info("whale_skipped_min_trades", address=address[:10], total_trades=stats.total_trades)
                     continue
 
-                if address.lower() in self._known_whales:
-                    logger.info("whale_skipped_known", address=address[:10])
-                    continue
-
+                # Check if whale is already known
+                is_known = address.lower() in self._known_whales
+                
+                # Calculate trades_last_3_days and days_active based on last_seen
+                # If last_seen is within 3 days, assume active
+                current_time = time.time()
+                three_days_ago = current_time - (3 * 24 * 3600)  # 3 days in seconds
+                
+                trades_last_3_days = 0
+                days_active = 0
+                
+                if stats.last_seen and stats.last_seen > three_days_ago:
+                    # Last trade was within 3 days - estimate trades_last_3_days
+                    # Use total_trades as approximation (API returns recent trades)
+                    trades_last_3_days = min(stats.total_trades, 10)  # Cap at 10 for safety
+                    days_active = 1
+                
                 whale = DetectedWhale(
                     wallet_address=address.lower(),
                     first_seen=stats.last_seen if stats.last_seen else time.time(),
                     total_trades=stats.total_trades,
                     total_volume=stats.total_volume_usd,
                     avg_trade_size=stats.avg_trade_size_usd,
+                    trades_last_3_days=trades_last_3_days,
+                    days_active=days_active,
+                    name=stats.name or "",
                 )
 
                 if stats.total_trades >= self.config.min_trades_for_quality:
                     self._detected_whales[address.lower()] = whale
                     await self._save_whale_to_db(whale)
-                    self._known_whales.add(address.lower())
-                    new_whales += 1
+                    
+                    if not is_known:
+                        self._known_whales.add(address.lower())
+                        new_whales += 1
+                        logger.info(
+                            "polymarket_new_whale",
+                            address=address[:10],
+                            total_trades=stats.total_trades,
+                            volume_usd=str(stats.total_volume_usd),
+                        )
+                    else:
+                        logger.info(
+                            "whale_updated",
+                            address=address[:10],
+                            total_trades=stats.total_trades,
+                            volume_usd=str(stats.total_volume_usd),
+                        )
 
                     logger.info(
                         "polymarket_new_whale",

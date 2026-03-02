@@ -33,14 +33,14 @@ Password: <ваш_пароль_БД>
    - Host: 212.192.11.92
    - Port: 22
    - Username: root
-   - Authentication: Password
-   - Password: <ваш_SSH_пароль>
+   - Authentication: Key
+   - Key: (нажмите Browse и выберите ваш приватный ключ)
 4. Вкладка "Main":
    - Host: localhost
    - Port: 5433
    - Database: polymarket
    - Username: postgres
-   - Password: 156136ar
+   - Password: <ваш_пароль_БД>
 
 ## Проверка
 

@@ -343,3 +343,17 @@ notes: |
 
 notes: |
   E2E тест Builder API pipeline успешно пройден. Все этапы от mock сигнала кита до исполнения в paper режиме работают корректно.
+
+---
+
+## 16. GOVERNANCE STATUS
+
+governance_document: dosc/CHAT GOVERNANCE.md
+governance_version: v1.0
+governance_status: ACTIVE
+last_governance_sync: 2026-03-02
+
+notes:
+  - STRATEGY является единственным оркестратором
+  - Roo получает задачи только через ORCHESTRATOR TASK PACK
+  - Параллельная реализация стратегий запрещена
