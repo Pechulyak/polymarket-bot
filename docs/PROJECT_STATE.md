@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-01 (исправление повторных трейдов китов)
-version: 1.1.1
+Обновлено: 2026-03-02 (Dual-Path Qualification: ACTIVE + CONVICTION)
+version: 1.2.0
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -213,11 +213,12 @@ whale_model_stage: DISCOVERY → QUALIFICATION
 whale_model_status: ACTIVE
 
 ### Discovery Metrics
-whales_discovered_count: 413+
-whales_qualified_count: в процессе
+whales_discovered_count: 1163
+whales_qualified_count: 82 (ACTIVE: 10, CONVICTION: 72)
 whales_rejected_count: 0
-last_discovery_refresh: 2026-03-01 (после исправления повторных трейдов)
+last_discovery_refresh: 2026-03-02 (Dual-Path Qualification)
 whale_discovery_status: ACTIVE
+qualification_path_active: true
 
 ### Ranking Status
 whale_ranking_status: ACTIVE
@@ -239,8 +240,12 @@ qualification_blocker: days_active (1) - ИСПРАВЛЕНО (добавлен 
 notes: |
   - Model v2: activity-based whale detection
   - Stage DISCOVERY: scanning for new whales via Polymarket Data API
-  - **DB TRUTH:** 28 discovered, 0 qualified, 0 ranked (from DB query)
+  - **DB TRUTH:** 1163 discovered, 82 qualified (from DB query)
   - **STAGE 2 IMPLEMENTED:** Discovery → Qualification → Ranking pipeline
+  - **DUAL-PATH QUALIFICATION (v1.2.0):**
+    - ACTIVE path: 10+ trades, $500+ volume, 3+ trades/7days, 1+ day active, risk_score <= 6
+    - CONVICTION path: $10000+ volume, $2000+ avg_size, 1+ trade/7days, 1+ day active, risk_score <= 6
+    - Priority: ACTIVE if both qualify
   - Qualification: 10+ trades, 3+ trades/3days, $500+ volume, 1+ day active
   - Ranking: get_top_whales(10) method with composite score
   - Ranking update: hourly in polling loop
@@ -257,9 +262,9 @@ kpi_status: BELOW_TARGET
 
 ### KPI Details
 - discovery_kpi_target: 50 unique traders to discover
-- qualification_kpi_target: 5 qualified whales (risk_score <= 4)
-- current: 28 discovered, 0 qualified (from DB)
-- status: BELOW_TARGET (waiting for qualification criteria)
+- qualification_kpi_target: 15 qualified whales (Dual-Path)
+- current: 1163 discovered, 82 qualified (ACTIVE: 10, CONVICTION: 72)
+- status: ✅ TARGET_MET (82 >= 15)
 
 notes: |
   - KPI отслеживает прогресс discovery и qualification

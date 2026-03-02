@@ -18,7 +18,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 # Настройка DB
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/postgres")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/polymarket")
 
 
 async def run_e2e_test():

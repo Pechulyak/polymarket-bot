@@ -96,8 +96,10 @@ class DetectedWhale:
     # Stage 2: Discovery + Qualification + Ranking
     status: str = "discovered"  # discovered | qualified | ranked
     trades_last_3_days: int = 0
+    trades_last_7_days: int = 0  # For dual-path qualification
     days_active: int = 0
     name: str = ""  # Trader's name from Polymarket profile
+    qualification_path: Optional[str] = None  # ACTIVE | CONVICTION | None
 
 
 @dataclass
@@ -395,6 +397,7 @@ class WhaleDetector:
         """
         cutoff_24h = time.time() - 86400
         cutoff_72h = time.time() - (3 * 86400)  # 3 days for qualification
+        cutoff_7d = time.time() - (7 * 86400)  # 7 days for dual-path qualification
         cutoff_window = time.time() - (self.DETECTION_WINDOW_HOURS * 3600)
 
         recent_trades = [
@@ -403,6 +406,9 @@ class WhaleDetector:
         trades_last_3_days = [
             t for t in self._trades[whale.wallet_address] if t.timestamp > cutoff_72h
         ]
+        trades_last_7_days = [
+            t for t in self._trades[whale.wallet_address] if t.timestamp > cutoff_7d
+        ]
         all_trades = [
             t for t in self._trades[whale.wallet_address] if t.timestamp > cutoff_window
         ]
@@ -410,6 +416,7 @@ class WhaleDetector:
         whale.total_trades = len(all_trades)
         whale.daily_trades = len(recent_trades)
         whale.trades_last_3_days = len(trades_last_3_days)
+        whale.trades_last_7_days = len(trades_last_7_days)
         
         # Calculate days_active (unique trading days)
         if all_trades:
@@ -501,6 +508,88 @@ class WhaleDetector:
                     failed_criteria=failed_criteria,
                 )
 
+        # Calculate dual-path qualification
+        whale.qualification_path = self._calculate_qualification_path(
+            total_trades=whale.total_trades,
+            total_volume_usd=whale.total_volume,
+            avg_trade_size_usd=whale.avg_trade_size,
+            trades_last_7_days=whale.trades_last_7_days,
+            days_active=whale.days_active,
+            risk_score=whale.risk_score,
+        )
+
+    def _calculate_qualification_path(
+        self,
+        total_trades: int,
+        total_volume_usd: Decimal,
+        avg_trade_size_usd: Decimal,
+        trades_last_7_days: int,
+        days_active: int,
+        risk_score: int,
+    ) -> Optional[str]:
+        """Calculate dual-path qualification for whale.
+        
+        ACTIVE path: 
+            - total_trades >= 10
+            - total_volume_usd >= 500
+            - trades_last_7_days >= 3
+            - days_active >= 1
+            - risk_score <= 6
+        
+        CONVICTION path:
+            - total_volume_usd >= 10000
+            - avg_trade_size_usd >= 2000
+            - trades_last_7_days >= 1
+            - days_active >= 1
+            - risk_score <= 6
+        
+        Priority: ACTIVE if both paths qualify
+        
+        Returns:
+            'ACTIVE', 'CONVICTION', or None if not qualified
+        """
+        active_path = (
+            total_trades >= 10 and
+            total_volume_usd >= Decimal("500") and
+            trades_last_7_days >= 3 and
+            days_active >= 1 and
+            risk_score <= 6
+        )
+        
+        conviction_path = (
+            total_volume_usd >= Decimal("10000") and
+            avg_trade_size_usd >= Decimal("2000") and
+            trades_last_7_days >= 1 and
+            days_active >= 1 and
+            risk_score <= 6
+        )
+        
+        if active_path:
+            logger.debug(
+                "whale_qualified_active_path",
+                total_trades=total_trades,
+                total_volume_usd=str(total_volume_usd),
+                trades_last_7_days=trades_last_7_days,
+            )
+            return "ACTIVE"
+        elif conviction_path:
+            logger.debug(
+                "whale_qualified_conviction_path",
+                total_volume_usd=str(total_volume_usd),
+                avg_trade_size_usd=str(avg_trade_size_usd),
+                trades_last_7_days=trades_last_7_days,
+            )
+            return "CONVICTION"
+        else:
+            logger.debug(
+                "whale_not_qualified_dual_path",
+                total_trades=total_trades,
+                total_volume_usd=str(total_volume_usd),
+                trades_last_7_days=trades_last_7_days,
+                risk_score=risk_score,
+            )
+            return None
+
     async def _save_whale_to_db(self, whale: DetectedWhale) -> None:
         """Save whale to database.
 
@@ -525,11 +614,13 @@ class WhaleDetector:
                 INSERT INTO whales (
                     wallet_address, total_trades, win_rate, total_profit_usd,
                     total_volume_usd, avg_trade_size_usd, last_active_at, risk_score,
-                    status, trades_last_3_days, days_active, source, updated_at, notes
+                    status, trades_last_3_days, trades_last_7_days, days_active, 
+                    qualification_path, source, updated_at, notes
                 ) VALUES (
                     :wallet_address, :total_trades, :win_rate, :total_profit,
                     :total_volume, :avg_trade_size, NOW(), :risk_score,
-                    :status, :trades_last_3_days, :days_active, 'auto_detected', NOW(), :notes
+                    :status, :trades_last_3_days, :trades_last_7_days, :days_active,
+                    :qualification_path, 'auto_detected', NOW(), :notes
                 )
                 ON CONFLICT (wallet_address) DO UPDATE SET
                     total_trades = EXCLUDED.total_trades,
@@ -540,7 +631,9 @@ class WhaleDetector:
                     risk_score = EXCLUDED.risk_score,
                     status = EXCLUDED.status,
                     trades_last_3_days = EXCLUDED.trades_last_3_days,
+                    trades_last_7_days = EXCLUDED.trades_last_7_days,
                     days_active = EXCLUDED.days_active,
+                    qualification_path = EXCLUDED.qualification_path,
                     last_active_at = NOW(),
                     updated_at = NOW(),
                     notes = EXCLUDED.notes
@@ -559,7 +652,9 @@ class WhaleDetector:
                     "risk_score": whale.risk_score,
                     "status": whale.status,
                     "trades_last_3_days": whale.trades_last_3_days,
+                    "trades_last_7_days": whale.trades_last_7_days,
                     "days_active": whale.days_active,
+                    "qualification_path": whale.qualification_path,
                     "notes": whale.name if whale.name else None,
                 },
             )
@@ -765,29 +860,72 @@ class WhaleDetector:
                 # Check if whale is already known
                 is_known = address.lower() in self._known_whales
                 
-                # Calculate trades_last_3_days and days_active based on last_seen
-                # If last_seen is within 3 days, assume active
+                # Calculate trades_last_3_days, trades_last_7_days and days_active
+                # NOTE: Polymarket API only returns recent trades, not full history
+                # We use total_trades as a proxy for activity since high trade count
+                # implies recent activity
                 current_time = time.time()
                 three_days_ago = current_time - (3 * 24 * 3600)  # 3 days in seconds
+                seven_days_ago = current_time - (7 * 24 * 3600)  # 7 days in seconds
                 
                 trades_last_3_days = 0
+                trades_last_7_days = 0
                 days_active = 0
                 
-                if stats.last_seen and stats.last_seen > three_days_ago:
-                    # Last trade was within 3 days - estimate trades_last_3_days
-                    # Use total_trades as approximation (API returns recent trades)
-                    trades_last_3_days = min(stats.total_trades, 10)  # Cap at 10 for safety
-                    days_active = 1
+                if stats.last_seen:
+                    if stats.last_seen > three_days_ago:
+                        # Last trade was within 3 days - estimate trades_last_3_days
+                        trades_last_3_days = min(stats.total_trades, 10)
+                        days_active = 1
+                    elif stats.last_seen > seven_days_ago:
+                        # Last trade was within 7 days
+                        days_active = 1
+                
+                # For API whales: use total_trades as proxy for trades_last_7_days
+                # High total_trades from API indicates active trading
+                if stats.total_trades >= 10:
+                    # Whale with 10+ trades is likely active in last 7 days
+                    trades_last_7_days = min(stats.total_trades, 20)
+                    if days_active == 0:
+                        days_active = 1
+                
+                # Calculate volume: use API value if available, otherwise estimate from avg_size * trades
+                # This handles cases where API returns 0 volume but has avg_trade_size
+                if stats.total_volume_usd > 0:
+                    total_volume = stats.total_volume_usd
+                else:
+                    # Estimate volume from avg_trade_size and total_trades
+                    total_volume = stats.avg_trade_size_usd * Decimal(stats.total_trades)
                 
                 whale = DetectedWhale(
                     wallet_address=address.lower(),
                     first_seen=stats.last_seen if stats.last_seen else time.time(),
                     total_trades=stats.total_trades,
-                    total_volume=stats.total_volume_usd,
+                    total_volume=total_volume,
                     avg_trade_size=stats.avg_trade_size_usd,
                     trades_last_3_days=trades_last_3_days,
+                    trades_last_7_days=trades_last_7_days,
                     days_active=days_active,
                     name=stats.name or "",
+                )
+                
+                # Calculate risk_score for Polymarket API whales (required for qualification)
+                whale.risk_score = calculate_risk_score(
+                    total_trades=whale.total_trades,
+                    avg_trade_size=whale.avg_trade_size,
+                    total_volume=whale.total_volume,
+                    trades_per_day=Decimal(whale.daily_trades) if whale.daily_trades > 0 else Decimal("1"),
+                    last_active=stats.last_seen,
+                )
+                
+                # Calculate dual-path qualification
+                whale.qualification_path = self._calculate_qualification_path(
+                    total_trades=whale.total_trades,
+                    total_volume_usd=whale.total_volume,
+                    avg_trade_size_usd=whale.avg_trade_size,
+                    trades_last_7_days=whale.trades_last_7_days,
+                    days_active=whale.days_active,
+                    risk_score=whale.risk_score,
                 )
 
                 if stats.total_trades >= self.config.min_trades_for_quality:

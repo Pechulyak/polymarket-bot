@@ -299,10 +299,10 @@ async def execute_arbitrage(self, opp: ArbitrageOpportunity) -> None:
 #### Connection Details
 ```env
 # PostgreSQL Connection (development)
-DATABASE_URL=postgresql://postgres:password@localhost:5433/postgres
+DATABASE_URL=postgresql://postgres:password@localhost:5433/polymarket
 
 # Docker PostgreSQL
-# Host: localhost, Port: 5433, User: postgres, Password: password, Database: postgres
+# Host: localhost, Port: 5433, User: postgres, Password: password, Database: polymarket
 ```
 
 #### Schema (init_db.sql)

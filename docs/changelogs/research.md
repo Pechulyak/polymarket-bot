@@ -1,5 +1,47 @@
 # Changelog - Research
 
+## [2026-03-02] - PHASE 2: Dual-Path Qualification
+
+### Task
+Добавить Dual-Path квалификацию: ACTIVE vs CONVICTION
+
+### Status
+✅ COMPLETE
+
+### Changes
+
+#### 1. Database Schema
+- Добавлена колонка `qualification_path VARCHAR(20)` в таблицу `whales`
+- Значения: NULL, 'ACTIVE', 'CONVICTION'
+- Добавлена колонка `trades_last_7_days INTEGER` для 7-дневного окна
+
+#### 2. Dual-Path Logic (src/research/whale_detector.py)
+
+**ACTIVE path** (приоритет):
+- total_trades >= 10
+- total_volume_usd >= 500
+- trades_last_7_days >= 3
+- days_active >= 1
+- risk_score <= 6
+
+**CONVICTION path**:
+- total_volume_usd >= 10000
+- avg_trade_size_usd >= 2000
+- trades_last_7_days >= 1
+- days_active >= 1
+- risk_score <= 6
+
+#### 3. Snapshot Audit Results
+- ACTIVE: 10 whales
+- CONVICTION: 72 whales
+- **Total qualified: 82** (>= 15 required ✅)
+
+#### 4. Data Fallbacks
+- Используется estimated_volume = avg_trade_size * total_trades когда API возвращает 0
+- Используется total_trades как proxy для trades_last_7_days
+
+---
+
 ## [2026-02-28] - Stage 2: Discovery + Qualification + Ranking Implementation
 
 ### Task

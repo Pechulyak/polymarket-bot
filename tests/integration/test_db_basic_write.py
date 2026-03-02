@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, text
 
 def _get_db_engine():
     db_url = os.environ.get(
-        "DB_URL", "postgresql://postgres:password@localhost:5433/postgres"
+        "DB_URL", "postgresql://postgres:password@localhost:5433/polymarket"
     )
     return create_engine(db_url), db_url
 

@@ -28,7 +28,7 @@ except Exception as e:
 @pytest.mark.asyncio
 async def test_db_persistence_exists():
     db_url = os.environ.get(
-        "DB_URL", "postgresql://postgres:password@localhost:5433/postgres"
+        "DB_URL", "postgresql://postgres:password@localhost:5433/polymarket"
     )
     print(f"INFO: Test DB URL: {db_url}")
     if VirtualBankroll is None:

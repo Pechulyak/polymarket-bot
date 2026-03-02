@@ -161,7 +161,7 @@ async def main():
     load_dotenv()
 
     database_url = os.getenv(
-        "DATABASE_URL", "postgresql://postgres:password@localhost:5433/postgres"
+        "DATABASE_URL", "postgresql://postgres:password@localhost:5433/polymarket"
     )
     api_key = os.getenv("POLYMARKET_API_KEY", "")
 

@@ -445,9 +445,9 @@ psql -c "SELECT DATE(executed_at) as day, COUNT(*) as trades, SUM(net_pnl) as pn
 
 ### Test Environment
 - **Database**: PostgreSQL 15 on port 5433
-- **Database Name**: `postgres`
+- **Database Name**: `polymarket`
 - **Dependencies**: SQLAlchemy, psycopg2-binary, pytest-asyncio
-- **DB URL**: `postgresql://postgres:password@localhost:5433/postgres`
+- **DB URL**: `postgresql://postgres:password@localhost:5433/polymarket`
 
 ### Test Execution
 ```bash
