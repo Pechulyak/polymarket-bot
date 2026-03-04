@@ -337,6 +337,17 @@ class WhaleDetector:
             # This ensures we track all candidates for qualification
             await self._save_whale_to_db(whale)
             
+            # Also save trade to whale_trades (ingestion pipeline fix)
+            # This is the canonical source for whale_trades
+            await self.save_trade_to_db(
+                trader=trader,
+                market_id=market_id,
+                side=side,
+                size_usd=size_usd,
+                price=price,
+                timestamp=timestamp,
+            )
+            
             if is_new:
                 self._known_whales.add(trader)
 
@@ -675,8 +686,12 @@ class WhaleDetector:
         size_usd: Decimal,
         price: Decimal,
         timestamp: Optional[float] = None,
-    ) -> None:
+        tx_hash: Optional[str] = None,
+    ) -> bool:
         """Save trade to whale_trades table.
+
+        Uses wallet_address as primary identifier (whale_id is optional).
+        Implements idempotent upsert using tx_hash to prevent duplicates.
 
         Args:
             trader: Trader wallet address
@@ -685,46 +700,86 @@ class WhaleDetector:
             size_usd: Trade size in USD
             price: Execution price
             timestamp: Trade timestamp
+            tx_hash: Transaction hash for deduplication
+
+        Returns:
+            True if trade was saved, False if it was a duplicate.
         """
         await self._ensure_database()
         if not self._Session:
             return
 
+        trader_lower = trader.lower()
+        timestamp = timestamp or time.time()
+        traded_at = datetime.fromtimestamp(timestamp)
+
         session = self._Session()
         try:
-            query = text("""
-                SELECT id FROM whales WHERE wallet_address = :address
-            """)
-            result = session.execute(query, {"address": trader.lower()})
-            row = result.fetchone()
+            # Check for duplicate using tx_hash if provided
+            if tx_hash:
+                dup_check = text("""
+                    SELECT id FROM whale_trades WHERE tx_hash = :tx_hash
+                """)
+                result = session.execute(dup_check, {"tx_hash": tx_hash})
+                if result.fetchone():
+                    logger.debug("trade_duplicate_skip", tx_hash=tx_hash[:16] if tx_hash else None)
+                    return False
 
-            if not row:
-                return
+            # Try to get whale_id if whale exists
+            whale_id = None
+            try:
+                query = text("""
+                    SELECT id FROM whales WHERE wallet_address = :address
+                """)
+                result = session.execute(query, {"address": trader_lower})
+                row = result.fetchone()
+                if row:
+                    whale_id = row[0]
+            except Exception:
+                pass  # whale_id is optional
 
-            whale_id = row[0]
-
+            # Insert trade with tx_hash for deduplication
             insert_query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, market_id, side, size_usd, price, traded_at
+                    whale_id, wallet_address, market_id, side, size_usd, price, traded_at, tx_hash
                 ) VALUES (
-                    :whale_id, :market_id, :side, :size_usd, :price, :traded_at
+                    :whale_id, :wallet_address, :market_id, :side, :size_usd, :price, :traded_at, :tx_hash
                 )
             """)
             session.execute(
                 insert_query,
                 {
                     "whale_id": whale_id,
+                    "wallet_address": trader_lower,
                     "market_id": market_id,
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
-                    "traded_at": datetime.fromtimestamp(timestamp or time.time()),
+                    "traded_at": traded_at,
+                    "tx_hash": tx_hash,
                 },
             )
             session.commit()
+            logger.info(
+                "whale_trade_saved",
+                wallet_address=trader_lower[:10],
+                market_id=market_id[:20] if market_id else "unknown",
+                side=side,
+                size_usd=str(size_usd),
+            )
+            
+            logger.debug(
+                "whale_trade_saved",
+                wallet_address=trader_lower[:10],
+                market_id=market_id[:20],
+                side=side,
+                size_usd=str(size_usd),
+            )
+            
+            return True
 
         except Exception as e:
-            logger.debug("trade_save_failed", error=str(e))
+            logger.info("trade_save_failed", error=str(e), trader=trader_lower[:10] if trader_lower else "unknown")
             session.rollback()
         finally:
             session.close()
@@ -837,8 +892,43 @@ class WhaleDetector:
         if not self.polymarket_client:
             return
 
+        saved_trades_count = 0
+        skipped_duplicates_count = 0
+
         try:
             min_size = self.config.quality_volume
+            
+            # Also fetch individual trades for whale_trades ingestion
+            # First get the raw trades before aggregation
+            trades = await self.polymarket_client.fetch_recent_trades(
+                limit=500,
+                min_size_usd=min_size,
+            )
+            
+            # Save each trade to whale_trades table
+            for trade in trades:
+                try:
+                    # Determine side from trade
+                    side = "buy" if trade.side.upper() == "BUY" else "sell"
+                    
+                    # Get market_id from condition_id
+                    market_id = trade.condition_id or ""
+                    
+                    # Save trade to database with tx_hash for deduplication
+                    await self.save_trade_to_db(
+                        trader=trade.trader,
+                        market_id=market_id,
+                        side=side,
+                        size_usd=trade.size_usd,
+                        price=trade.price,
+                        timestamp=float(trade.timestamp),
+                        tx_hash=trade.tx_hash,
+                    )
+                    saved_trades_count += 1
+                except Exception as e:
+                    logger.debug("trade_save_error", error=str(e), trader=trade.trader[:10] if trade.trader else "unknown")
+            
+            # Now get aggregated stats
             aggregated = await self.polymarket_client.aggregate_by_address(
                 limit=500,
                 min_size_usd=min_size,
@@ -910,12 +1000,14 @@ class WhaleDetector:
                 )
                 
                 # Calculate risk_score for Polymarket API whales (required for qualification)
+                # Convert timestamp (int) to datetime as required by calculate_risk_score
+                last_active_dt = datetime.fromtimestamp(stats.last_seen) if stats.last_seen else None
                 whale.risk_score = calculate_risk_score(
                     total_trades=whale.total_trades,
                     avg_trade_size=whale.avg_trade_size,
                     total_volume=whale.total_volume,
                     trades_per_day=Decimal(whale.daily_trades) if whale.daily_trades > 0 else Decimal("1"),
-                    last_active=stats.last_seen,
+                    last_active=last_active_dt,
                 )
                 
                 # Calculate dual-path qualification

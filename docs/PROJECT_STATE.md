@@ -88,6 +88,7 @@ Docker контейнеры: OK (все healthy)
 builder_api_status: VERIFIED
 last_e2e_test: 2026-03-01
 e2e_test_result: PASS
+last_fix: 2026-03-04 (datetime - int в calculate_risk_score)
 
 ---
 
@@ -157,6 +158,17 @@ notes: |
 
 ## 12. WHALE DETECTION VERIFICATION
 
+### whale_trades_ingestion
+whale_trades_ingestion.status: WRITES_OK
+whale_trades_ingestion.entrypoint: "python src/run_whale_detection.py"
+whale_trades_ingestion.source_files: ["src/research/real_time_whale_monitor.py:398", "src/research/whale_tracker.py:696", "src/research/whale_detector.py:707", "src/strategy/virtual_bankroll.py:383"]
+whale_trades.count: 41
+whale_trades.last_seen: "2026-03-04 18:29:11"
+whale_trades_ingestion.last_audit: "2026-03-04"
+whale_trades_ingestion.last_fix: "2026-03-04"
+
+**Комментарий:** WRITES_OK — исправление успешно (save_whale_trade добавлен). 41 запись получена от 22 уникальных трейдеров. Записи добавляются регулярно.
+
 whale_detection_status: VERIFIED
 whales_detected_count: 0
 whales_active_count: 0
@@ -167,10 +179,13 @@ whale_filter_version: "1.0"
 ## 12.1. WHALE DETECTION (ИСПРАВЛЕНО)
 
 ### Текущий статус
-- **Статус:** ✅ Работает (исправлено 2026-03-01)
-- **Tracked whales:** 413+
+- **Статус:** ✅ WRITES_OK (41 запись от 22 трейдеров)
+- **Tracked whales:** 2012+
 - **Quality whales:** в процессе квалификации
-- **В БД:** обновляются повторные трейды
+- **В БД:** whale_trades записываются регулярно
+- **whale_trades_count:** 41
+- **last_seen:** 2026-03-04 18:29:11
+- **last_fix:** 2026-03-04
 
 ### Исправление 2026-03-01: Повторные трейды китов
 **Проблема:** Повторные трейды от известных китов не сохранялись в БД

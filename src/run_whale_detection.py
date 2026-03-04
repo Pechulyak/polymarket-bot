@@ -20,6 +20,7 @@ if sys.platform == "win32":
 
 import aiohttp
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 
 from research.whale_detector import WhaleDetector, DetectionConfig
 from research.polymarket_data_client import PolymarketDataClient
@@ -254,16 +255,59 @@ async def main():
     print("\n✅ Whale Detector is running!")
     print("   Press Ctrl+C to stop\n")
 
+    # Helper to get whale_trades stats
+    def get_whale_trades_stats():
+        """Get whale_trades ingestion stats from database."""
+        try:
+            engine = create_engine(database_url)
+            with engine.connect() as conn:
+                # Total count
+                total_result = conn.execute(text("SELECT COUNT(*) FROM whale_trades"))
+                total_count = total_result.scalar() or 0
+                
+                # Last seen
+                last_seen_result = conn.execute(text("SELECT MAX(traded_at) FROM whale_trades"))
+                last_seen = last_seen_result.scalar()
+                
+                # Whale_id coverage
+                has_whale_id_result = conn.execute(text("SELECT COUNT(*) FROM whale_trades WHERE whale_id IS NOT NULL"))
+                has_whale_id = has_whale_id_result.scalar() or 0
+                
+                # Unique traders
+                unique_traders_result = conn.execute(text("SELECT COUNT(DISTINCT wallet_address) FROM whale_trades WHERE wallet_address IS NOT NULL"))
+                unique_traders = unique_traders_result.scalar() or 0
+                
+                return {
+                    "total_count": total_count,
+                    "last_seen": last_seen,
+                    "has_whale_id": has_whale_id,
+                    "unique_traders": unique_traders,
+                }
+        except Exception as e:
+            return {"error": str(e)}
+
     try:
+        cycle = 0
         while True:
             await asyncio.sleep(10)
+            cycle += 1
+            
             stats = detector.get_stats()
             quality = detector.get_quality_whales()
+            
+            # Get whale_trades stats (every 6 cycles = ~1 minute)
+            trades_stats = {}
+            if cycle % 6 == 0:
+                trades_stats = get_whale_trades_stats()
 
             print(f"[{time.time():.0f}] Stats:")
             print(f"   Total tracked: {stats['total_tracked']}")
             print(f"   Quality whales: {stats['quality_whales']}")
-
+            
+            # Ingestion metrics
+            if trades_stats:
+                print(f"   INGEST: whale_trades={trades_stats.get('total_count', '?')}, last_seen={trades_stats.get('last_seen', 'none')}, unique_traders={trades_stats.get('unique_traders', '?')}")
+            
             if quality:
                 print("   🐋 Quality Whales:")
                 for whale in quality[:5]:
