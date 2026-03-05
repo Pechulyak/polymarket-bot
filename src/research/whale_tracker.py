@@ -695,10 +695,10 @@ class WhaleTracker:
             query = text("""
                 INSERT INTO whale_trades (
                     whale_id, market_id, side, size_usd, price,
-                    is_winner, profit_usd, traded_at
+                    is_winner, profit_usd, traded_at, source
                 ) VALUES (
                     :whale_id, :market_id, :side, :size_usd, :price,
-                    :is_winner, :profit_usd, NOW()
+                    :is_winner, :profit_usd, NOW(), 'realtime'
                 )
             """)
             session.execute(

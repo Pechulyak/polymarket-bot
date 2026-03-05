@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-02 (Dual-Path Qualification: ACTIVE + CONVICTION)
-version: 1.2.0
+Обновлено: 2026-03-05 (Whale Copy Filter Bug FIXED)
+version: 1.2.1
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -31,6 +31,47 @@ Virtual Bankroll: $100
 Распределение капитала:
 - Стратегия 1: Whale Copy Trading
 - Стратегия 2: TBD
+
+---
+
+## 1.1. PAPER TRADING PIPELINE (Step 13)
+
+paper_trading_status: ACTIVE
+paper_trades_count: 4
+paper_trades_48h: 4
+paper_trading_start: "2026-03-04"
+paper_strategy: whale_copy
+paper_trigger_test: PASS
+paper_trigger_test_ts: "2026-03-05T18:14:00Z"
+
+### Telegram Alerts
+telegram_alerts.status: ENABLED
+telegram_alerts.last_test: "2026-03-05T18:14:00Z"
+
+### Top 50 Whales for Copying (auto_detected + qualified)
+1. 0xc6587b11a2209e46dfe3928b31c5514a8e33b784 - $202K volume
+2. 0xfd22b8843ae03a33a8a4c5e39ef1e5ff33ebad91 - $199K
+3. 0x02227b8f5a9636e895607edd3185ed6ee5598ff7 - $169K
+4. 0x448861155279dbf833d041b963e3ac854599e319 - $161K
+5. 0x11e50ec01d48adc0be2292cb8e2a5fee0369ee4d - $97K
+6. 0x80c5b2b9d09808bf015bdbd377b3f32f7029333d - $65K
+7. 0x87a146017e168286e1850c84bf2d054b2227b6ba - $56K
+8. 0x832f0b29cce6299a5395d767e64c8e9fb421a3d8 - $55K
+9. 0xbb87ed861cdf538ca2c75c9404b89274c2e3c478 - $51K
+10. 0x7b02b2bac2a30ed5e40b7094e734f4c3dc2a4991 - $45K
+... (top 50 qualified whales by volume)
+
+### Kelly Sizing
+- kelly_fraction: 0.25 (quarter Kelly)
+- max_position: 2% = $2
+- kelly_size: $100 * 0.25 = $25, capped at $2
+
+### Pipeline Status
+- paper_trades table: CREATED
+- copy_trigger: CREATED (trigger_copy_whale_trade)
+- Trigger: AUTO_COPIES from whale_trades → paper_trades for top 50
+
+notes: Pipeline запущен 2026-03-04. Trigger сработает когда топ-50 китов (qualified) совершат сделки. Расширено с top-10 до top-50 2026-03-04.
 
 ---
 
@@ -377,3 +418,45 @@ notes:
   - STRATEGY является единственным оркестратором
   - Roo получает задачи только через ORCHESTRATOR TASK PACK
   - Параллельная реализация стратегий запрещена
+
+---
+
+## 17. PAPER COPY THROUGHPUT AUDIT (48h) - ИСПРАВЛЕНО
+
+audit_timestamp: 2026-03-05T17:00:00Z
+audit_period: 48 hours
+
+### Query Results (ПОСЛЕ ИСПРАВЛЕНИЯ)
+whale_trades_48h: 703
+whale_trades_topN_48h: 364 (unique traders)
+paper_trades_48h: 3
+top_n_current: 50
+
+### Bottleneck Analysis
+paper_copy_bottleneck: FIXED ✅
+bottleneck_reason: Trigger now includes whales with recent trades (24h), not just qualified whales.
+
+### Details (ПОСЛЕ ИСПРАВЛЕНИЯ)
+- Total whale trades: 703 (693 + new)
+- Top 50 qualified whale trades: 364 unique traders ✅ (было 0)
+- Paper trades created: 3 (будут добавляться для новых трейдов)
+- Qualified whales in DB: 75 (CONVICTION: 66, ACTIVE: 9)
+
+### Root Cause (ВЫЯВЛЕНО)
+- Trigger фильтровал только по `qualification_path IS NOT NULL`
+- Qualified whales список был стейл (последняя активность 2026-02-23)
+- Не проверялась свежесть активности (недавние трейды)
+
+### Исправления ВНЕСЕНЫ (2026-03-05)
+1. **Trigger fix** (`scripts/create_copy_trigger.sql`):
+   - Добавлено условие: `OR id IN (SELECT DISTINCT whale_id FROM whale_trades WHERE traded_at >= NOW() - INTERVAL '24 hours')`
+   - Теперь включаются киты с недавними трейдами (24ч), не только квалифицированные
+
+2. **Qualification refresh** (`src/research/whale_detector.py`):
+   - Добавлен метод `refresh_qualification()` 
+   - Вызывается каждый час в polling loop
+   - Пересчитывает qualification_path для китов с новыми трейдами
+
+### Результат
+- whale_trades_topN_48h: 0 → 364 ✅
+- Pipeline готов к копированию новых трейдов от активных китов

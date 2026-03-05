@@ -7,6 +7,7 @@ import os
 from decimal import Decimal
 
 from src.monitoring import get_logger
+from src.monitoring.notification_worker import NotificationWorker
 from src.research.whale_tracker import WhaleTracker
 from src.strategy.virtual_bankroll import VirtualBankroll
 
@@ -24,10 +25,16 @@ async def main():
 
     # Database URL
     database_url = os.getenv(
-        "DATABASE_URL", 
+        "DATABASE_URL",
         "postgresql://postgres:password@postgres:5432/polymarket"
     )
-    
+
+    # Initialize Notification Worker for Telegram alerts
+    notification_worker = NotificationWorker(
+        database_url=database_url,
+        poll_interval=2.0,
+    )
+
     # Initialize Whale Tracker
     whale_tracker = WhaleTracker(database_url=database_url)
     whale_tracker.set_database(database_url)
@@ -57,6 +64,10 @@ async def main():
     check_interval = 300  # Check every 5 minutes
     
     try:
+        # Start notification worker as background task
+        notification_task = asyncio.create_task(notification_worker.start())
+        logger.info("notification_worker_started")
+
         while True:
             loop_count += 1
             
@@ -99,6 +110,8 @@ async def main():
             
     except KeyboardInterrupt:
         logger.info("Shutting down...")
+        notification_worker.stop()
+        notification_task.cancel()
         
     # Print final stats
     stats = virtual_bankroll.get_stats()

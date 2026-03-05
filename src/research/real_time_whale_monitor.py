@@ -396,9 +396,9 @@ class RealTimeWhaleMonitor:
         try:
             query = text("""
                 INSERT INTO whale_trades (
-                    market_id, side, size_usd, price, traded_at
+                    market_id, side, size_usd, price, traded_at, source
                 ) VALUES (
-                    :market_id, :side, :size_usd, :price, :traded_at
+                    :market_id, :side, :size_usd, :price, :traded_at, 'realtime'
                 )
             """)
             session.execute(

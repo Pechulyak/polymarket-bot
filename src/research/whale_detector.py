@@ -601,6 +601,89 @@ class WhaleDetector:
             )
             return None
 
+    async def refresh_qualification(self) -> int:
+        """Refresh qualification for all whales based on recent trades.
+        
+        This method re-calculates qualification_path for whales that have
+        new trades in the last 24 hours. It ensures the qualified list
+        stays up-to-date with currently active traders.
+        
+        Returns:
+            Number of whales that were re-qualified
+        """
+        await self._ensure_database()
+        if not self._Session:
+            return 0
+        
+        refreshed = 0
+        session = self._Session()
+        try:
+            # Get whales with recent trades (last 24h)
+            query = text("""
+                SELECT 
+                    w.id,
+                    w.wallet_address,
+                    w.total_trades,
+                    w.total_volume_usd,
+                    w.avg_trade_size_usd,
+                    w.risk_score,
+                    COALESCE(w.days_active, 0) as days_active,
+                    COUNT(wt.id) as trades_last_24h,
+                    COUNT(DISTINCT DATE(wt.traded_at)) as days_active_24h
+                FROM whales w
+                INNER JOIN whale_trades wt ON LOWER(w.wallet_address) = LOWER(wt.wallet_address)
+                WHERE wt.traded_at >= NOW() - INTERVAL '24 hours'
+                GROUP BY w.id, w.wallet_address, w.total_trades, w.total_volume_usd, 
+                         w.avg_trade_size_usd, w.risk_score, w.days_active
+            """)
+            result = session.execute(query)
+            
+            for row in result:
+                whale_id, wallet_address, total_trades, total_volume, avg_size, risk_score, days_active, trades_24h, days_24h = row
+                
+                # Calculate trades_last_7_days estimate (use 24h trades as minimum)
+                trades_last_7_days = max(trades_24h, 1)
+                
+                # Re-calculate qualification path
+                qualification_path = self._calculate_qualification_path(
+                    total_trades=total_trades,
+                    total_volume_usd=total_volume or Decimal("0"),
+                    avg_trade_size_usd=avg_size or Decimal("0"),
+                    trades_last_7_days=trades_last_7_days,
+                    days_active=max(days_active, days_24h or 1),
+                    risk_score=risk_score or 5,
+                )
+                
+                if qualification_path:
+                    # Update whale with new qualification
+                    update_query = text("""
+                        UPDATE whales 
+                        SET qualification_path = :qualification_path,
+                            trades_last_7_days = :trades_last_7_days,
+                            days_active = :days_active,
+                            last_active_at = NOW(),
+                            updated_at = NOW()
+                        WHERE id = :whale_id
+                    """)
+                    session.execute(update_query, {
+                        "qualification_path": qualification_path,
+                        "trades_last_7_days": trades_last_7_days,
+                        "days_active": max(days_active, days_24h or 1),
+                        "whale_id": whale_id,
+                    })
+                    refreshed += 1
+            
+            session.commit()
+            logger.info("qualification_refresh_complete", refreshed=refreshed)
+            
+        except Exception as e:
+            logger.error("qualification_refresh_failed", error=str(e))
+            session.rollback()
+        finally:
+            session.close()
+        
+        return refreshed
+
     async def _save_whale_to_db(self, whale: DetectedWhale) -> None:
         """Save whale to database.
 
@@ -741,9 +824,9 @@ class WhaleDetector:
             # Insert trade with tx_hash for deduplication
             insert_query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, wallet_address, market_id, side, size_usd, price, traded_at, tx_hash
+                    whale_id, wallet_address, market_id, side, size_usd, price, traded_at, tx_hash, source
                 ) VALUES (
-                    :whale_id, :wallet_address, :market_id, :side, :size_usd, :price, :traded_at, :tx_hash
+                    :whale_id, :wallet_address, :market_id, :side, :size_usd, :price, :traded_at, :tx_hash, 'backfill'
                 )
             """)
             session.execute(
@@ -864,12 +947,17 @@ class WhaleDetector:
         ranking_interval = 3600  # 1 hour
         last_ranking_update = time.time()
         
+        # Qualification refresh interval (every hour)
+        qualification_interval = 3600  # 1 hour
+        last_qualification_refresh = time.time()
+        
         while self._running:
             try:
                 await self._fetch_polymarket_whales()
                 
-                # Stage 2: Periodic ranking update every hour
                 current_time = time.time()
+                
+                # Stage 2: Periodic ranking update every hour
                 if current_time - last_ranking_update >= ranking_interval:
                     top_whales = self.get_top_whales(limit=10)
                     if top_whales:
@@ -879,6 +967,16 @@ class WhaleDetector:
                             top_addresses=[w.wallet_address[:10] for w in top_whales[:3]],
                         )
                     last_ranking_update = current_time
+                
+                # Qualification refresh every hour (for whales with recent trades)
+                if current_time - last_qualification_refresh >= qualification_interval:
+                    refreshed = await self.refresh_qualification()
+                    if refreshed > 0:
+                        logger.info(
+                            "qualification_refreshed",
+                            refreshed=refreshed,
+                        )
+                    last_qualification_refresh = current_time
                 
                 await asyncio.sleep(self.polymarket_poll_interval)
             except asyncio.CancelledError:

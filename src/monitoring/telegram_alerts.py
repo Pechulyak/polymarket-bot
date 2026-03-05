@@ -283,11 +283,11 @@ class TelegramAlerts:
             error: Error message if failed
         """
         from datetime import timezone, timedelta
-        
+
         # UTC+3 timezone
         utc_plus_3 = timezone(timedelta(hours=3))
         now_utc3 = datetime.now(utc_plus_3)
-        
+
         if status == "success":
             message = f"""
 🐋 *WHALE TRADE - {trade_type.upper()}*
@@ -311,6 +311,62 @@ class TelegramAlerts:
 *Time:* {now_utc3.strftime("%Y-%m-%d %H:%M:%S UTC+3")}
 *Status:* ❌ {status}
 *Error:* {error}
+"""
+        await self._send_message(message)
+
+    async def send_paper_trade_notification(
+        self,
+        whale_address: str,
+        market_id: str,
+        side: str,
+        price: float,
+        size: float,
+        size_usd: float,
+        kelly_fraction: float,
+        kelly_size: float,
+        source: str,
+        created_at: datetime,
+    ) -> None:
+        """Send paper trade created notification.
+
+        Args:
+            whale_address: Whale wallet address
+            market_id: Market ID
+            side: Trade side (buy/sell)
+            price: Trade price
+            size: Trade size
+            size_usd: Trade size in USD
+            kelly_fraction: Kelly fraction used
+            kelly_size: Kelly-calculated position size
+            source: Source (realtime/backfill)
+            created_at: When trade was created
+        """
+        from datetime import timezone, timedelta
+
+        # UTC+3 timezone
+        utc_plus_3 = timezone(timedelta(hours=3))
+        
+        # Handle timestamp conversion
+        if created_at.tzinfo:
+            created_utc3 = created_at.replace(tzinfo=timezone.utc).astimezone(utc_plus_3)
+        else:
+            # Assume UTC if no timezone info
+            created_utc3 = created_at.replace(tzinfo=timezone.utc).astimezone(utc_plus_3)
+
+        source_emoji = "⚡" if source == "realtime" else "📚"
+        side_emoji = "🟢" if side.upper() == "BUY" else "🔴"
+
+        message = f"""
+{side_emoji} *PAPER TRADE CREATED*
+
+*Source:* {source_emoji} {source.upper()}
+*Whale:* `{whale_address[:6]}...{whale_address[-4:]}`
+*Side:* {side.upper()}
+*Size:* ${size_usd:,.2f}
+*Kelly:* {kelly_fraction*100:.1f}% → ${kelly_size:,.2f}
+*Price:* {price:.4f}
+*Market:* {market_id[:50]}...
+*Time:* {created_utc3.strftime("%Y-%m-%d %H:%M:%S UTC+3")}
 """
         await self._send_message(message)
 
