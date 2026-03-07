@@ -267,12 +267,13 @@ class PolymarketClient:
         """Get single market details.
 
         Args:
-            market_id: Market identifier
+            market_id: Market identifier (address/hash)
 
         Returns:
             Market details dictionary
         """
-        url = f"{self.GAMMA_API}/markets/{market_id}"
+        # Use CLOB API for market details (supports address/hash format)
+        url = f"{self.CLOB_API}/markets/{market_id}"
 
         logger.debug("fetching_market", market_id=market_id)
 

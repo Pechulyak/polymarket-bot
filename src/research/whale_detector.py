@@ -31,6 +31,7 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from src.data.storage.market_title_cache import get_market_title
 from src.research.polymarket_data_client import (
     PolymarketDataClient,
 )
@@ -339,6 +340,7 @@ class WhaleDetector:
             
             # Also save trade to whale_trades (ingestion pipeline fix)
             # This is the canonical source for whale_trades
+            market_title = await get_market_title(market_id)
             await self.save_trade_to_db(
                 trader=trader,
                 market_id=market_id,
@@ -346,6 +348,8 @@ class WhaleDetector:
                 size_usd=size_usd,
                 price=price,
                 timestamp=timestamp,
+                market_title=market_title,
+                source="BACKFILL",
             )
             
             if is_new:
@@ -770,6 +774,8 @@ class WhaleDetector:
         price: Decimal,
         timestamp: Optional[float] = None,
         tx_hash: Optional[str] = None,
+        market_title: Optional[str] = None,
+        source: str = "BACKFILL",
     ) -> bool:
         """Save trade to whale_trades table.
 
@@ -784,6 +790,8 @@ class WhaleDetector:
             price: Execution price
             timestamp: Trade timestamp
             tx_hash: Transaction hash for deduplication
+            market_title: Market question/title from Polymarket API
+            source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
 
         Returns:
             True if trade was saved, False if it was a duplicate.
@@ -824,9 +832,9 @@ class WhaleDetector:
             # Insert trade with tx_hash for deduplication
             insert_query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, wallet_address, market_id, side, size_usd, price, traded_at, tx_hash, source
+                    whale_id, wallet_address, market_id, market_title, side, size_usd, price, traded_at, tx_hash, source
                 ) VALUES (
-                    :whale_id, :wallet_address, :market_id, :side, :size_usd, :price, :traded_at, :tx_hash, 'backfill'
+                    :whale_id, :wallet_address, :market_id, :market_title, :side, :size_usd, :price, :traded_at, :tx_hash, :source
                 )
             """)
             session.execute(
@@ -835,11 +843,13 @@ class WhaleDetector:
                     "whale_id": whale_id,
                     "wallet_address": trader_lower,
                     "market_id": market_id,
+                    "market_title": market_title,
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
                     "traded_at": traded_at,
                     "tx_hash": tx_hash,
+                    "source": source,
                 },
             )
             session.commit()
@@ -1021,6 +1031,8 @@ class WhaleDetector:
                         price=trade.price,
                         timestamp=float(trade.timestamp),
                         tx_hash=trade.tx_hash,
+                        market_title=trade.market_title,
+                        source="BACKFILL",
                     )
                     saved_trades_count += 1
                 except Exception as e:

@@ -32,6 +32,7 @@ from sqlalchemy.orm import sessionmaker
 
 from data.ingestion.websocket_client import PolymarketWebSocket, WebSocketMessage
 from research.whale_tracker import WhaleTracker
+from src.data.storage.market_title_cache import get_market_title
 
 logger = structlog.get_logger(__name__)
 
@@ -367,7 +368,8 @@ class RealTimeWhaleMonitor:
                 max_acceptable=self.MAX_ACCEPTABLE_DELAY_MS,
             )
 
-        await self._save_whale_signal_to_db(signal)
+        market_title = await get_market_title(signal.market_id)
+        await self._save_whale_signal_to_db(signal, market_title=market_title)
 
         if self.on_whale_signal:
             try:
@@ -386,8 +388,13 @@ class RealTimeWhaleMonitor:
             delay_ms=signal.delay_ms,
         )
 
-    async def _save_whale_signal_to_db(self, signal: WhaleTradeSignal) -> None:
-        """Save whale signal to database."""
+    async def _save_whale_signal_to_db(self, signal: WhaleTradeSignal, market_title: Optional[str] = None) -> None:
+        """Save whale signal to database.
+
+        Args:
+            signal: The whale trade signal
+            market_title: Market question/title from Polymarket API (optional)
+        """
         await self._ensure_database()
         if not self._Session:
             return
@@ -396,19 +403,21 @@ class RealTimeWhaleMonitor:
         try:
             query = text("""
                 INSERT INTO whale_trades (
-                    market_id, side, size_usd, price, traded_at, source
+                    market_id, market_title, side, size_usd, price, traded_at, source
                 ) VALUES (
-                    :market_id, :side, :size_usd, :price, :traded_at, 'realtime'
+                    :market_id, :market_title, :side, :size_usd, :price, :traded_at, :source
                 )
             """)
             session.execute(
                 query,
                 {
                     "market_id": signal.market_id,
+                    "market_title": market_title,
                     "side": signal.side,
                     "size_usd": float(signal.size_usd),
                     "price": float(signal.price),
                     "traded_at": datetime.fromtimestamp(signal.timestamp),
+                    "source": "REALTIME",
                 },
             )
             session.commit()

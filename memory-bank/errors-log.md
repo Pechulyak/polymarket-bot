@@ -11,6 +11,25 @@
 
 ## Зафиксированные ошибки
 
+### [2026-03-06] market_title сохраняется как NULL в БД
+
+- **Симптом:** Все записи в таблице `whale_trades` имеют `market_title=NULL`, хотя Polymarket API возвращает это поле
+- **Причина:** При сохранении whale trades во всех модулях передавалось `market_title=None`:
+  - `virtual_bankroll.py` строки ~559, ~677
+  - `whale_detector.py` строка ~350
+  - `real_time_whale_monitor.py` строка ~371
+- **Решение:**
+  1. Создана утилита [`src/data/storage/market_title_cache.py`](src/data/storage/market_title_cache.py) — функция `get_market_title(market_id)` с кэшированием (до 100 записей)
+  2. Функция использует `PolymarketClient.get_market()` и извлекает поле `question` из ответа API
+  3. Обновлены все места вызова:
+     - [`src/strategy/virtual_bankroll.py`](src/strategy/virtual_bankroll.py): строки 559, 677 — добавлен вызов `await get_market_title(market_id)`
+     - [`src/research/whale_detector.py`](src/research/whale_detector.py): строка ~350 — добавлен вызов
+     - [`src/research/real_time_whale_monitor.py`](src/research/real_time_whale_monitor.py): строка ~371 — добавлен вызов
+- **Проверка:** Все файлы прошли `python3 -m py_compile` без ошибок
+- **Правило:** Использовать `get_market_title()` для получения title при наличии market_id
+
+---
+
 ### [2026-02-28] Киты не сохраняются в БД (ИСПРАВЛЕНО)
 
 - **Симптом:** В памяти: 10-35 tracked whales, в БД: 0 записей. Логи показывают: `whale_save_failed error='column "total_volume_usd" of relation "whales" does not exist'`

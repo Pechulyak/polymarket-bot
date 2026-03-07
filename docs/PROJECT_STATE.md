@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-05 (Whale Copy Filter Bug FIXED)
-version: 1.2.1
+Обновлено: 2026-03-07 (market_title Pipeline VERIFIED)
+version: 1.2.2
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -276,6 +276,12 @@ last_discovery_refresh: 2026-03-02 (Dual-Path Qualification)
 whale_discovery_status: ACTIVE
 qualification_path_active: true
 
+### Qualification Configuration
+qualification_path_role: LABEL_ONLY
+paper_copy_gate: RECENT_WHALE_TRADES_PLUS_ACTIVITY
+qualification_gate_removed: true
+qualification_gate_removed_at: 2026-03-07T08:25:00Z
+
 ### Ranking Status
 whale_ranking_status: ACTIVE
 top_whales_count: в процессе
@@ -409,7 +415,7 @@ notes: |
 
 ## 16. GOVERNANCE STATUS
 
-governance_document: dosc/CHAT GOVERNANCE.md
+governance_document: docs/CHAT GOVERNANCE.md
 governance_version: v1.0
 governance_status: ACTIVE
 last_governance_sync: 2026-03-02
@@ -460,3 +466,48 @@ bottleneck_reason: Trigger now includes whales with recent trades (24h), not jus
 ### Результат
 - whale_trades_topN_48h: 0 → 364 ✅
 - Pipeline готов к копированию новых трейдов от активных китов
+
+---
+
+## 18. MARKET_TITLE PIPELINE VERIFICATION (2026-03-07)
+
+### Тест: Trigger Test для market_title
+
+**Статус:** ✅ VERIFIED
+
+**Дата теста:** 2026-03-07T07:30:00Z
+
+**Параметры теста:**
+- Источник: Top-50 whale (wallet: 0xe8d78..., qualification_path: CONVICTION, volume: $15,111)
+- Whale ID: 2516
+- market_id: 0x61d9486c0f7e14ed98f3b177b6adcb3cd45646c92e8bbfbf209789b86472d4b6
+- market_title: "Will Wes Moore win the 2028 Democratic presidential nomination?"
+- source: TRIGGER_TEST
+
+**Шаги теста:**
+1. ✅ INSERT в whale_trades с market_title
+2. ✅ Trigger сработал - INSERT в paper_trades с market_title
+3. ✅ Trigger notify сработал - INSERT в paper_trade_notifications с market_title
+4. ✅ Telegram notification отправлен (лог: notification_sent)
+
+**Результаты:**
+- whale_trades: запись создана (id=3707)
+- paper_trades: market_title присутствует ✅
+- paper_trade_notifications: market_title присутствует, notified=true ✅
+- Telegram: notification_sent logged ✅
+
+**Cleanup:**
+- Удалено 2 записи из whale_trades
+- Удалено 1 запись из paper_trades
+- Удалено 1 запись из paper_trade_notifications
+- Все записи удалены (проверено: cnt=0 для всех таблиц)
+
+**Исправления внесены:**
+- Добавлен TRIGGER_TEST в whitelist paper_trades_source_check constraint
+
+**Вывод:**
+market_title pipeline VERIFIED:
+- whale_trades → paper_trades: ✅
+- paper_trades → paper_trade_notifications: ✅
+- Telegram notifications: ✅
+- market_title корректно передаётся по всей цепочке

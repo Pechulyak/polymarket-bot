@@ -326,6 +326,7 @@ class TelegramAlerts:
         kelly_size: float,
         source: str,
         created_at: datetime,
+        market_title: str = None,
     ) -> None:
         """Send paper trade created notification.
 
@@ -340,12 +341,13 @@ class TelegramAlerts:
             kelly_size: Kelly-calculated position size
             source: Source (realtime/backfill)
             created_at: When trade was created
+            market_title: Market title (optional, will fetch from DB if not provided)
         """
         from datetime import timezone, timedelta
 
         # UTC+3 timezone
         utc_plus_3 = timezone(timedelta(hours=3))
-        
+
         # Handle timestamp conversion
         if created_at.tzinfo:
             created_utc3 = created_at.replace(tzinfo=timezone.utc).astimezone(utc_plus_3)
@@ -356,19 +358,106 @@ class TelegramAlerts:
         source_emoji = "⚡" if source == "realtime" else "📚"
         side_emoji = "🟢" if side.upper() == "BUY" else "🔴"
 
+        # Try to get market_title from DB if not provided
+        if not market_title:
+            market_title = await self._fetch_market_title(market_id)
+
+        # Use market_title if available, otherwise fallback to truncated market_id
+        if market_title:
+            market_display = market_title
+        else:
+            market_display = f"`{market_id[:12]}...{market_id[-8:]}`"
+
         message = f"""
 {side_emoji} *PAPER TRADE CREATED*
 
 *Source:* {source_emoji} {source.upper()}
 *Whale:* `{whale_address[:6]}...{whale_address[-4:]}`
+*Market:* {market_display}
 *Side:* {side.upper()}
 *Size:* ${size_usd:,.2f}
 *Kelly:* {kelly_fraction*100:.1f}% → ${kelly_size:,.2f}
 *Price:* {price:.4f}
-*Market:* {market_id[:50]}...
 *Time:* {created_utc3.strftime("%Y-%m-%d %H:%M:%S UTC+3")}
 """
         await self._send_message(message)
+
+    async def _fetch_market_title(self, market_id: str) -> Optional[str]:
+        """Fetch market_title from database.
+
+        Args:
+            market_id: Market ID to look up
+
+        Returns:
+            Market title if found, None otherwise
+        """
+        import os
+        from sqlalchemy import create_engine, text
+
+        try:
+            database_url = os.getenv(
+                "DATABASE_URL",
+                "postgresql://postgres:password@postgres:5432/polymarket"
+            )
+
+            # Try to connect without SSL first (for local/Docker)
+            engine = create_engine(
+                database_url,
+                connect_args={"options": "-c statement_timeout=5000"}
+            )
+
+            with engine.connect() as conn:
+                # First try paper_trade_notifications table
+                result = conn.execute(
+                    text("""
+                        SELECT market_title
+                        FROM paper_trade_notifications
+                        WHERE market_id = :market_id
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    """),
+                    {"market_id": market_id}
+                )
+                row = result.fetchone()
+                if row and row[0]:
+                    return row[0]
+
+                # Fallback: try paper_trades table
+                result = conn.execute(
+                    text("""
+                        SELECT market_title
+                        FROM paper_trades
+                        WHERE market_id = :market_id
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    """),
+                    {"market_id": market_id}
+                )
+                row = result.fetchone()
+                if row and row[0]:
+                    return row[0]
+
+                # Fallback: try whale_trades table
+                result = conn.execute(
+                    text("""
+                        SELECT market_title
+                        FROM whale_trades
+                        WHERE market_id = :market_id
+                        ORDER BY traded_at DESC
+                        LIMIT 1
+                    """),
+                    {"market_id": market_id}
+                )
+                row = result.fetchone()
+                if row and row[0]:
+                    return row[0]
+
+            engine.dispose()
+            return None
+
+        except Exception as e:
+            logger.warning("failed_to_fetch_market_title", market_id=market_id, error=str(e))
+            return None
 
     async def send_daily_summary(
         self,

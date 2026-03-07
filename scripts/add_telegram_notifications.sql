@@ -1,10 +1,16 @@
 -- Add source column to whale_trades for tracking realtime vs backfill
-ALTER TABLE whale_trades ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'unknown' 
-    CHECK (source IN ('realtime', 'backfill', 'unknown'));
+ALTER TABLE whale_trades ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'unknown'
+    CHECK (source IN ('REALTIME', 'BACKFILL', 'TRIGGER_TEST', 'unknown'));
 
 -- Add source column to paper_trades
 ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'unknown'
-    CHECK (source IN ('realtime', 'backfill', 'unknown'));
+    CHECK (source IN ('REALTIME', 'BACKFILL', 'TRIGGER_TEST', 'unknown'));
+
+-- Add market_title column to whale_trades
+ALTER TABLE whale_trades ADD COLUMN IF NOT EXISTS market_title TEXT;
+
+-- Add market_title column to paper_trades
+ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS market_title TEXT;
 
 -- Create notification queue table for Telegram alerts
 CREATE TABLE IF NOT EXISTS paper_trade_notifications (
@@ -12,6 +18,7 @@ CREATE TABLE IF NOT EXISTS paper_trade_notifications (
     paper_trade_id INTEGER NOT NULL,
     whale_address TEXT NOT NULL,
     market_id TEXT NOT NULL,
+    market_title TEXT,
     side TEXT NOT NULL,
     price NUMERIC(20, 8) NOT NULL,
     size NUMERIC(20, 8) NOT NULL,
@@ -46,23 +53,23 @@ BEGIN
     v_source := COALESCE(NEW.source, 'unknown');
 
     -- Check if whale is in top 50:
-    -- 1. Qualified whales (qualification_path IS NOT NULL)
-    -- 2. OR whales with recent trades (traded in last 24h)
+    -- Gate 1: Whale has recent trades in whale_trades (last 24h)
+    -- Gate 2: Whale passes activity filter (has trades_last_7_days > 0)
     IF v_whale_address IS NOT NULL THEN
         SELECT EXISTS (
             SELECT 1 FROM (
                 SELECT wallet_address 
                 FROM whales 
                 WHERE (
-                    -- Path 1: Qualified whales
-                    qualification_path IS NOT NULL
-                    -- OR Path 2: Whales with recent activity (traded in last 24h)
-                    OR id IN (
+                    -- Gate 1: Whale has recent trades in whale_trades (last 24h)
+                    id IN (
                         SELECT DISTINCT whale_id 
                         FROM whale_trades 
                         WHERE whale_id IS NOT NULL 
                           AND traded_at >= NOW() - INTERVAL '24 hours'
                     )
+                    -- Gate 2: Whale passes activity filter (has trades_last_7_days > 0)
+                    AND COALESCE(trades_last_7_days, 0) > 0
                 )
                 ORDER BY total_volume_usd DESC 
                 LIMIT 50
@@ -119,6 +126,7 @@ BEGIN
         paper_trade_id,
         whale_address,
         market_id,
+        market_title,
         side,
         price,
         size,
@@ -131,6 +139,7 @@ BEGIN
         NEW.id,
         NEW.whale_address,
         NEW.market_id,
+        NEW.market_title,
         NEW.side,
         NEW.price,
         NEW.size,

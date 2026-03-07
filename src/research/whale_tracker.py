@@ -670,6 +670,8 @@ class WhaleTracker:
         price: Decimal,
         is_winner: Optional[bool] = None,
         profit_usd: Optional[Decimal] = None,
+        market_title: Optional[str] = None,
+        source: str = "BACKFILL",
     ) -> bool:
         """Save a whale trade to database.
 
@@ -681,6 +683,8 @@ class WhaleTracker:
             price: Execution price
             is_winner: Whether trade was winning
             profit_usd: Profit in USD
+            market_title: Market question/title from Polymarket API
+            source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
 
         Returns:
             True if saved successfully
@@ -694,11 +698,11 @@ class WhaleTracker:
         try:
             query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, market_id, side, size_usd, price,
+                    whale_id, market_id, market_title, side, size_usd, price,
                     is_winner, profit_usd, traded_at, source
                 ) VALUES (
-                    :whale_id, :market_id, :side, :size_usd, :price,
-                    :is_winner, :profit_usd, NOW(), 'realtime'
+                    :whale_id, :market_id, :market_title, :side, :size_usd, :price,
+                    :is_winner, :profit_usd, NOW(), :source
                 )
             """)
             session.execute(
@@ -706,11 +710,13 @@ class WhaleTracker:
                 {
                     "whale_id": whale_id,
                     "market_id": market_id,
+                    "market_title": market_title,
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
                     "is_winner": is_winner,
                     "profit_usd": float(profit_usd) if profit_usd else None,
+                    "source": source,
                 },
             )
             session.commit()

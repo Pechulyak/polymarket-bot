@@ -31,6 +31,8 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from src.data.storage.market_title_cache import get_market_title
+
 logger = structlog.get_logger(__name__)
 
 
@@ -350,6 +352,7 @@ class VirtualBankroll:
         side: str,
         size_usd: Decimal,
         price: Decimal,
+        market_title: Optional[str] = None,
     ) -> None:
         """Save whale trade record for tracking copy trading source.
 
@@ -359,6 +362,7 @@ class VirtualBankroll:
             side: Trade side
             size_usd: Trade size in USD
             price: Execution price
+            market_title: Market question/title (optional)
         """
         await self._ensure_database()
 
@@ -381,9 +385,9 @@ class VirtualBankroll:
 
             insert_query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, market_id, side, size_usd, price, traded_at
+                    whale_id, market_id, market_title, side, size_usd, price, traded_at, source
                 ) VALUES (
-                    :whale_id, :market_id, :side, :size_usd, :price, NOW()
+                    :whale_id, :market_id, :market_title, :side, :size_usd, :price, NOW(), :source
                 )
             """)
             session.execute(
@@ -391,9 +395,11 @@ class VirtualBankroll:
                 {
                     "whale_id": whale_id,
                     "market_id": market_id,
+                    "market_title": market_title,
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
+                    "source": "TRIGGER_TEST",
                 },
             )
             session.commit()
@@ -544,12 +550,14 @@ class VirtualBankroll:
         )
 
         if whale_source:
+            market_title = await get_market_title(market_id)
             await self._save_whale_trade_record(
                 whale_address=whale_source,
                 market_id=market_id,
                 side=side.lower(),
                 size_usd=size,
                 price=price,
+                market_title=market_title,
             )
 
         await self._save_bankroll_history(
@@ -660,12 +668,14 @@ class VirtualBankroll:
         )
 
         if position.whale_source:
+            market_title = await get_market_title(market_id)
             await self._save_whale_trade_record(
                 whale_address=position.whale_source,
                 market_id=market_id,
                 side="sell" if position.side == "buy" else "buy",
                 size_usd=position.size,
                 price=close_price,
+                market_title=market_title,
             )
 
         await self._save_bankroll_history(

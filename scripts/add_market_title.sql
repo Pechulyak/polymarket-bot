@@ -1,6 +1,13 @@
--- Function to copy whale trades to paper_trades table
--- FIX: Include whales with recent trades (last 24h) OR qualified whales
--- ADDED: market_title column
+-- Add market_title column to whale_trades
+ALTER TABLE whale_trades ADD COLUMN IF NOT EXISTS market_title TEXT;
+
+-- Add market_title column to paper_trades
+ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS market_title TEXT;
+
+-- Add market_title column to paper_trade_notifications
+ALTER TABLE paper_trade_notifications ADD COLUMN IF NOT EXISTS market_title TEXT;
+
+-- Update trigger function to include market_title
 CREATE OR REPLACE FUNCTION copy_whale_trade_to_paper()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -88,9 +95,51 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger
+-- Update trigger
 DROP TRIGGER IF EXISTS trigger_copy_whale_trade ON whale_trades;
 CREATE TRIGGER trigger_copy_whale_trade
 AFTER INSERT ON whale_trades
 FOR EACH ROW
 EXECUTE FUNCTION copy_whale_trade_to_paper();
+
+-- Update notification function to include market_title
+CREATE OR REPLACE FUNCTION notify_paper_trade()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO paper_trade_notifications (
+        paper_trade_id,
+        whale_address,
+        market_id,
+        market_title,
+        side,
+        price,
+        size,
+        size_usd,
+        kelly_fraction,
+        kelly_size,
+        source,
+        created_at
+    ) VALUES (
+        NEW.id,
+        NEW.whale_address,
+        NEW.market_id,
+        NEW.market_title,
+        NEW.side,
+        NEW.price,
+        NEW.size,
+        NEW.size_usd,
+        NEW.kelly_fraction,
+        NEW.kelly_size,
+        NEW.source,
+        NEW.created_at
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Recreate trigger on paper_trades
+DROP TRIGGER IF EXISTS trigger_notify_paper_trade ON paper_trades;
+CREATE TRIGGER trigger_notify_paper_trade
+AFTER INSERT ON paper_trades
+FOR EACH ROW
+EXECUTE FUNCTION notify_paper_trade();
