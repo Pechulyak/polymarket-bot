@@ -19,7 +19,7 @@
 
 ## Текущий приоритет
 
-**W-003 — Strategy Metrics Engine** (IN_PROGRESS)
+*(None - waiting for tasks)*
 
 ---
 
@@ -29,7 +29,7 @@
 |----|--------|--------|
 | W-001 | Whale Detection Pipeline | TODO |
 | W-002 | Whale Tracking Database | TODO |
-| W-003 | Strategy Metrics Engine | **IN_PROGRESS** |
+| W-003 | Strategy Metrics Engine | TODO |
 | W-004 | Copy Trading Engine Integration | TODO |
 
 ---
@@ -63,6 +63,7 @@
 | SYS-304 | Add TASK_BOARD governance rules | DONE |
 | SYS-305 | Generate docs/TASK_BOARD.html | DONE |
 | SYS-306 | Persistent local web server for TASK_BOARD | DONE |
+| SYS-309 | Daily Data Audit Snapshot | READY |
 
 ---
 
