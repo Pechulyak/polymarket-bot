@@ -1,6 +1,6 @@
 # Daily Data Audit Snapshot
 
-**Generated:** 2026-03-09 10:53:57
+**Generated:** 2026-03-09 11:01:54
 
 ---
 
@@ -8,8 +8,8 @@
 
 | Table | Row Count | Rows 24h | Rows 48h | First Row | Last Row |
 |-------|-----------|----------|----------|-----------|----------|
-| whales | 3914 | 449 | 959 | 2026-02-23 18:18:13 | 2026-03-09 10:33:47 |
-| whale_trades | 3486 | 872 | 1860 | 2026-02-23 18:47:03 | 2026-03-09 10:41:27 |
+| whales | 3915 | 450 | 955 | 2026-02-23 18:18:13 | 2026-03-09 10:55:49 |
+| whale_trades | 3488 | 871 | 1858 | 2026-02-23 18:47:03 | 2026-03-09 10:52:03 |
 | paper_trades | 40 | 4 | 10 | 2026-03-04 23:59:51 | 2026-03-08 23:44:09 |
 | paper_trade_notifications | 38 | 4 | 10 | 2026-03-05 17:28:03 | 2026-03-08 23:44:09 |
 | trades | 2 | N/A | N/A | 2026-03-01 10:40:49 | 2026-03-01 10:41:38 |
@@ -21,19 +21,19 @@
 
 ### whales
 
-- Unique addresses: 3914
+- Unique addresses: 3915
 - Default risk_score (5): 1711
-- NULL qualification_path: 1371
-- Active whales (24h): 676
-- Active whales (48h): 1322
+- NULL qualification_path: 1372
+- Active whales (24h): 673
+- Active whales (48h): 1320
 
 ### whale_trades
 
 - Unique whales: 878
-- Unique whales (24h): 256
+- Unique whales (24h): 255
 - NULL price: 0
 - NULL size: 0
-- Latest trade: 2026-03-09 10:41:27
+- Latest trade: 2026-03-09 10:52:03
 
 ### paper_trades
 

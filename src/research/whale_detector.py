@@ -688,6 +688,94 @@ class WhaleDetector:
         
         return refreshed
 
+    async def update_whale_activity_counters(self) -> int:
+        """Update activity counters for all whales based on whale_trades table.
+        
+        This method recalculates:
+        - trades_last_3_days: COUNT of trades in last 3 days
+        - trades_last_7_days: COUNT of trades in last 7 days  
+        - days_active: COUNT of DISTINCT trading days
+        
+        Returns:
+            Number of whales updated
+        """
+        await self._ensure_database()
+        if not self._Session:
+            return 0
+        
+        updated = 0
+        session = self._Session()
+        try:
+            # Update trades_last_3_days
+            update_3d = text("""
+                UPDATE whales w
+                SET trades_last_3_days = t.trade_count,
+                    last_active_at = NOW(),
+                    updated_at = NOW()
+                FROM (
+                    SELECT wallet_address, COUNT(*) as trade_count
+                    FROM whale_trades
+                    WHERE traded_at >= NOW() - INTERVAL '3 days'
+                    GROUP BY wallet_address
+                ) t
+                WHERE LOWER(w.wallet_address) = LOWER(t.wallet_address)
+                AND w.trades_last_3_days != t.trade_count
+            """)
+            session.execute(update_3d)
+            
+            # Update trades_last_7_days
+            update_7d = text("""
+                UPDATE whales w
+                SET trades_last_7_days = t.trade_count,
+                    last_active_at = NOW(),
+                    updated_at = NOW()
+                FROM (
+                    SELECT wallet_address, COUNT(*) as trade_count
+                    FROM whale_trades
+                    WHERE traded_at >= NOW() - INTERVAL '7 days'
+                    GROUP BY wallet_address
+                ) t
+                WHERE LOWER(w.wallet_address) = LOWER(t.wallet_address)
+                AND w.trades_last_7_days != t.trade_count
+            """)
+            session.execute(update_7d)
+            
+            # Update days_active
+            update_days = text("""
+                UPDATE whales w
+                SET days_active = t.days,
+                    last_active_at = NOW(),
+                    updated_at = NOW()
+                FROM (
+                    SELECT wallet_address, COUNT(DISTINCT DATE(traded_at)) as days
+                    FROM whale_trades
+                    GROUP BY wallet_address
+                ) t
+                WHERE LOWER(w.wallet_address) = LOWER(t.wallet_address)
+                AND w.days_active != t.days
+            """)
+            session.execute(update_days)
+            
+            session.commit()
+            
+            # Get count of updated whales
+            count_query = text("""
+                SELECT COUNT(*) FROM whales 
+                WHERE updated_at >= NOW() - INTERVAL '1 second'
+            """)
+            result = session.execute(count_query)
+            updated = result.scalar() or 0
+            
+            logger.info("activity_counters_updated", whales_updated=updated)
+            
+        except Exception as e:
+            logger.error("activity_counters_update_failed", error=str(e))
+            session.rollback()
+        finally:
+            session.close()
+        
+        return updated
+
     async def _save_whale_to_db(self, whale: DetectedWhale) -> None:
         """Save whale to database.
 
@@ -985,6 +1073,13 @@ class WhaleDetector:
                         logger.info(
                             "qualification_refreshed",
                             refreshed=refreshed,
+                        )
+                    # Also refresh activity counters from whale_trades table
+                    activity_updated = await self.update_whale_activity_counters()
+                    if activity_updated > 0:
+                        logger.info(
+                            "activity_counters_refreshed",
+                            whales_updated=activity_updated,
                         )
                     last_qualification_refresh = current_time
                 

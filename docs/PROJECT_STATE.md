@@ -546,3 +546,35 @@ market_title pipeline VERIFIED:
 - paper_trades → paper_trade_notifications: ✅
 - Telegram notifications: ✅
 - market_title корректно передаётся по всей цепочке
+
+---
+
+## 19. WHALE ACTIVITY COUNTERS FIX (2026-03-09)
+
+### Problem
+Activity counters in whales table (trades_last_3_days, trades_last_7_days, days_active) were incorrectly calculated:
+- Only 4 whales had ≥3 trades in 3 days
+- days_active max was 1, avg was 0.95
+- While whale_trades contained 1,570 active addresses
+
+### Root Cause
+Activity counters were calculated from in-memory trade data (72h window) instead of whale_trades table.
+
+### Fix Applied
+Added `update_whale_activity_counters()` method in whale_detector.py:
+- Calculates trades_last_3_days from whale_trades (COUNT where traded_at >= NOW() - 3 days)
+- Calculates trades_last_7_days from whale_trades (COUNT where traded_at >= NOW() - 7 days)
+- Calculates days_active from whale_trades (COUNT DISTINCT DATE(traded_at))
+- Called hourly in polling loop
+
+### Results After Fix
+- **trades_last_3_days ≥ 3:** 106 whales (was 4)
+- **trades_last_3_days ≥ 1:** 3,686 whales
+- **max trades_last_3_days:** 58 (was 5)
+- **max days_active:** 6 (was 1)
+- **avg days_active:** 1.07 (was 0.95)
+- **whales with days_active > 1:** 315 (was 0)
+
+whale_activity_counters_status: FIXED
+fix_date: 2026-03-09
+active_whales_3d: 3686
