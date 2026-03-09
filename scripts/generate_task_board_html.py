@@ -368,6 +368,9 @@ def generate_html(data: dict) -> str:
             <tbody>
 '''
             for task in epic['tasks']:
+                # Skip DONE tasks - they remain in MD but not shown in HTML
+                if task['status'] == 'DONE':
+                    continue
                 html += f'''                <tr>
                     <td class="task-id">{task['id']}</td>
                     <td>{task['name']}</td>
