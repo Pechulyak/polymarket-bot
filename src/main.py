@@ -87,13 +87,34 @@ async def main():
                                 f"Whale {whale_addr[:8]}... has {len(trades)} recent trades"
                             )
                             
-                            # Process each trade - in paper mode, just log it
-                            # In live mode, would execute real trades
+                            # Process each trade - execute via VirtualBankroll
                             for trade in trades[:3]:  # Process up to 3 trades
                                 logger.info(
                                     f"  Trade: {trade.side} ${trade.size_usd:.0f} "
                                     f"at {trade.price} on {trade.market_id[:16]}..."
                                 )
+                                
+                                # Execute paper trade via VirtualBankroll
+                                try:
+                                    fees = trade.size_usd * Decimal("0.002")
+                                    gas = Decimal("1.50")
+                                    
+                                    result = await virtual_bankroll.execute_virtual_trade(
+                                        market_id=trade.market_id,
+                                        side=trade.side.lower(),
+                                        size=trade.size_usd,
+                                        price=trade.price,
+                                        strategy="copy_whale",
+                                        fees=fees,
+                                        gas=gas,
+                                        whale_source=whale_addr,
+                                    )
+                                    logger.info(
+                                        f"  Paper trade executed: {result.trade_id}, "
+                                        f"new balance: {virtual_bankroll.balance}"
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"  Error executing paper trade: {e}")
                                 
                     except Exception as e:
                         logger.warning(f"Error fetching trades for {whale_addr[:8]}: {e}")
