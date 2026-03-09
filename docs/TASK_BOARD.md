@@ -44,7 +44,7 @@
 
 ---
 
-## EPIC 3 — RISK MANAGEMENT
+## EPIC 3 — SMART MONEY
 
 | ID | Задача | Статус |
 |----|--------|--------|
