@@ -64,7 +64,7 @@
 | SYS-305 | Generate docs/TASK_BOARD.html | DONE |
 | SYS-306 | Persistent local web server for TASK_BOARD | DONE |
 | SYS-309 | Daily Data Audit Snapshot | READY |
-| SYS-311 | Fix Whale Activity Counters | READY |
+| SYS-311 | Fix Whale Activity Counters | DONE |
 
 ---
 
