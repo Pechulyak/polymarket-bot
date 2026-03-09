@@ -69,7 +69,7 @@
 | SYS-313 | Hide DONE Tasks in HTML Task Board | DONE |
 | SYS-314 | Paper Trade Trigger Pipeline Audit | DONE |
 | SYS-315 | Fix Duplicate Suppression in Paper Trade Trigger | DONE |
-| SYS-317 | Audit trades lifecycle for paper performance tracking | READY |
+| SYS-317 | Audit trades lifecycle for paper performance tracking | DONE |
 
 ---
 
