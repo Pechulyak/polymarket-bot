@@ -578,3 +578,77 @@ Added `update_whale_activity_counters()` method in whale_detector.py:
 whale_activity_counters_status: FIXED
 fix_date: 2026-03-09
 active_whales_3d: 3686
+
+---
+
+## 21. TRADES LIFECYCLE AUDIT (SYS-317)
+
+### Audit Date
+audit_date: 2026-03-09
+
+### Table Purpose
+trades_table_purpose: Central execution log with PnL tracking
+
+### Structure Verified
+- trade_id: UUID ✓
+- opportunity_id: UUID ✓
+- market_id: VARCHAR ✓
+- side: VARCHAR ✓
+- size, price: NUMERIC ✓
+- exchange: VARCHAR (VIRTUAL for paper) ✓
+- commission, gas_cost_eth, gas_cost_usd: NUMERIC ✓
+- gross_pnl, total_fees, net_pnl: NUMERIC ✓
+- status: VARCHAR ('open'/'closed') ✓
+- executed_at, settled_at: TIMESTAMP ✓
+
+### Current State
+trades_count: 2
+trades_status_distribution: open=2, closed=0
+trades_exchange: VIRTUAL (both records are paper trades)
+
+### Pipeline
+trades_pipeline: VirtualBankroll.execute_virtual_trade() → _save_virtual_trade()
+pipeline_location: src/strategy/virtual_bankroll.py
+pipeline_status: IMPLEMENTED
+
+### Lifecycle
+lifecycle_trade_created: status='open', executed_at=NOW()
+lifecycle_trade_settled: status='closed', settled_at=NOW(), net_pnl calculated
+lifecycle_close_method: close_virtual_position() or sell side
+
+### PnL Calculation
+pnl_formula: |
+  gross_pnl = exit_value - entry_value
+  total_fees = commission + gas_cost
+  net_pnl = gross_pnl - total_fees
+pnl_fields_present: TRUE
+
+### Paper Trading Integration
+trades_used_for_paper: YES
+exchange_value_for_paper: VIRTUAL
+related_tables: paper_trades (signals), paper_trade_notifications (alerts)
+
+### Architecture
+recommended_architecture: |
+  whale_signal → paper_trades → copy_trading_engine → 
+  VirtualBankroll.execute_virtual_trade() → trades (with PnL)
+
+### Findings
+1. Trades table IS used for paper trade tracking (exchange='VIRTUAL')
+2. PnL calculation is implemented (gross_pnl, total_fees, net_pnl)
+3. Lifecycle status transitions work (open → closed)
+4. Issue: No automatic settlement (positions stay 'open')
+5. Issue: whale_source passed but not saved to trades table
+
+### Recommendation
+pnl_tracking_possible: TRUE
+trades_table_usage: SUITABLE - already in use for paper PnL tracking
+recommended_actions:
+- Implement market resolution listener for auto-close
+- Save whale_source to trades (currently passed but not inserted)
+- Add reporting queries for paper performance
+
+notes: |
+  The trades table is suitable and already in use for paper trade 
+  performance tracking. All required PnL fields are present and 
+  calculated. The pipeline is implemented in VirtualBankroll.
