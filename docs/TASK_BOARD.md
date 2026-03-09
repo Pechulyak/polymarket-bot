@@ -66,6 +66,7 @@
 | SYS-309 | Daily Data Audit Snapshot | READY |
 | SYS-311 | Fix Whale Activity Counters | DONE |
 | SYS-312 | Whale Universe Quality Analysis | DONE |
+| SYS-313 | Hide DONE Tasks in HTML Task Board | DONE |
 
 ---
 
