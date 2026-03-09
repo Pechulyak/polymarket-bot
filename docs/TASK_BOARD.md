@@ -67,7 +67,7 @@
 | SYS-311 | Fix Whale Activity Counters | DONE |
 | SYS-312 | Whale Universe Quality Analysis | DONE |
 | SYS-313 | Hide DONE Tasks in HTML Task Board | DONE |
-| SYS-314 | Paper Trade Trigger Pipeline Audit | READY |
+| SYS-314 | Paper Trade Trigger Pipeline Audit | DONE |
 
 ---
 
