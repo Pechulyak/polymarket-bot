@@ -38,9 +38,9 @@
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| W-005 | Cross-Exchange Arbitrage Detector | TODO |
-| W-006 | Bybit Hedging Integration | TODO |
-| W-007 | Order Book Inefficiency Scanner | TODO |
+| A-101 | Cross-Exchange Arbitrage Detector | TODO |
+| A-102 | Bybit Hedging Integration | TODO |
+| A-103 | Order Book Inefficiency Scanner | TODO |
 
 ---
 
@@ -48,9 +48,9 @@
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| W-008 | Kill Switch Mechanisms | TODO |
-| W-009 | Position Limits & Drawdown Controls | TODO |
-| W-010 | Commission & Fee Tracker | TODO |
+| S-201 | Kill Switch Mechanisms | TODO |
+| S-202 | Position Limits & Drawdown Controls | TODO |
+| S-203 | Commission & Fee Tracker | TODO |
 
 ---
 
@@ -58,8 +58,11 @@
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| W-011 | Docker Orchestration & Deployment | TODO |
-| W-012 | Monitoring & Alerting System | TODO |
+| SYS-301 | Docker Orchestration & Deployment | TODO |
+| SYS-302 | Monitoring & Alerting System | TODO |
+| SYS-304 | Add TASK_BOARD governance rules | DONE |
+| SYS-305 | Generate docs/TASK_BOARD.html | DONE |
+| SYS-306 | Persistent local web server for TASK_BOARD | DONE |
 
 ---
 
