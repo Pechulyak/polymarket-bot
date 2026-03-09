@@ -469,6 +469,41 @@ bottleneck_reason: Trigger now includes whales with recent trades (24h), not jus
 
 ---
 
+## DAILY DATA SNAPSHOT
+
+<!-- AUTO-GENERATED: This section is updated by scripts/run_data_check.py -->
+### 2026-03-09
+
+snapshot_date: 2026-03-09
+database: polymarket
+schema: public
+
+whales_rows: 3915
+whale_trades_rows: 3488
+paper_trades_rows: 40
+paper_trade_notifications_rows: 38
+trades_rows: 2
+bankroll_rows: 3
+
+whale_trades_last_24h: 871
+paper_trades_last_24h: 4
+notifications_last_24h: 4
+
+conversion_whale_to_paper_48h: 0.54%
+conversion_paper_to_notifications_48h: 100.0%
+
+stale_tables_24h:
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+---
+
 ## 18. MARKET_TITLE PIPELINE VERIFICATION (2026-03-07)
 
 ### Тест: Trigger Test для market_title

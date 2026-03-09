@@ -497,6 +497,106 @@ def cleanup_old_snapshots():
     return deleted
 
 
+def update_project_state(audit_results, cross_table_metrics):
+    """Update PROJECT_STATE.md with daily snapshot."""
+    PROJECT_STATE_PATH = Path(__file__).parent.parent / "docs" / "PROJECT_STATE.md"
+    if not PROJECT_STATE_PATH.exists():
+        print("PROJECT_STATE.md not found, skipping update")
+        return
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # Generate snapshot content
+    snapshot = f"""
+### {today}
+
+snapshot_date: {today}
+database: polymarket
+schema: public
+
+whales_rows: {audit_results.get('whales', {}).get('row_count', 0)}
+whale_trades_rows: {audit_results.get('whale_trades', {}).get('row_count', 0)}
+paper_trades_rows: {audit_results.get('paper_trades', {}).get('row_count', 0)}
+paper_trade_notifications_rows: {audit_results.get('paper_trade_notifications', {}).get('row_count', 0)}
+trades_rows: {audit_results.get('trades', {}).get('row_count', 0)}
+bankroll_rows: {audit_results.get('bankroll', {}).get('row_count', 0)}
+
+whale_trades_last_24h: {audit_results.get('whale_trades', {}).get('rows_last_24h', 0)}
+paper_trades_last_24h: {audit_results.get('paper_trades', {}).get('rows_last_24h', 0)}
+notifications_last_24h: {audit_results.get('paper_trade_notifications', {}).get('rows_last_24h', 0)}
+
+conversion_whale_to_paper_48h: {cross_table_metrics.get('whale_to_paper_conversion_ratio_48h', 0)}%
+conversion_paper_to_notifications_48h: {cross_table_metrics.get('notification_coverage_48h', 0)}%
+
+stale_tables_24h:
+{chr(10).join(f"- {t}" for t in cross_table_metrics.get('stale_tables_24h', []))}
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+"""
+    
+    # Read current PROJECT_STATE.md
+    content = PROJECT_STATE_PATH.read_text()
+    
+    # Find the DAILY DATA SNAPSHOT section
+    marker_start = "## DAILY DATA SNAPSHOT"
+    marker_end = "<!-- END AUTO-GENERATED -->"
+    
+    if marker_start in content and marker_end in content:
+        # Extract existing snapshots
+        start_idx = content.find(marker_start)
+        end_idx = content.find(marker_end) + len(marker_end)
+        
+        # Get everything before and after the auto-generated section
+        before = content[:start_idx]
+        after = content[end_idx:]
+        
+        # Extract existing snapshots (between markers)
+        current_section = content[start_idx:end_idx]
+        
+        # Parse existing dates
+        existing_snapshots = []
+        lines = current_section.split('\n')
+        current_date = None
+        current_lines = []
+        
+        for line in lines:
+            if line.startswith('### '):
+                if current_date:
+                    existing_snapshots.append((current_date, '\n'.join(current_lines)))
+                current_date = line.replace('### ', '').strip()
+                current_lines = [line]
+            else:
+                current_lines.append(line)
+        
+        if current_date:
+            existing_snapshots.append((current_date, '\n'.join(current_lines)))
+        
+        # Add new snapshot
+        existing_snapshots.append((today, snapshot.strip()))
+        
+        # Keep only last 2 days
+        existing_snapshots = existing_snapshots[-2:]
+        
+        # Rebuild section
+        new_section = f"""{marker_start}
+
+<!-- AUTO-GENERATED: This section is updated by scripts/run_data_check.py -->
+"""
+        for date, snap_content in existing_snapshots:
+            new_section += snap_content + "\n\n"
+        
+        new_section += f"""<!-- END AUTO-GENERATED -->"""
+        
+        # Reconstruct file
+        new_content = before + new_section + after
+        PROJECT_STATE_PATH.write_text(new_content)
+        print(f"Updated: {PROJECT_STATE_PATH}")
+    else:
+        print("DAILY DATA SNAPSHOT section not found in PROJECT_STATE.md")
+
+
 def main():
     """Main execution."""
     print("Starting daily data audit...")
@@ -537,6 +637,9 @@ def main():
         print(f"Deleted old snapshots: {deleted}")
     else:
         print("No old snapshots to delete")
+    
+    # Update PROJECT_STATE.md
+    update_project_state(audit_results, cross_table_metrics)
     
     print("Data audit complete.")
 
