@@ -19,7 +19,7 @@
 
 ## Текущий приоритет
 
-**W-003 — Strategy Metrics Engine** (READY)
+**W-003 — Strategy Metrics Engine** (IN_PROGRESS)
 
 ---
 
@@ -29,7 +29,7 @@
 |----|--------|--------|
 | W-001 | Whale Detection Pipeline | TODO |
 | W-002 | Whale Tracking Database | TODO |
-| W-003 | Strategy Metrics Engine | **READY** |
+| W-003 | Strategy Metrics Engine | **IN_PROGRESS** |
 | W-004 | Copy Trading Engine Integration | TODO |
 
 ---
