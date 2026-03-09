@@ -68,6 +68,7 @@
 | SYS-312 | Whale Universe Quality Analysis | DONE |
 | SYS-313 | Hide DONE Tasks in HTML Task Board | DONE |
 | SYS-314 | Paper Trade Trigger Pipeline Audit | DONE |
+| SYS-315 | Fix Duplicate Suppression in Paper Trade Trigger | READY |
 
 ---
 

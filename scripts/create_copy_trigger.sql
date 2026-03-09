@@ -47,6 +47,19 @@ BEGIN
     END IF;
 
     IF v_is_top_whale AND v_whale_address IS NOT NULL THEN
+        -- Check for duplicate signal: skip if similar paper_trade exists within 5 minutes
+        -- This prevents duplicate paper trades from whale_trades duplicates
+        IF EXISTS (
+            SELECT 1 FROM paper_trades
+            WHERE whale_address = v_whale_address
+              AND market_id = NEW.market_id
+              AND side = NEW.side
+              AND created_at >= NOW() - INTERVAL '5 minutes'
+        ) THEN
+            -- Skip duplicate signal
+            RETURN NEW;
+        END IF;
+
         -- Calculate Kelly size: bankroll * kelly_fraction (25% of full Kelly)
         v_max_position := v_bankroll * 0.02;
         v_kelly_size := v_bankroll * v_kelly_fraction;
