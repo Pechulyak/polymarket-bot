@@ -502,6 +502,35 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-10
+
+snapshot_date: 2026-03-10
+database: polymarket
+schema: public
+
+whales_rows: 4256
+whale_trades_rows: 4268
+paper_trades_rows: 143
+paper_trade_notifications_rows: 142
+trades_rows: 68
+bankroll_rows: 69
+
+whale_trades_last_24h: 875
+paper_trades_last_24h: 104
+notifications_last_24h: 104
+
+conversion_whale_to_paper_48h: 6.14%
+conversion_paper_to_notifications_48h: 100.93%
+
+stale_tables_24h:
+
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ---
 
 ## 18. MARKET_TITLE PIPELINE VERIFICATION (2026-03-07)
@@ -707,3 +736,49 @@ settlement_flow: |
 - Database queries: OK
 - Module imports: OK
 - trades table: 68 records written
+
+---
+
+## 23. PAPER EXECUTION GAP AUDIT (SYS-319)
+
+### Gap Measurements (2026-03-10)
+paper_trades_rows: 173
+trades_rows: 68
+virtual_trades_rows: 68
+
+### Gap by Time Window
+| Window | paper_trades | trades(VIRTUAL) | Gap |
+|--------|--------------|-----------------|-----|
+| 2h     | 5            | 0               | 5   |
+| 6h     | 28           | 0               | 28  |
+| 24h    | 125          | 66              | 59  |
+
+execution_gap_detected: YES
+execution_gap_window_24h: 59
+paper_to_trades_match_ratio: 0.046 (4.6%)
+main_execution_path_status: VERIFIED
+
+### Primary Gap Cause
+balance_exhaustion
+
+### Details
+- Initial balance: $100.00
+- Current balance: $1.00
+- Each trade requires ~$1.50 (size + fees + gas)
+- All new trades fail with "Insufficient balance" error
+- Logs show ~30 errors/second continuously
+
+### Integration Path (VERIFIED)
+1. whale detection → paper_trades (separate process, continues working)
+2. main.py → VirtualBankroll.execute_virtual_trade() → trades (blocked by balance)
+3. Integration code is correct, execution blocked by balance check
+
+### Skip Conditions
+- Insufficient balance: CRITICAL (all trades rejected)
+- Duplicate suppression: OK (index exists)
+- Invalid market_id: OK (validation works)
+
+### Recommended Fix
+1. Reset virtual bankroll to $100.00
+2. Consider reducing fixed gas cost ($1.50) or implementing dynamic gas
+3. Add balance alert when < $10
