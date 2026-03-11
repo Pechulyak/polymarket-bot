@@ -502,6 +502,40 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-11
+
+snapshot_date: 2026-03-11
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 0
+paper_trades_rows: 0
+paper_trade_notifications_rows: 0
+trades_rows: 0
+bankroll_rows: 0
+
+whale_trades_last_24h: 0
+paper_trades_last_24h: 0
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 0%
+conversion_paper_to_notifications_48h: 0%
+
+stale_tables_24h:
+- whales
+- whale_trades
+- paper_trades
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-10
 
 snapshot_date: 2026-03-10
@@ -782,3 +816,27 @@ balance_exhaustion
 1. Reset virtual bankroll to $100.00
 2. Consider reducing fixed gas cost ($1.50) or implementing dynamic gas
 3. Add balance alert when < $10
+
+---
+
+## Security Incident — Environment Exposure
+
+Date: 2026-03-11
+
+Incident:
+taskboard.service exposed project directory via python http.server.
+
+Impact:
+.env with private key became accessible via HTTP, resulting in wallet compromise and fund loss.
+
+Resolution:
+- new wallet created
+- new Polymarket account created
+- new API keys issued
+- new Telegram token issued
+- firewall configured
+- .env permissions set to 600
+- external ports closed
+
+Preventive measure:
+"No Public Ports Policy" introduced.

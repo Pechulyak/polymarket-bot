@@ -124,3 +124,31 @@ Winrate > 60%
    - TASK_ID
    - изменение статуса или структуры
 5. TASK_BOARD.html является производным файлом и не редактируется вручную.
+
+---
+
+## SECURITY POLICY — NETWORK EXPOSURE
+
+External ports are strictly forbidden for the trading infrastructure.
+
+Project directories must never be exposed via HTTP servers.
+
+Forbidden examples:
+- python3 -m http.server
+- nginx serving project root
+- any file server exposing /root/polymarket-bot
+- any service exposing .env or configuration files
+
+All services must bind to:
+- 127.0.0.1
+
+Firewall must block external access unless explicitly required.
+
+If external access is ever required (rare cases):
+- reverse proxy required
+- authentication required
+- directory access disabled
+- .env must never be reachable
+- service must not point to project root
+
+Violation of this rule is considered a critical security failure.

@@ -71,7 +71,17 @@
 | SYS-315 | Fix Duplicate Suppression in Paper Trade Trigger | DONE |
 | SYS-317 | Audit trades lifecycle for paper performance tracking | DONE |
 | SYS-318 | Paper Position Settlement Engine | IN_PROGRESS |
-| SYS-319 | Paper Execution Gap Audit | READY |
+| SYS-319 | Paper Execution Gap Audit | DONE |
+| SYS-320 | Paper Trade Close Lifecycle Audit | READY |
+| SYS-322 | Security Hardening: No Public Ports Policy | READY |
+
+---
+
+## EPIC 5 — STRATEGY / RESEARCH
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| SYS-321 | Paper Trade Quality Audit (High Price Entries) | READY |
 
 ---
 
