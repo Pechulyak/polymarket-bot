@@ -502,6 +502,35 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-12
+
+snapshot_date: 2026-03-12
+database: polymarket
+schema: public
+
+whales_rows: 4461
+whale_trades_rows: 4703
+paper_trades_rows: 213
+paper_trade_notifications_rows: 212
+trades_rows: 134
+bankroll_rows: 135
+
+whale_trades_last_24h: 119
+paper_trades_last_24h: 16
+notifications_last_24h: 16
+
+conversion_whale_to_paper_48h: 16.09%
+conversion_paper_to_notifications_48h: 100.0%
+
+stale_tables_24h:
+
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-11
 
 snapshot_date: 2026-03-11
@@ -840,3 +869,33 @@ Resolution:
 
 Preventive measure:
 "No Public Ports Policy" introduced.
+
+---
+
+## 24. POST-INCIDENT CREDENTIAL VALIDATION
+
+### Validation Date
+validation_date: 2026-03-12
+
+### Component Status
+env_permissions_status: ok
+docker_startup_status: ok
+db_connectivity_status: ok
+polymarket_api_status: ok
+wallet_signing_status: ok
+main_startup_status: ok
+db_write_path_status: ok
+telegram_status: ok
+
+### Overall Result
+overall_validation_status: PASS
+
+### Notes
+- env_permissions: .env set to 600 (verified after incident)
+- docker: All containers healthy
+- db: PostgreSQL connection OK (pg_hba.conf trust)
+- polymarket_api: Verified working (Builder API tested)
+- wallet: New wallet created after incident, signing tested
+- main_startup: Verified via docker logs
+- db_write: Verified via test_infrastructure.py
+- telegram: New token issued, tested (2026-03-05T18:14:00Z)
