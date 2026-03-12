@@ -72,7 +72,7 @@
 | SYS-317 | Audit trades lifecycle for paper performance tracking | DONE |
 | SYS-318 | Paper Position Settlement Engine | IN_PROGRESS |
 | SYS-319 | Paper Execution Gap Audit | DONE |
-| SYS-320 | Paper Trade Close Lifecycle Audit | READY |
+| SYS-320 | Paper Trade Close Lifecycle Audit | DONE |
 | SYS-322 | Security Hardening: No Public Ports Policy | READY |
 
 ---
