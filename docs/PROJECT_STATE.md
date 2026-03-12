@@ -899,3 +899,56 @@ overall_validation_status: PASS
 - main_startup: Verified via docker logs
 - db_write: Verified via test_infrastructure.py
 - telegram: New token issued, tested (2026-03-05T18:14:00Z)
+
+---
+
+## 25. PAPER TRADE CLOSE LIFECYCLE AUDIT (SYS-320)
+
+### Audit Date
+audit_date: 2026-03-12
+
+### DB State
+paper_trades_rows: 213
+trades_rows: 134
+virtual_open_trades: 134
+virtual_closed_trades: 0
+
+### Close Path Status
+close_path_status: VERIFIED
+close_implementation: close_virtual_position() in virtual_bankroll.py (lines 582-696)
+close_callers:
+- copy_trading_engine.py _execute_paper_close() - only on whale exit
+- main_paper_trading.py run_demo_paper_trading() - only in demo mode
+
+### Settlement Runtime Status
+settlement_runtime_status: NOT_RUNNING
+settlement_module: src/strategy/paper_position_settlement.py
+settlement_class: PaperPositionSettlementEngine
+connection_to_main: NOT_CONNECTED (no reference in main.py)
+docker_service: NOT_DEFINED (not in docker-compose.yml)
+must_be_run_manually: YES
+
+### Bankroll Return Path Status
+bankroll_return_path_status: VERIFIED
+balance_restoration_line: virtual_bankroll.py:620
+balance_restoration_logic: self.balance += exit_value - fees - gas
+trigger_status: NOT_TRIGGERED
+
+### Primary Close Failure Cause
+primary_close_failure_cause: Settlement engine exists but is not running
+
+### Root Cause Analysis
+- close_virtual_position() is IMPLEMENTED and CORRECT
+- Settlement engine is IMPLEMENTED and CORRECT
+- Problem: Settlement engine is NOT CONNECTED to main runtime
+- Problem: No Docker service defined
+- Problem: Must be run manually (never done)
+
+### Recommended Next Fix
+recommended_next_fix: Connect settlement engine to main.py by adding:
+  asyncio.create_task(run_settlement_loop(database_url, interval_seconds=600))
+This would check for market resolution every 10 minutes and auto-close positions.
+
+### Alternative Fixes
+1. Add settlement engine as separate Docker container
+2. Add cron job to run settlement script every 10 minutes
