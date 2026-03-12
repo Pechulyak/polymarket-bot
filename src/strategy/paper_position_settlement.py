@@ -21,6 +21,9 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+# Import VirtualBankroll for bankroll integration
+from .virtual_bankroll import VirtualBankroll
+
 logger = structlog.get_logger(__name__)
 
 
@@ -109,6 +112,13 @@ class PaperPositionSettlementEngine:
         # Fee constants (Polymarket fees)
         self.trading_fee_rate = Decimal("0.02")  # 2% trading fee
         self.gas_cost = Decimal("1.50")  # Estimated gas cost
+
+        # Initialize VirtualBankroll for bankroll integration
+        # This is used to return funds to the virtual bankroll when positions settle
+        self._virtual_bankroll = VirtualBankroll(
+            initial_balance=Decimal("100.00"),
+            database_url=database_url,
+        )
 
         logger.info("paper_position_settlement_engine_initialized")
 
@@ -338,6 +348,40 @@ class PaperPositionSettlementEngine:
                 gross_pnl=str(gross_pnl),
                 net_pnl=str(net_pnl),
             )
+
+            # Return funds to virtual bankroll
+            # This updates the balance when a position is settled
+            try:
+                # Use asyncio.run for synchronous context
+                result = asyncio.run(
+                    self._virtual_bankroll.close_virtual_position(
+                        market_id=market_id,
+                        close_price=close_price,
+                        fees=commission,
+                        gas=gas_cost,
+                    )
+                )
+                logger.info(
+                    "bankroll_updated",
+                    market_id=market_id[:20],
+                    new_balance=str(self._virtual_bankroll.balance),
+                    trade_id=trade_id,
+                )
+            except ValueError as e:
+                # Position might not be in bankroll (e.g., manual trades)
+                # This is OK - just log and continue
+                logger.warning(
+                    "bankroll_position_not_found",
+                    market_id=market_id[:20],
+                    error=str(e),
+                )
+            except Exception as e:
+                logger.error(
+                    "bankroll_update_error",
+                    market_id=market_id[:20],
+                    error=str(e),
+                )
+
             return True
 
         except Exception as e:

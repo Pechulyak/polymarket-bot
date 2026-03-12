@@ -96,7 +96,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:156136ar@postgres:5432/polymarket
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/polymarket
     command: python src/run_whale_detection.py
     depends_on:
       postgres:
@@ -104,6 +104,24 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - polymarket_network
+
+  paper_settlement:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: polymarket_paper_settlement
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/polymarket
+      - SETTLEMENT_INTERVAL=600
+    command: python src/runtime/paper_settlement_service.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
     networks:
       - polymarket_network
 
