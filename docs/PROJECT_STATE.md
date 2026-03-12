@@ -37,8 +37,6 @@ Virtual Bankroll: $100
 ## 1.1. PAPER TRADING PIPELINE (Step 13)
 
 paper_trading_status: ACTIVE
-paper_trades_count: 4
-paper_trades_48h: 4
 paper_trading_start: "2026-03-04"
 paper_strategy: whale_copy
 paper_trigger_test: PASS
@@ -203,7 +201,6 @@ notes: |
 whale_trades_ingestion.status: WRITES_OK
 whale_trades_ingestion.entrypoint: "python src/run_whale_detection.py"
 whale_trades_ingestion.source_files: ["src/research/real_time_whale_monitor.py:398", "src/research/whale_tracker.py:696", "src/research/whale_detector.py:707", "src/strategy/virtual_bankroll.py:383"]
-whale_trades.count: 41
 whale_trades.last_seen: "2026-03-04 18:29:11"
 whale_trades_ingestion.last_audit: "2026-03-04"
 whale_trades_ingestion.last_fix: "2026-03-04"
@@ -472,36 +469,6 @@ bottleneck_reason: Trigger now includes whales with recent trades (24h), not jus
 ## DAILY DATA SNAPSHOT
 
 <!-- AUTO-GENERATED: This section is updated by scripts/run_data_check.py -->
-### 2026-03-09
-
-snapshot_date: 2026-03-09
-database: polymarket
-schema: public
-
-whales_rows: 3915
-whale_trades_rows: 3488
-paper_trades_rows: 40
-paper_trade_notifications_rows: 38
-trades_rows: 2
-bankroll_rows: 3
-
-whale_trades_last_24h: 871
-paper_trades_last_24h: 4
-notifications_last_24h: 4
-
-conversion_whale_to_paper_48h: 0.54%
-conversion_paper_to_notifications_48h: 100.0%
-
-stale_tables_24h:
-- trades
-- bankroll
-
-notes:
-- bankroll contains only test data
-- trades table contains only virtual test trades
-
-<!-- END AUTO-GENERATED -->
-
 ### 2026-03-12
 
 snapshot_date: 2026-03-12
@@ -587,6 +554,36 @@ conversion_paper_to_notifications_48h: 100.93%
 
 stale_tables_24h:
 
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-03-09
+
+snapshot_date: 2026-03-09
+database: polymarket
+schema: public
+
+whales_rows: 3915
+whale_trades_rows: 3488
+paper_trades_rows: 40
+paper_trade_notifications_rows: 38
+trades_rows: 2
+bankroll_rows: 3
+
+whale_trades_last_24h: 871
+paper_trades_last_24h: 4
+notifications_last_24h: 4
+
+conversion_whale_to_paper_48h: 0.54%
+conversion_paper_to_notifications_48h: 100.0%
+
+stale_tables_24h:
+- trades
+- bankroll
 
 notes:
 - bankroll contains only test data
@@ -995,7 +992,8 @@ container_uptime: 18 seconds
 
 ### Database Verification
 trades_virtual_count: 134
-trades_status_distribution: open=134, closed=0
+closed_virtual_trades: 132
+open_virtual_trades: 2
 
 ### API Status
 polymarket_resolution_api: OK (returns 422 for unresolved markets - expected)

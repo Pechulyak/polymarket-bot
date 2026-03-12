@@ -73,7 +73,7 @@
 | SYS-318 | Paper Position Settlement Engine | IN_PROGRESS |
 | SYS-319 | Paper Execution Gap Audit | DONE |
 | SYS-320 | Paper Trade Close Lifecycle Audit | DONE |
-| SYS-321 | Подключение settlement engine для paper сделок | READY |
+| SYS-321 | Подключение settlement engine для paper сделок | DONE |
 | SYS-322 | Security Hardening: No Public Ports Policy | READY |
 
 ---
@@ -82,7 +82,7 @@
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| SYS-321 | Paper Trade Quality Audit (High Price Entries) | READY |
+| SYS-325 | Paper Trade Quality Audit (High Price Entries) | READY |
 
 ---
 
@@ -104,4 +104,4 @@ STRATEGY → [TASK_PACK] → ROO → [выполнение] → STRATEGY → [re
 
 ---
 
-*Обновлено: 2026-03-09*
+*Обновлено: 2026-03-12*
