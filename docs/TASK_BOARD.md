@@ -86,6 +86,60 @@
 
 ---
 
+## EPIC 6 — SECURITY
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| SEC-401 | Full Security Audit (ports, env exposure, docker, firewall) | TODO |
+| SEC-402 | Verify No Public Ports Policy enforcement | TODO |
+| SEC-403 | Scan server for exposed services and vulnerabilities | TODO |
+
+---
+
+## EPIC 7 — SYSTEM HYGIENE
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| SYS-401 | Project cleanup (logs, temp files, unused scripts) | TODO |
+| SYS-402 | Remove unused docker images and dangling volumes | TODO |
+| SYS-403 | Verify .env permissions and secret handling | TODO |
+
+---
+
+## EPIC 8 — TRADING CORRECTNESS
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| TRD-401 | Audit trades table structure and data correctness | TODO |
+| TRD-402 | Verify settlement behaviour (sell vs event resolution) | TODO |
+| TRD-403 | Verify bankroll accounting (entry/exit updates) | TODO |
+| TRD-404 | Verify Kelly sizing logic | TODO |
+| TRD-405 | Investigate execution gap (paper_trades vs trades) | TODO |
+
+---
+
+## EPIC 9 — DATA INTEGRITY
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| DATA-401 | Remove test records from whales tables | TODO |
+| DATA-402 | Remove test records from whale_trades | TODO |
+| DATA-403 | Remove test records from trades table | TODO |
+| DATA-404 | Reset virtual bankroll for fresh paper trading cycle | TODO |
+
+---
+
+## EPIC 10 — ANALYTICS PREPARATION
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| ANA-401 | Extend trades table with market categories | TODO |
+| ANA-402 | Integrate Polymarket /categories endpoint | TODO |
+| ANA-403 | Whale behaviour analysis by category | TODO |
+| ANA-404 | Whale behaviour analysis by entry price (≥0.95, ≤0.05) | TODO |
+
+---
+
 ## Правила управления задачами
 
 1. **Создание задач**: Только STRATEGY может добавлять новые задачи
@@ -104,4 +158,4 @@ STRATEGY → [TASK_PACK] → ROO → [выполнение] → STRATEGY → [re
 
 ---
 
-*Обновлено: 2026-03-12*
+*Обновлено: 2026-03-13*
