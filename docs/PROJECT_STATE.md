@@ -1248,3 +1248,32 @@ audit_date: 2026-03-13
 ### Status
 trades_audit_status: COMPLETED
 anomalies_found: 3 critical, 1 moderate
+
+---
+
+## 31. DATABASE TEST DATA CLEANUP (DATA-405)
+
+### Cleanup Summary
+cleanup_date: "2026-03-13"
+task_id: DATA-405
+status: COMPLETED
+
+### Records Removed
+trades_removed: 2
+whale_trades_removed: 1
+paper_trades_removed: 0
+whales_removed: 1
+
+### Deleted Record Details
+- trades: id 1, 2 (test market_id 0x1234567890abcdef...)
+- whale_trades: id 1 (test market_id)
+- whales: id 9 (test whale without trades)
+- whales 1-8, 10: KEPT (have associated whale_trades)
+
+### Final Row Counts (after cleanup)
+trades: 132
+whale_trades: 5855
+paper_trades: 352
+whales: 5038
+
+notes: Removed test/dummy records from core trading tables. Production dataset integrity verified. Whale ids 1-8, 10 retained as they have associated trades in whale_trades.

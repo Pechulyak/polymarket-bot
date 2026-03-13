@@ -134,6 +134,14 @@ Goals:
 | DATA-402 | Remove test records from whale_trades | TODO |
 | DATA-403 | Remove test records from trades table | TODO |
 | DATA-404 | Reset virtual bankroll for fresh paper trading cycle | TODO |
+| DATA-405 | Cleanup test records from database | TODO |
+| Description: | Remove test and dummy records from core trading tables.
+| Goals: | 
+| - | remove dummy trades
+| - | remove test whale records
+| - | remove test whale_trades
+| - | remove invalid market_id records
+| - | ensure production dataset integrity
 
 ---
 
