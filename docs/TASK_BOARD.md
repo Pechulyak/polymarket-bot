@@ -93,6 +93,7 @@
 | SEC-401 | Full Security Audit (ports, env exposure, docker, firewall) | TODO |
 | SEC-402 | Verify No Public Ports Policy enforcement | TODO |
 | SEC-403 | Scan server for exposed services and vulnerabilities | TODO |
+| SEC-404 | Restrict Qdrant to localhost only | TODO |
 
 ---
 

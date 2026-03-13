@@ -498,6 +498,36 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-13
+
+snapshot_date: 2026-03-13
+database: polymarket
+schema: public
+
+whales_rows: 4857
+whale_trades_rows: 5541
+paper_trades_rows: 325
+paper_trade_notifications_rows: 324
+trades_rows: 134
+bankroll_rows: 135
+
+whale_trades_last_24h: 838
+paper_trades_last_24h: 112
+notifications_last_24h: 112
+
+conversion_whale_to_paper_48h: 13.38%
+conversion_paper_to_notifications_48h: 100.0%
+
+stale_tables_24h:
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-11
 
 snapshot_date: 2026-03-11
@@ -1028,7 +1058,43 @@ notes: |
 
 ---
 
-## 27. SETTLEMENT ENGINE REAL MARKET VERIFICATION (SYS-321)
+## 27. QDRANT LOCALHOST HARDENING (SEC-404)
+
+### Date
+hardening_date: 2026-03-13
+
+### Configuration
+qdrant_previous_bind: 0.0.0.0:6333
+qdrant_current_bind: 127.0.0.1:6333
+
+### Security Status
+qdrant_public_access: DISABLED
+qdrant_local_access: VERIFIED
+qdrant_data_preserved: YES
+
+### Compatibility
+roo_qdrant_compatibility: VERIFIED
+qdrant_usage_in_code: NONE (not used by polymarket-bot)
+
+### Container Status
+qdrant_container_status: RUNNING
+qdrant_collections_preserved: 1 (ws-5fe07fc827daaa7e)
+
+### Verification Commands
+```bash
+# Verify localhost binding
+ss -tulpen | grep 6333
+
+# Test local access
+curl http://127.0.0.1:6333/collections
+
+# Test external access (should fail)
+curl http://212.192.11.92:6333/collections
+```
+
+---
+
+## 28. SETTLEMENT ENGINE REAL MARKET VERIFICATION (SYS-321)
 
 ### Verification Date
 verification_date: 2026-03-12
