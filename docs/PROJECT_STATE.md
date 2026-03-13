@@ -1166,3 +1166,85 @@ bankroll_rows_after_reset: 1
 SELECT * FROM bankroll;
 -- Result: 1 row, total_capital=100.00
 ```
+
+---
+
+## 30. TRADES TABLE AUDIT (TRD-401)
+
+### Audit Date
+audit_date: 2026-03-13
+
+### Query Results Summary
+
+| Metric | Value |
+|--------|-------|
+| Total trades | 134 |
+| Trades status: closed | 132 |
+| Trades status: open | 2 |
+| Zero-size trades (size=0) | 133 |
+| Price range: min | 0.55 |
+| Price range: max | 1.00 |
+| Trades with non-zero PnL | 132 |
+| Closed trades | 132 |
+| paper_trades table count | 352 |
+| Trades with exchange=VIRTUAL | 134 |
+
+### Metadata Completeness
+
+| Field | NULL Count | % NULL |
+|-------|------------|--------|
+| market_title | 134 | 100% |
+| opportunity_id | 134 | 100% |
+
+### Gas Cost Analysis
+
+| Field | Distinct Values |
+|-------|----------------|
+| gas_cost_usd | 1.50 (all records) |
+| gas_cost_eth | 1.50 (all records) |
+
+### Anomalies Detected
+
+#### CRITICAL: Zero-Size Trades (99.3%)
+- 133 out of 134 trades have size = 0
+- Only 1 trade has non-zero size
+- This indicates the size field is not being populated correctly during trade execution
+
+#### CRITICAL: Gas Cost Unit Error
+- gas_cost_usd and gas_cost_eth have IDENTICAL values (1.5)
+- This is mathematically impossible:
+  - gas_cost_usd should be in USD (~$1-5)
+  - gas_cost_eth should be in ETH (~$0.001-0.01, i.e., ~0.000001-0.00001 ETH at $2000/ETH)
+- Having 1.5 ETH gas cost per trade is unrealistic (~$3000 per trade)
+- Root cause: Likely a copy-paste error or field swap in the code
+
+#### CRITICAL: Missing Metadata (100%)
+- All 134 trades have market_title = NULL
+- All 134 trades have opportunity_id = NULL
+- This indicates the pipeline is not populating these fields
+
+#### MODERATE: Execution Gap
+- paper_trades: 352 records
+- trades: 134 records
+- Gap: 218 trades not executed to trades table
+- This is consistent with previous audit findings (balance exhaustion)
+
+### Root Cause Analysis
+
+1. **Zero-size trades**: Likely caused by incorrect size calculation in VirtualBankroll.execute_virtual_trade() or missing size field in the trade record
+
+2. **Gas cost error**: Likely a bug where gas_cost_usd value is copied to gas_cost_eth field (or vice versa)
+
+3. **Missing metadata**: Market title and opportunity_id are not being passed through the pipeline to the trades table
+
+### Recommended Fixes
+
+1. **Zero-size trades**: Debug VirtualBankroll._save_virtual_trade() to verify size field is populated
+
+2. **Gas cost error**: Check copy_trading_engine.py or virtual_bankroll.py for gas cost assignment
+
+3. **Missing metadata**: Add market_title and opportunity_id fields to the trades INSERT statement
+
+### Status
+trades_audit_status: COMPLETED
+anomalies_found: 3 critical, 1 moderate
