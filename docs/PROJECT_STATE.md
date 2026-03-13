@@ -1142,3 +1142,27 @@ All 8 markets show: closed=true, resolved=null
 settlement_engine_verdict: WORKING_CORRECTLY
 settlement_engine_issue: NONE (Polymarket data limitation)
 recommendation: Monitor Polymarket API - wait for markets to be resolved
+
+---
+
+## 29. VIRTUAL BANKROLL RESET
+
+### Reset Date
+reset_date: 2026-03-13
+
+### Status
+bankroll_reset_status: COMPLETED
+open_virtual_trades_before_reset: 2 (test records)
+new_virtual_bankroll_start: $100.00
+bankroll_rows_after_reset: 1
+
+### Reset Details
+- TRUNCATE TABLE bankroll executed
+- New snapshot created with total_capital=100.00
+- All counters reset to 0 (total_trades, win_count, loss_count)
+
+### Verification
+```sql
+SELECT * FROM bankroll;
+-- Result: 1 row, total_capital=100.00
+```
