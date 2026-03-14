@@ -5,6 +5,10 @@ import asyncio
 import argparse
 import os
 from decimal import Decimal
+from typing import Optional, Set
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 from src.monitoring import get_logger
 from src.monitoring.notification_worker import NotificationWorker
@@ -12,6 +16,53 @@ from src.research.whale_tracker import WhaleTracker
 from src.strategy.virtual_bankroll import VirtualBankroll
 
 logger = get_logger(__name__)
+
+
+# Cache for processed trade IDs to avoid duplicates within same session
+_processed_trade_ids: Set[str] = set()
+
+
+def _check_trade_exists(database_url: str, market_id: str, whale_address: str, size: Decimal, price: Decimal) -> bool:
+    """Check if a similar trade already exists in the trades table.
+    
+    Uses market_id + whale_source + size + price as composite key to detect duplicates.
+    
+    Args:
+        database_url: PostgreSQL connection URL
+        market_id: Market identifier
+        whale_address: Source whale wallet address
+        size: Trade size in USD
+        price: Execution price
+    
+    Returns:
+        True if trade already exists, False otherwise
+    """
+    engine = create_engine(database_url)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        # Check for existing trade with same market, whale source, size, and price
+        query = text("""
+            SELECT COUNT(*) FROM trades 
+            WHERE market_id = :market_id 
+              AND whale_source = :whale_source
+              AND size = :size 
+              AND price = :price
+              AND exchange = 'VIRTUAL'
+        """)
+        result = session.execute(query, {
+            "market_id": market_id,
+            "whale_source": whale_address,
+            "size": float(size),
+            "price": float(price),
+        })
+        count = result.scalar()
+        return count > 0
+    except Exception as e:
+        logger.warning("trade_existence_check_failed", error=str(e))
+        return False
+    finally:
+        session.close()
 
 
 async def main():
@@ -61,7 +112,7 @@ async def main():
 
     # Trading loop - fetch whale trades periodically
     loop_count = 0
-    check_interval = 300  # Check every 5 minutes
+    check_interval = 5  # Check every 5 seconds (for testing)
     
     try:
         # Start notification worker as background task
@@ -94,10 +145,33 @@ async def main():
                                     f"at {trade.price} on {trade.market_id[:16]}..."
                                 )
                                 
+                                # DEFENSIVE: Skip zero-size trades
+                                if trade.size_usd <= Decimal("0"):
+                                    logger.warning(
+                                        f"  Skipping zero-size trade: {trade.market_id[:16]}... "
+                                        f"(size={trade.size_usd})"
+                                    )
+                                    continue
+                                
                                 # Execute paper trade via VirtualBankroll
                                 try:
+                                    # DEDUPLICATION CHECK - skip if trade already exists
+                                    if _check_trade_exists(database_url, trade.market_id, whale_addr, trade.size_usd, trade.price):
+                                        logger.info(
+                                            f"  Skipping duplicate trade: {trade.market_id[:16]}... "
+                                            f"${trade.size_usd:.0f} @ {trade.price}"
+                                        )
+                                        continue
+                                    
                                     fees = trade.size_usd * Decimal("0.002")
                                     gas = Decimal("1.50")
+                                    
+                                    # Generate opportunity_id from market_id + timestamp
+                                    opportunity_id = f"{trade.market_id}_{int(trade.timestamp.timestamp() * 1000)}" if hasattr(trade, 'timestamp') and trade.timestamp else None
+                                    
+                                    # Get market title from cache
+                                    from src.data.storage.market_title_cache import get_market_title
+                                    market_title = await get_market_title(trade.market_id)
                                     
                                     result = await virtual_bankroll.execute_virtual_trade(
                                         market_id=trade.market_id,
@@ -108,6 +182,8 @@ async def main():
                                         fees=fees,
                                         gas=gas,
                                         whale_source=whale_addr,
+                                        opportunity_id=opportunity_id,
+                                        market_title=market_title,
                                     )
                                     logger.info(
                                         f"  Paper trade executed: {result.trade_id}, "

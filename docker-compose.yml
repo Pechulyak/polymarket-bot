@@ -58,6 +58,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     container_name: polymarket_bot
+    command: python src/main.py --bankroll 100 --mode paper
     env_file:
       - .env
     environment:

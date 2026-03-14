@@ -347,8 +347,51 @@ class CopyTradingEngine:
             return {"success": False, "error": "Virtual bankroll not configured"}
 
         try:
+            # DEDUPLICATION CHECK - skip if trade already exists
+            from sqlalchemy import create_engine, text
+            from sqlalchemy.orm import sessionmaker
+            
+            if self.database_url:
+                engine = create_engine(self.database_url)
+                Session = sessionmaker(bind=engine)
+                session = Session()
+                try:
+                    query = text("""
+                        SELECT COUNT(*) FROM trades 
+                        WHERE market_id = :market_id 
+                          AND whale_source = :whale_source
+                          AND size = :size 
+                          AND price = :price
+                          AND exchange = 'VIRTUAL'
+                    """)
+                    result_check = session.execute(query, {
+                        "market_id": market_id,
+                        "whale_source": whale_address,
+                        "size": float(size),
+                        "price": float(price),
+                    })
+                    count = result_check.scalar()
+                    if count > 0:
+                        logger.info(
+                            "skipping_duplicate_trade",
+                            market_id=market_id[:20],
+                            size=str(size),
+                            price=str(price),
+                        )
+                        return {"success": False, "error": "Duplicate trade"}
+                finally:
+                    session.close()
+            
             fees = size * Decimal("0.002")
             gas = Decimal("1.50")
+
+            # Generate opportunity_id from market_id + timestamp
+            import time
+            opportunity_id = f"{market_id}_{int(time.time() * 1000)}"
+            
+            # Get market title from cache
+            from src.data.storage.market_title_cache import get_market_title
+            market_title = await get_market_title(market_id)
 
             result = await self.virtual_bankroll.execute_virtual_trade(
                 market_id=market_id,
@@ -359,6 +402,8 @@ class CopyTradingEngine:
                 fees=fees,
                 gas=gas,
                 whale_source=whale_address,
+                opportunity_id=opportunity_id,
+                market_title=market_title,
             )
 
             logger.info(

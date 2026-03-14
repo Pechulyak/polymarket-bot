@@ -5,6 +5,17 @@
 
 ---
 
+### TRD-402: Fix trades field population in execution pipeline
+**Status:** TODO  
+**Goals:**
+- populate size correctly
+- populate opportunity_id from paper_trades
+- populate market_title
+- fix gas cost units
+- ensure new VIRTUAL trades are analytically valid
+
+---
+
 ## Статусы задач
 
 | Статус | Описание |
@@ -119,10 +130,19 @@ Goals:
 - verify PnL fields
 - verify gas cost values
 - check market metadata completeness
-| TRD-402 | Verify settlement behaviour (sell vs event resolution) | TODO |
-| TRD-403 | Verify bankroll accounting (entry/exit updates) | TODO |
-| TRD-404 | Verify Kelly sizing logic | TODO |
-| TRD-405 | Investigate execution gap (paper_trades vs trades) | TODO |
+| TRD-402 | Fix trades field population in execution pipeline | TODO |
+| TRD-403 | Verify settlement behaviour (sell vs event resolution) | TODO |
+| TRD-404 | Verify bankroll accounting (entry/exit updates) | TODO |
+| FIN-401 | Fix virtual bankroll flow across trade lifecycle | TODO |
+Description: Fix virtual bankroll logic so that capital is blocked only on executed trade open and returned only on trade close.
+Goals:
+- ensure paper_trades do not affect bankroll
+- ensure trades(open) reduce available and increase allocated
+- ensure trades(closed) release allocated capital
+- ensure net_pnl is reflected in bankroll correctly
+| TRD-405 | Verify Kelly sizing logic | TODO |
+| TRD-406 | Fix zero-size paper trades on open path | TODO |
+| TRD-407 | Investigate execution gap (paper_trades vs trades) | TODO |
 
 ---
 

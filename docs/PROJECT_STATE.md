@@ -498,6 +498,35 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-14
+
+snapshot_date: 2026-03-14
+database: polymarket
+schema: public
+
+whales_rows: 5293
+whale_trades_rows: 20845
+paper_trades_rows: 577
+paper_trade_notifications_rows: 576
+trades_rows: 14376
+bankroll_rows: 14330
+
+whale_trades_last_24h: 15301
+paper_trades_last_24h: 251
+notifications_last_24h: 251
+
+conversion_whale_to_paper_48h: 2.25%
+conversion_paper_to_notifications_48h: 100.0%
+
+stale_tables_24h:
+
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-13
 
 snapshot_date: 2026-03-13
@@ -1205,10 +1234,13 @@ audit_date: 2026-03-13
 
 ### Anomalies Detected
 
-#### CRITICAL: Zero-Size Trades (99.3%)
-- 133 out of 134 trades have size = 0
-- Only 1 trade has non-zero size
-- This indicates the size field is not being populated correctly during trade execution
+#### CRITICAL: Zero-Size Trades (99.3%) - FIXED
+- 133 out of 134 trades have size = 0 (before fix)
+- Root cause: whale_tracker.py used `item.get("amount")` but API returns `size`
+- FIX APPLIED (2026-03-14):
+  - whale_tracker.py:357: changed `item.get("amount", 0)` → `item.get("size", 0)`
+  - main.py:149: added defensive check to skip zero-size trades
+- New trades now have correct sizes (verified: $350K, $100K, $554K whale trades detected)
 
 #### CRITICAL: Gas Cost Unit Error
 - gas_cost_usd and gas_cost_eth have IDENTICAL values (1.5)

@@ -16,7 +16,7 @@ from typing import Optional
 
 import structlog
 
-from execution.polymarket.client import PolymarketClient
+from src.execution.polymarket.client import PolymarketClient
 
 logger = structlog.get_logger(__name__)
 

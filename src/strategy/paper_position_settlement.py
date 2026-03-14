@@ -21,9 +21,6 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# Import VirtualBankroll for bankroll integration
-from .virtual_bankroll import VirtualBankroll
-
 logger = structlog.get_logger(__name__)
 
 
@@ -38,8 +35,6 @@ logger = structlog.get_logger(__name__)
 
 
 # Polymarket API endpoints
-# Using CLOB API as fallback (Gamma /markets/{id} doesn't work with conditionId)
-CLOB_API = "https://clob.polymarket.com"
 GAMMA_API = "https://gamma-api.polymarket.com"
 
 
@@ -50,7 +45,6 @@ class MarketResolution:
     Attributes:
         market_id: Market identifier
         closed: Whether market is closed/resolved
-        umaResolutionStatus: UMA resolution status (per docs: indicates final resolved state)
         end_date: End date timestamp
         outcome_prices: Final outcome prices
         winner: Winning outcome (if resolved)
@@ -58,7 +52,6 @@ class MarketResolution:
 
     market_id: str
     closed: bool
-    umaResolutionStatus: Optional[str]
     end_date: Optional[str]
     outcome_prices: List[float]
     winner: Optional[str] = None
@@ -117,13 +110,6 @@ class PaperPositionSettlementEngine:
         self.trading_fee_rate = Decimal("0.02")  # 2% trading fee
         self.gas_cost = Decimal("1.50")  # Estimated gas cost
 
-        # Initialize VirtualBankroll for bankroll integration
-        # This is used to return funds to the virtual bankroll when positions settle
-        self._virtual_bankroll = VirtualBankroll(
-            initial_balance=Decimal("100.00"),
-            database_url=database_url,
-        )
-
         logger.info("paper_position_settlement_engine_initialized")
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -155,11 +141,11 @@ class PaperPositionSettlementEngine:
         try:
             session = await self._get_session()
 
-            # Use CLOB API market endpoint (Gamma doesn't support conditionId)
-            # CLOB API works with conditionId directly
-            url = f"{CLOB_API}/markets/{market_id}"
+            # Use Gamma API markets endpoint
+            url = f"{GAMMA_API}/markets"
+            params = {"id": market_id}
 
-            async with session.get(url) as resp:
+            async with session.get(url, params=params) as resp:
                 if resp.status != 200:
                     logger.warning(
                         "market_api_error",
@@ -170,10 +156,6 @@ class PaperPositionSettlementEngine:
 
                 data = await resp.json()
 
-                # Handle CLOB API response format (wraps data in "data" field)
-                if isinstance(data, dict) and "data" in data:
-                    data = data["data"]
-                
                 # Handle both single market and list response
                 if isinstance(data, list):
                     if not data:
@@ -184,50 +166,7 @@ class PaperPositionSettlementEngine:
 
                 # Extract resolution data
                 closed = market.get("closed", False)
-                
-                # Per docs: Check umaResolutionStatus for final resolved state
-                # Common values: "resolved", "final", "OPEN", "NOT_OPEN"
-                uma_resolution_status = market.get("umaResolutionStatus", "")
                 end_date = market.get("endDate") or market.get("end_date")
-                
-                # Get tokens for winner determination (CLOB API)
-                # Tokens contain winner field: winner=true means that outcome won
-                winner = None
-                settlement_price = None
-                tokens = market.get("tokens", [])
-                
-                # Debug: log what we received
-                logger.debug(
-                    "market_data_debug",
-                    market_id=market_id[:20],
-                    closed=closed,
-                    has_tokens=bool(tokens),
-                    tokens_count=len(tokens) if tokens else 0,
-                    market_keys=list(market.keys())[:10],
-                )
-                
-                if tokens:
-                    for token in tokens:
-                        if token.get("winner") == True:
-                            winner = token.get("outcome")
-                            # Settlement price: winner = 1.0, loser = 0.0
-                            settlement_price = Decimal("1.0")
-                            logger.info(
-                                "market_resolved_via_tokens",
-                                market_id=market_id[:20],
-                                winner=winner,
-                                settlement_price=str(settlement_price),
-                            )
-                            break
-                
-                # Log umaResolutionStatus for debugging
-                logger.debug(
-                    "market_resolution_check",
-                    market_id=market_id[:20],
-                    closed=closed,
-                    umaResolutionStatus=uma_resolution_status,
-                    winner_from_tokens=winner,
-                )
 
                 # Get outcome prices - this is the settlement price
                 outcome_prices = []
@@ -247,9 +186,9 @@ class PaperPositionSettlementEngine:
                             error=str(e),
                         )
 
-                # Determine winner from tokens (preferred) or outcome prices
-                # winner already set from tokens above, fallback to outcomePrices
-                if not winner and closed and outcome_prices:
+                # Determine winner
+                winner = None
+                if closed and outcome_prices:
                     # Find the outcome with highest probability
                     max_idx = outcome_prices.index(max(outcome_prices))
                     # Get outcomes list
@@ -264,7 +203,6 @@ class PaperPositionSettlementEngine:
                 return MarketResolution(
                     market_id=market_id,
                     closed=closed,
-                    umaResolutionStatus=uma_resolution_status,
                     end_date=end_date,
                     outcome_prices=outcome_prices,
                     winner=winner,
@@ -400,18 +338,6 @@ class PaperPositionSettlementEngine:
                 gross_pnl=str(gross_pnl),
                 net_pnl=str(net_pnl),
             )
-
-            # Note: Bankroll update is handled separately by the main trading loop
-            # PnL is already recorded in the trades table
-            # Bankroll balance will be updated by copy_trading_engine when positions close
-            logger.info(
-                "position_settled_pnl_recorded",
-                trade_id=trade_id,
-                market_id=market_id[:20],
-                gross_pnl=str(gross_pnl),
-                net_pnl=str(net_pnl),
-            )
-
             return True
 
         except Exception as e:
@@ -477,60 +403,35 @@ class PaperPositionSettlementEngine:
                 failed += len(market_positions_list)
                 continue
 
-            # For CLOB API: Check closed == true AND winner is determined
-            # Winner comes from tokens with winner=true field
-            is_resolved = resolution.closed and resolution.winner is not None
-            
-            if not is_resolved:
+            if not resolution.closed:
                 logger.debug(
-                    "market_not_final_resolved",
+                    "market_not_resolved",
                     market_id=market_id[:20],
-                    closed=resolution.closed,
-                    umaResolutionStatus=resolution.umaResolutionStatus,
                 )
                 markets_not_resolved += len(market_positions_list)
                 continue
 
             # Market is resolved - get settlement price
-            # We can use winner from tokens even if outcomePrices is empty
+            if not resolution.outcome_prices:
+                logger.warning(
+                    "no_outcome_prices",
+                    market_id=market_id[:20],
+                )
+                failed += len(market_positions_list)
+                continue
+
             resolved += len(market_positions_list)
 
-            # Per docs: Use winner from tokens for settlement
-            # winner from tokens: "Yes", "No", or actual outcome name
+            # Use the first outcome price as settlement price
+            # (for binary markets, this is typically the YES token)
+            settlement_price = Decimal(str(resolution.outcome_prices[0]))
+
             logger.info(
                 "market_resolved",
                 market_id=market_id[:20],
-                umaResolutionStatus=resolution.umaResolutionStatus,
-                outcome_prices=resolution.outcome_prices,
+                settlement_price=str(settlement_price),
                 winner=resolution.winner,
             )
-
-            # Settlement price based on winner from tokens
-            # For binary markets: winner gets 1.0, loser gets 0.0
-            # We already have winner set from tokens with winner=true
-            if resolution.winner:
-                # Winner determined from tokens - use 1.0
-                settlement_price = Decimal("1.0")
-                logger.info(
-                    "settlement_using_winner",
-                    market_id=market_id[:20],
-                    winner=resolution.winner,
-                    settlement_price=str(settlement_price),
-                )
-            elif resolution.outcome_prices:
-                # Fallback to outcome prices
-                settlement_price = Decimal(str(resolution.outcome_prices[0]))
-            else:
-                # Cannot determine settlement price
-                logger.warning(
-                    "cannot_determine_settlement_price",
-                    market_id=market_id[:20],
-                    winner=resolution.winner,
-                    outcome_prices=resolution.outcome_prices,
-                )
-                failed += resolved  # Remove from resolved count
-                failed += len(market_positions_list)
-                continue
 
             # Settle each position in this market
             for pos in market_positions_list:

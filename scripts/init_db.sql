@@ -41,8 +41,9 @@ CREATE INDEX IF NOT EXISTS idx_detected ON opportunities(detected_at, executed);
 CREATE TABLE IF NOT EXISTS trades (
     id SERIAL PRIMARY KEY,
     trade_id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
-    opportunity_id UUID REFERENCES opportunities(opportunity_id),
+    opportunity_id VARCHAR(255),
     market_id VARCHAR(255) NOT NULL,
+    whale_source VARCHAR(255),
     side VARCHAR(10) NOT NULL CHECK (side IN ('buy', 'sell')),
     size DECIMAL(20, 8) NOT NULL,
     price DECIMAL(20, 8) NOT NULL,

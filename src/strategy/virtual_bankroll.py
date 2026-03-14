@@ -144,6 +144,14 @@ class VirtualBankroll:
     Manages virtual currency for paper trading without executing real trades.
     All operations are simulated and logged to PostgreSQL for analysis.
 
+    IMPORTANT: Bankroll changes (available/allocated) happen ONLY after creating
+    trades record in database. The pipeline is:
+    1. whale_trades → paper_trades
+    2. paper_trades → check bankroll (available >= entry_cost)
+    3. trades(status='open') created
+    4. bankroll: available -= entry_cost, allocated += entry_cost
+    5. paper_trade_notifications
+
     Attributes:
         initial_balance: Starting virtual balance (default: $100)
         database_url: PostgreSQL connection URL
@@ -160,8 +168,12 @@ class VirtualBankroll:
             initial_balance: Starting virtual balance (default: $100)
             database_url: PostgreSQL connection URL (optional, can be set later)
         """
-        self.balance = initial_balance
+        # Core bankroll fields
+        self.balance = initial_balance  # Total capital (available + allocated)
+        self.available = initial_balance  # Capital available for new positions
+        self.allocated = Decimal("0")  # Capital locked in open positions
         self.initial_balance = initial_balance
+        
         self.database_url = database_url
 
         self._open_positions: Dict[str, VirtualPosition] = {}
@@ -178,6 +190,8 @@ class VirtualBankroll:
             "virtual_bankroll_initialized",
             initial_balance=str(initial_balance),
             balance=str(self.balance),
+            available=str(self.available),
+            allocated=str(self.allocated),
         )
 
     def set_database(self, database_url: str) -> None:
@@ -191,6 +205,58 @@ class VirtualBankroll:
         self._Session = sessionmaker(bind=self._engine)
         logger.info(
             "virtual_bankroll_database_configured", database_url=_mask_database_url(database_url)
+        )
+
+    def get_allocated_capital(self) -> Decimal:
+        """Get current allocated capital.
+        
+        Returns:
+            Current allocated capital (capital locked in open positions)
+        """
+        return self.allocated
+
+    def get_available_capital(self) -> Decimal:
+        """Get current available capital.
+        
+        Returns:
+            Available capital for new positions
+        """
+        return self.available
+
+    def _allocate_capital(self, entry_cost: Decimal) -> None:
+        """Allocate capital when opening a position.
+        
+        IMPORTANT: This must be called AFTER creating the trades record.
+        
+        Args:
+            entry_cost: Cost to open the position (size * price)
+        """
+        self.available -= entry_cost
+        self.allocated += entry_cost
+        
+        logger.debug(
+            "capital_allocated",
+            entry_cost=str(entry_cost),
+            new_available=str(self.available),
+            new_allocated=str(self.allocated),
+        )
+
+    def _release_capital(self, exit_value: Decimal) -> None:
+        """Release capital when closing a position.
+        
+        IMPORTANT: This must be called AFTER creating the trades record.
+        
+        Args:
+            exit_value: Value received from closing the position
+        """
+        self.allocated -= exit_value
+        self.available += exit_value
+        
+        logger.debug(
+            "capital_released",
+            exit_value=str(exit_value),
+            new_available=str(self.available),
+            new_allocated=str(self.allocated),
         )
 
     async def _ensure_database(self) -> None:
@@ -222,6 +288,8 @@ class VirtualBankroll:
         fiat_fees: Decimal = Decimal("0"),
         opportunity_id: Optional[str] = None,
         whale_source: str = "",
+        market_title: Optional[str] = None,
+        gas_cost_eth: Decimal = Decimal("0"),
     ) -> None:
         """Save virtual trade to PostgreSQL.
 
@@ -242,13 +310,21 @@ class VirtualBankroll:
             total_fees: Total fees (commission + gas)
             fiat_fees: Fiat fees
             opportunity_id: Associated opportunity ID
+            market_title: Market title/question
         """
         await self._ensure_database()
 
         if not self._Session:
             return
 
-        total_fees = commission + gas_cost
+        # For Builder-based paper mode (gasless transactions), fees are 0
+        # TODO: Add separate implementation for fee-enabled markets
+        db_commission = Decimal("0")
+        db_gas_cost_eth = Decimal("0")
+        db_gas_cost_usd = Decimal("0")
+        db_fiat_fees = Decimal("0")
+        db_total_fees = Decimal("0")
+
         session = self._Session()
         try:
             query = text("""
@@ -256,12 +332,12 @@ class VirtualBankroll:
                     trade_id, market_id, side, size, price, exchange,
                     commission, gas_cost_eth, gas_cost_usd, net_pnl,
                     status, executed_at, settled_at, opportunity_id,
-                    fiat_fees, gross_pnl, total_fees
+                    fiat_fees, gross_pnl, total_fees, market_title
                 ) VALUES (
                     :trade_id, :market_id, :side, :size, :price, :exchange,
                     :commission, :gas_cost_eth, :gas_cost_usd, :net_pnl,
                     :status, :executed_at, :settled_at, :opportunity_id,
-                    :fiat_fees, :gross_pnl, :total_fees
+                    :fiat_fees, :gross_pnl, :total_fees, :market_title
                 )
                 ON CONFLICT (trade_id) DO UPDATE SET
                     status = EXCLUDED.status,
@@ -279,21 +355,22 @@ class VirtualBankroll:
                     "size": float(size),
                     "price": float(price),
                     "exchange": "VIRTUAL",
-                    "commission": float(commission),
-                    "gas_cost_eth": float(gas_cost),
-                    "gas_cost_usd": float(gas_cost),
+                    "commission": float(db_commission),
+                    "gas_cost_eth": float(db_gas_cost_eth),
+                    "gas_cost_usd": float(db_gas_cost_usd),
                     "net_pnl": float(net_pnl),
                     "status": "open" if is_open else "closed",
                     "executed_at": opened_at,
                     "settled_at": closed_at,
                     "opportunity_id": opportunity_id,
-                    "fiat_fees": float(fiat_fees) if fiat_fees else None,
+                    "fiat_fees": float(db_fiat_fees),
                     "gross_pnl": float(gross_pnl) if gross_pnl else None,
-                    "total_fees": float(total_fees),
+                    "total_fees": float(db_total_fees),
+                    "market_title": market_title,
                 },
             )
             session.commit()
-            logger.debug("virtual_trade_saved", trade_id=trade_id)
+            logger.debug("virtual_trade_saved", trade_id=trade_id, status="open" if is_open else "closed")
         except Exception as e:
             logger.error("virtual_trade_save_failed", trade_id=trade_id, error=str(e))
             session.rollback()
@@ -317,14 +394,14 @@ class VirtualBankroll:
 
         session = self._Session()
         try:
-            # Persist into existing 'bankroll' table
+            # Persist into existing 'bankroll' table with available/allocated fields
             query = text(
                 """
                 INSERT INTO bankroll (
                     timestamp, total_capital, allocated, available,
                     daily_pnl, daily_drawdown, total_trades, win_count, loss_count
                 ) VALUES (
-                    NOW(), :balance, 0, :balance, 0, 0, :total_trades, :win_count, :loss_count
+                    NOW(), :balance, :allocated, :available, 0, 0, :total_trades, :win_count, :loss_count
                 )
                 ON CONFLICT DO NOTHING
                 """
@@ -333,12 +410,22 @@ class VirtualBankroll:
                 query,
                 {
                     "balance": float(balance),
+                    "allocated": float(self.allocated),
+                    "available": float(self.available),
                     "total_trades": self._total_trades,
                     "win_count": self._winning_trades,
                     "loss_count": self._losing_trades,
                 },
             )
             session.commit()
+            
+            logger.debug(
+                "bankroll_history_saved",
+                balance=str(balance),
+                allocated=str(self.allocated),
+                available=str(self.available),
+                action=action,
+            )
         except Exception as e:
             logger.error("bankroll_history_save_failed", error=str(e))
             session.rollback()
@@ -423,10 +510,18 @@ class VirtualBankroll:
         fees: Decimal = Decimal("0.00"),
         gas: Decimal = Decimal("0.00"),
         whale_source: str = "",
+        opportunity_id: Optional[str] = None,
+        market_title: Optional[str] = None,
     ) -> VirtualTradeResult:
         """Execute a virtual trade (does NOT execute real trade).
 
-        Calculates costs, updates balance, and records the trade.
+        IMPORTANT: Order of operations is critical:
+        1. Check available capital (before any changes)
+        2. Create trades record (status='open' for BUY)
+        3. Allocate capital (available -= entry_cost, allocated += entry_cost)
+        
+        This ensures trades table is the source of truth and bankroll changes
+        happen only after the trade is recorded.
 
         Args:
             market_id: Market/token identifier
@@ -437,26 +532,27 @@ class VirtualBankroll:
             fees: Trading commission (default: $0)
             gas: Gas cost (default: $0)
             whale_source: Source whale address for copy trading tracking
+            opportunity_id: Associated opportunity ID (optional)
+            market_title: Market title/question (optional)
 
         Returns:
             VirtualTradeResult with trade details
 
         Raises:
-            ValueError: If insufficient balance for trade
+            ValueError: If insufficient available balance for trade
         """
         trade_id = str(uuid4())
         now = datetime.now()
 
-        cost = size * price
-        total_cost = cost + fees + gas
+        entry_cost = size * price
+        total_cost = entry_cost + fees + gas
 
-        # Use >= to ensure we don't allow trades that would completely exhaust the balance
-        if total_cost >= self.balance:
+        # Check available capital BEFORE any changes
+        if total_cost >= self.available:
             raise ValueError(
-                f"Insufficient balance: required {total_cost}, available {self.balance}"
+                f"Insufficient available capital: required {total_cost}, available {self.available}"
             )
 
-        self.balance -= total_cost
         self._total_trades += 1
 
         if side.lower() == "buy":
@@ -489,6 +585,7 @@ class VirtualBankroll:
                     gross_pnl - fees - gas - position.commission - position.gas_cost
                 )
 
+                # Update total balance
                 self.balance += exit_value - fees - gas
                 is_open = False
             else:
@@ -525,12 +622,13 @@ class VirtualBankroll:
             whale_source=whale_source,
         )
 
-        total_fees = (
+        total_fees_calc = (
             fees + gas + position.commission + position.gas_cost
             if side.lower() == "sell"
             else fees + gas
         )
 
+        # STEP 1: Save trade to database FIRST (source of truth)
         await self._save_virtual_trade(
             trade_id=result.trade_id,
             market_id=result.market_id,
@@ -545,9 +643,17 @@ class VirtualBankroll:
             closed_at=result.closed_at,
             strategy=result.strategy,
             gross_pnl=gross_pnl,
-            total_fees=total_fees,
+            total_fees=total_fees_calc,
             whale_source=whale_source,
+            opportunity_id=opportunity_id,
+            market_title=market_title,
+            gas_cost_eth=Decimal("0"),
         )
+
+        # STEP 2: THEN allocate capital (only for BUY/open positions)
+        # Balance stays the same - only available/allocated change
+        if side.lower() == "buy" and is_open:
+            self._allocate_capital(entry_cost)
 
         if whale_source:
             market_title = await get_market_title(market_id)
@@ -560,6 +666,7 @@ class VirtualBankroll:
                 market_title=market_title,
             )
 
+        # Save bankroll history
         await self._save_bankroll_history(
             balance=self.balance, trade_id=trade_id, action=f"trade_{side.lower()}"
         )
@@ -570,8 +677,10 @@ class VirtualBankroll:
             side=side.lower(),
             size=str(size),
             price=str(price),
-            cost=str(total_cost),
+            entry_cost=str(entry_cost),
             new_balance=str(self.balance),
+            new_available=str(self.available),
+            new_allocated=str(self.allocated),
             is_open=is_open,
             strategy=strategy,
             whale_source=whale_source[:10] if whale_source else "",
@@ -587,6 +696,13 @@ class VirtualBankroll:
         gas: Decimal = Decimal("0.00"),
     ) -> VirtualTradeResult:
         """Close an open virtual position and calculate PnL.
+
+        IMPORTANT: Order of operations is critical:
+        1. Create trades record (status='closed')
+        2. Release capital (allocated -= exit_value, available += exit_value)
+        
+        This ensures trades table is the source of truth and bankroll changes
+        happen only after the trade is recorded.
 
         Args:
             market_id: Market identifier of position to close
@@ -604,8 +720,7 @@ class VirtualBankroll:
             raise ValueError(f"No open position for market {market_id}")
 
         position = self._open_positions[market_id]
-        del self._open_positions[market_id]
-
+        
         entry_value = position.size * position.entry_price
         exit_value = position.size * close_price
 
@@ -614,10 +729,9 @@ class VirtualBankroll:
         else:
             gross_pnl = entry_value - exit_value
 
-        total_fees = fees + gas + position.commission + position.gas_cost
-        net_pnl = gross_pnl - total_fees
+        total_fees_calc = fees + gas + position.commission + position.gas_cost
+        net_pnl = gross_pnl - total_fees_calc
 
-        self.balance += exit_value - fees - gas
         self._total_trades += 1
 
         if net_pnl > 0:
@@ -632,6 +746,9 @@ class VirtualBankroll:
 
         self._total_pnl += net_pnl
         now = datetime.now()
+
+        # Remove position from tracking
+        del self._open_positions[market_id]
 
         result = VirtualTradeResult(
             trade_id=position.trade_id,
@@ -649,6 +766,7 @@ class VirtualBankroll:
             whale_source=position.whale_source,
         )
 
+        # STEP 1: Save trade to database FIRST (source of truth)
         await self._save_virtual_trade(
             trade_id=result.trade_id,
             market_id=result.market_id,
@@ -663,9 +781,16 @@ class VirtualBankroll:
             closed_at=result.closed_at,
             strategy=result.strategy,
             gross_pnl=gross_pnl,
-            total_fees=total_fees,
+            total_fees=total_fees_calc,
             whale_source=position.whale_source,
+            gas_cost_eth=Decimal("0"),
         )
+
+        # STEP 2: Update total balance
+        self.balance += exit_value - fees - gas
+
+        # STEP 3: Release allocated capital (using original entry value)
+        self._release_capital(entry_value)
 
         if position.whale_source:
             market_title = await get_market_title(market_id)
@@ -688,8 +813,12 @@ class VirtualBankroll:
             market_id=market_id,
             entry_price=str(position.entry_price),
             close_price=str(close_price),
+            entry_value=str(entry_value),
+            exit_value=str(exit_value),
             pnl=str(net_pnl),
             new_balance=str(self.balance),
+            new_available=str(self.available),
+            new_allocated=str(self.allocated),
             whale_source=position.whale_source[:10] if position.whale_source else "",
         )
 
@@ -763,7 +892,11 @@ class VirtualBankroll:
         Args:
             new_balance: New balance to set (default: initial balance)
         """
-        self.balance = new_balance if new_balance else self.initial_balance
+        new_val = new_balance if new_balance else self.initial_balance
+        self.balance = new_val
+        self.available = new_val
+        self.allocated = Decimal("0")
+        
         self._open_positions.clear()
         self._consecutive_losses = 0
         self._max_consecutive_losses = 0
@@ -779,6 +912,8 @@ class VirtualBankroll:
         logger.info(
             "virtual_bankroll_reset",
             new_balance=str(self.balance),
+            available=str(self.available),
+            allocated=str(self.allocated),
             initial_balance=str(self.initial_balance),
         )
 

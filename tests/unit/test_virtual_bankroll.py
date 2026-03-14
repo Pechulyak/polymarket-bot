@@ -52,6 +52,16 @@ class TestVirtualBankrollInitialization:
         assert bankroll.database_url == "postgresql://user:pass@localhost/db"
         assert bankroll._engine is not None
 
+    def test_available_and_allocated_initialization(self):
+        """Test that available and allocated are initialized correctly."""
+        bankroll = VirtualBankroll(initial_balance=Decimal("100.00"))
+
+        assert bankroll.balance == Decimal("100.00")
+        assert bankroll.available == Decimal("100.00")
+        assert bankroll.allocated == Decimal("0")
+        assert bankroll.get_available_capital() == Decimal("100.00")
+        assert bankroll.get_allocated_capital() == Decimal("0")
+
 
 class TestVirtualTradeExecution:
     """Test virtual trade execution."""
@@ -84,8 +94,21 @@ class TestVirtualTradeExecution:
         assert result.is_open is True
         assert result.net_pnl == Decimal("0")
 
-        cost = Decimal("10.0") * Decimal("0.50") + Decimal("0.10") + Decimal("1.00")
-        assert bankroll.balance == Decimal("100.00") - cost
+        # entry_cost = size * price = 10.0 * 0.50 = 5.00
+        entry_cost = Decimal("10.0") * Decimal("0.50")
+        
+        # Balance: stays at 100 (only available/allocated change)
+        assert bankroll.balance == Decimal("100.00")
+        
+        # Available: 100 - 5.00 = 95.00
+        assert bankroll.available == Decimal("100.00") - entry_cost
+        
+        # Allocated: 5.00
+        assert bankroll.allocated == entry_cost
+        
+        # Check getters
+        assert bankroll.get_available_capital() == bankroll.available
+        assert bankroll.get_allocated_capital() == bankroll.allocated
 
     @pytest.mark.asyncio
     async def test_execute_virtual_sell(self, bankroll):
@@ -111,8 +134,8 @@ class TestVirtualTradeExecution:
 
     @pytest.mark.asyncio
     async def test_insufficient_balance(self, bankroll):
-        """Test error when balance is insufficient."""
-        with pytest.raises(ValueError, match="Insufficient balance"):
+        """Test error when available capital is insufficient."""
+        with pytest.raises(ValueError, match="Insufficient available capital"):
             await bankroll.execute_virtual_trade(
                 market_id="0xmarket1",
                 side="buy",
@@ -167,7 +190,10 @@ class TestPositionClosing:
             gas=Decimal("0.50"),
         )
 
+        # After opening: balance=100, available=95, allocated=5
         initial_balance = bankroll.balance
+        initial_available = bankroll.available
+        initial_allocated = bankroll.allocated
 
         result = await bankroll.close_virtual_position(
             market_id="0xmarket1",
@@ -179,7 +205,11 @@ class TestPositionClosing:
         assert result.is_open is False or result.status == "closed"
         assert isinstance(result.net_pnl, Decimal)
         assert "0xmarket1" not in bankroll._open_positions
+        
+        # After closing: balance increased by profit, allocated=0, available restored
         assert bankroll.balance > initial_balance
+        assert bankroll.allocated == Decimal("0")  # All capital released
+        assert bankroll.available > initial_available
 
     @pytest.mark.asyncio
     async def test_close_position_loss(self, bankroll):
@@ -395,11 +425,15 @@ class TestReset:
             strategy="copy",
         )
 
-        assert bankroll.balance != Decimal("100.00")
+        # Verify position was opened - balance stays same but available/allocated change
+        assert bankroll.balance == Decimal("100.00")
+        assert bankroll.available != Decimal("100.00")
 
         await bankroll.reset()
 
         assert bankroll.balance == Decimal("100.00")
+        assert bankroll.available == Decimal("100.00")
+        assert bankroll.allocated == Decimal("0")
         assert len(bankroll._open_positions) == 0
         assert bankroll._total_trades == 0
         assert bankroll._winning_trades == 0

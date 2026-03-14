@@ -354,7 +354,8 @@ class WhaleTracker:
                         trade_id=item.get("id", ""),
                         market_id=item.get("conditionId", item.get("tokenId", "")),
                         side=item.get("side", "buy").lower(),
-                        size_usd=Decimal(str(item.get("amount", 0))),
+                        # FIX: Polymarket API returns "size" (USD value), not "amount"
+                        size_usd=Decimal(str(item.get("size", 0))),
                         price=Decimal(str(item.get("price", 0))),
                         timestamp=trade_timestamp,
                         fee=Decimal(str(item.get("fee", 0))),
