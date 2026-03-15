@@ -94,7 +94,8 @@ def _get_pending_paper_trades(database_url: str, limit: int = 10) -> list:
                 COALESCE(pt.size_usd, pt.size) as size_usd,
                 pt.price,
                 pt.whale_address,
-                pt.created_at
+                pt.created_at,
+                pt.kelly_size
             FROM paper_trades pt
             WHERE NOT EXISTS (
                 SELECT 1 FROM trades t 
@@ -117,6 +118,7 @@ def _get_pending_paper_trades(database_url: str, limit: int = 10) -> list:
                 "price": row[4],
                 "whale_address": row[5],
                 "created_at": row[6],
+                "kelly_size": row[7],  # Kelly-sized position (capped at 2% of bankroll)
             })
         return trades
     except Exception as e:
@@ -196,17 +198,22 @@ async def main():
                     
                     # Process each trade - execute via VirtualBankroll
                     for trade in pending_trades:
+                        # Use Kelly-sized position (already calculated and capped at 2% of bankroll)
+                        # kelly_size is in paper_trades table, calculated based on Kelly Criterion
+                        trade_size = Decimal(str(trade['kelly_size'])) if trade.get('kelly_size') else Decimal(str(trade['size_usd']))
+                        
                         logger.info(
-                            f"  Trade: {trade['side']} ${trade['size_usd']:.0f} "
+                            f"  Trade: {trade['side']} ${trade_size:.2f} "
+                            f"(kelly_size=${trade['kelly_size']:.2f}) "
                             f"at {trade['price']} on {trade['market_id'][:16]}... "
                             f"whale: {trade['whale_address'][:8] if trade['whale_address'] else 'unknown'}..."
                         )
                         
                         # DEFENSIVE: Skip zero-size trades
-                        if Decimal(str(trade['size_usd'])) <= Decimal("0"):
+                        if trade_size <= Decimal("0"):
                             logger.warning(
                                 f"  Skipping zero-size trade: {trade['market_id'][:16]}... "
-                                f"(size={trade['size_usd']})"
+                                f"(size={trade_size})"
                             )
                             continue
                         
@@ -215,14 +222,14 @@ async def main():
                         # Execute paper trade via VirtualBankroll
                         try:
                             # DEDUPLICATION CHECK - skip if trade already exists
-                            if _check_trade_exists(database_url, trade['market_id'], whale_addr, Decimal(str(trade['size_usd'])), Decimal(str(trade['price']))):
+                            if _check_trade_exists(database_url, trade['market_id'], whale_addr, trade_size, Decimal(str(trade['price']))):
                                 logger.info(
                                     f"  Skipping duplicate trade: {trade['market_id'][:16]}... "
-                                    f"${trade['size_usd']:.0f} @ {trade['price']}"
+                                    f"${trade_size:.2f} @ {trade['price']}"
                                 )
                                 continue
                             
-                            fees = Decimal(str(trade['size_usd'])) * Decimal("0.002")
+                            fees = trade_size * Decimal("0.002")
                             gas = Decimal("1.50")
                             
                             # Generate opportunity_id from paper_trade_id
@@ -235,7 +242,7 @@ async def main():
                             result = await virtual_bankroll.execute_virtual_trade(
                                 market_id=trade['market_id'],
                                 side=str(trade['side']).lower(),
-                                size=Decimal(str(trade['size_usd'])),
+                                size=trade_size,
                                 price=Decimal(str(trade['price'])),
                                 strategy="copy_whale",
                                 fees=fees,

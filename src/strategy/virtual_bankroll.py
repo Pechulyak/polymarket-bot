@@ -332,12 +332,12 @@ class VirtualBankroll:
                     trade_id, market_id, side, size, price, exchange,
                     commission, gas_cost_eth, gas_cost_usd, net_pnl,
                     status, executed_at, settled_at, opportunity_id,
-                    fiat_fees, gross_pnl, total_fees, market_title
+                    fiat_fees, gross_pnl, total_fees, market_title, whale_source
                 ) VALUES (
                     :trade_id, :market_id, :side, :size, :price, :exchange,
                     :commission, :gas_cost_eth, :gas_cost_usd, :net_pnl,
                     :status, :executed_at, :settled_at, :opportunity_id,
-                    :fiat_fees, :gross_pnl, :total_fees, :market_title
+                    :fiat_fees, :gross_pnl, :total_fees, :market_title, :whale_source
                 )
                 ON CONFLICT (trade_id) DO UPDATE SET
                     status = EXCLUDED.status,
@@ -367,6 +367,7 @@ class VirtualBankroll:
                     "gross_pnl": float(gross_pnl) if gross_pnl else None,
                     "total_fees": float(db_total_fees),
                     "market_title": market_title,
+                    "whale_source": whale_source,
                 },
             )
             session.commit()
@@ -486,7 +487,7 @@ class VirtualBankroll:
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
-                    "source": "TRIGGER_TEST",
+                    "source": "REALTIME",
                 },
             )
             session.commit()
