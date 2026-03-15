@@ -65,6 +65,67 @@ def _check_trade_exists(database_url: str, market_id: str, whale_address: str, s
         session.close()
 
 
+def _get_pending_paper_trades(database_url: str, limit: int = 10) -> list:
+    """Get pending paper trades from paper_trades table.
+    
+    Reads from paper_trades table (filled by trigger from whale_trades).
+    This ensures the proper pipeline: whale_trades -> trigger -> paper_trades -> trades.
+    
+    Filters out trades that are already executed (exist in trades table).
+    
+    Args:
+        database_url: PostgreSQL connection URL
+        limit: Maximum number of trades to return
+    
+    Returns:
+        List of pending paper trades with market_id, side, size_usd, price, whale_address
+    """
+    engine = create_engine(database_url)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        # Get trades from paper_trades that haven't been executed yet
+        # Exclude trades that already exist in trades table (by market_id + whale_address + side)
+        query = text("""
+            SELECT 
+                pt.id as paper_trade_id,
+                pt.market_id,
+                pt.side,
+                COALESCE(pt.size_usd, pt.size) as size_usd,
+                pt.price,
+                pt.whale_address,
+                pt.created_at
+            FROM paper_trades pt
+            WHERE NOT EXISTS (
+                SELECT 1 FROM trades t 
+                WHERE t.market_id = pt.market_id 
+                  AND t.whale_source = pt.whale_address
+                  AND t.side = pt.side
+                  AND t.exchange = 'VIRTUAL'
+            )
+            ORDER BY pt.created_at DESC
+            LIMIT :limit
+        """)
+        result = session.execute(query, {"limit": limit})
+        trades = []
+        for row in result:
+            trades.append({
+                "paper_trade_id": row[0],
+                "market_id": row[1],
+                "side": row[2],
+                "size_usd": row[3],
+                "price": row[4],
+                "whale_address": row[5],
+                "created_at": row[6],
+            })
+        return trades
+    except Exception as e:
+        logger.warning("get_pending_paper_trades_failed", error=str(e))
+        return []
+    finally:
+        session.close()
+
+
 async def main():
     """Main trading loop with whale copy trading."""
     parser = argparse.ArgumentParser(description="Polymarket Trading Bot")
@@ -122,78 +183,76 @@ async def main():
         while True:
             loop_count += 1
             
-            # Every check_interval iterations, fetch new trades from whales
+            # Every check_interval iterations, fetch new trades from paper_trades
+            # This ensures proper pipeline: whale_trades -> trigger -> paper_trades -> trades
             if loop_count % check_interval == 0:
-                logger.info(f"Checking whale trades (loop {loop_count})...")
+                logger.info(f"Checking paper_trades for pending trades (loop {loop_count})...")
                 
-                for whale_addr in whale_addresses[:5]:  # Check top 5 whales
-                    try:
-                        # Fetch recent trades for this whale
-                        trades = await whale_tracker.fetch_whale_trades(
-                            whale_addr, limit=20
+                # Read from paper_trades table (filled by trigger from whale_trades)
+                pending_trades = _get_pending_paper_trades(database_url, limit=10)
+                
+                if pending_trades:
+                    logger.info(f"Found {len(pending_trades)} pending paper trades")
+                    
+                    # Process each trade - execute via VirtualBankroll
+                    for trade in pending_trades:
+                        logger.info(
+                            f"  Trade: {trade['side']} ${trade['size_usd']:.0f} "
+                            f"at {trade['price']} on {trade['market_id'][:16]}... "
+                            f"whale: {trade['whale_address'][:8] if trade['whale_address'] else 'unknown'}..."
                         )
                         
-                        if trades:
-                            logger.info(
-                                f"Whale {whale_addr[:8]}... has {len(trades)} recent trades"
+                        # DEFENSIVE: Skip zero-size trades
+                        if Decimal(str(trade['size_usd'])) <= Decimal("0"):
+                            logger.warning(
+                                f"  Skipping zero-size trade: {trade['market_id'][:16]}... "
+                                f"(size={trade['size_usd']})"
                             )
-                            
-                            # Process each trade - execute via VirtualBankroll
-                            for trade in trades[:3]:  # Process up to 3 trades
+                            continue
+                        
+                        whale_addr = trade['whale_address']
+                        
+                        # Execute paper trade via VirtualBankroll
+                        try:
+                            # DEDUPLICATION CHECK - skip if trade already exists
+                            if _check_trade_exists(database_url, trade['market_id'], whale_addr, Decimal(str(trade['size_usd'])), Decimal(str(trade['price']))):
                                 logger.info(
-                                    f"  Trade: {trade.side} ${trade.size_usd:.0f} "
-                                    f"at {trade.price} on {trade.market_id[:16]}..."
+                                    f"  Skipping duplicate trade: {trade['market_id'][:16]}... "
+                                    f"${trade['size_usd']:.0f} @ {trade['price']}"
                                 )
-                                
-                                # DEFENSIVE: Skip zero-size trades
-                                if trade.size_usd <= Decimal("0"):
-                                    logger.warning(
-                                        f"  Skipping zero-size trade: {trade.market_id[:16]}... "
-                                        f"(size={trade.size_usd})"
-                                    )
-                                    continue
-                                
-                                # Execute paper trade via VirtualBankroll
-                                try:
-                                    # DEDUPLICATION CHECK - skip if trade already exists
-                                    if _check_trade_exists(database_url, trade.market_id, whale_addr, trade.size_usd, trade.price):
-                                        logger.info(
-                                            f"  Skipping duplicate trade: {trade.market_id[:16]}... "
-                                            f"${trade.size_usd:.0f} @ {trade.price}"
-                                        )
-                                        continue
-                                    
-                                    fees = trade.size_usd * Decimal("0.002")
-                                    gas = Decimal("1.50")
-                                    
-                                    # Generate opportunity_id from market_id + timestamp
-                                    opportunity_id = f"{trade.market_id}_{int(trade.timestamp.timestamp() * 1000)}" if hasattr(trade, 'timestamp') and trade.timestamp else None
-                                    
-                                    # Get market title from cache
-                                    from src.data.storage.market_title_cache import get_market_title
-                                    market_title = await get_market_title(trade.market_id)
-                                    
-                                    result = await virtual_bankroll.execute_virtual_trade(
-                                        market_id=trade.market_id,
-                                        side=trade.side.lower(),
-                                        size=trade.size_usd,
-                                        price=trade.price,
-                                        strategy="copy_whale",
-                                        fees=fees,
-                                        gas=gas,
-                                        whale_source=whale_addr,
-                                        opportunity_id=opportunity_id,
-                                        market_title=market_title,
-                                    )
-                                    logger.info(
-                                        f"  Paper trade executed: {result.trade_id}, "
-                                        f"new balance: {virtual_bankroll.balance}"
-                                    )
-                                except Exception as e:
-                                    logger.warning(f"  Error executing paper trade: {e}")
-                                
-                    except Exception as e:
-                        logger.warning(f"Error fetching trades for {whale_addr[:8]}: {e}")
+                                continue
+                            
+                            fees = Decimal(str(trade['size_usd'])) * Decimal("0.002")
+                            gas = Decimal("1.50")
+                            
+                            # Generate opportunity_id from paper_trade_id
+                            opportunity_id = f"paper_{trade['paper_trade_id']}"
+                            
+                            # Get market title from cache
+                            from src.data.storage.market_title_cache import get_market_title
+                            market_title = await get_market_title(trade['market_id'])
+                            
+                            result = await virtual_bankroll.execute_virtual_trade(
+                                market_id=trade['market_id'],
+                                side=str(trade['side']).lower(),
+                                size=Decimal(str(trade['size_usd'])),
+                                price=Decimal(str(trade['price'])),
+                                strategy="copy_whale",
+                                fees=fees,
+                                gas=gas,
+                                whale_source=whale_addr or "",
+                                opportunity_id=opportunity_id,
+                                market_title=market_title,
+                            )
+                            logger.info(
+                                f"  Paper trade executed: {result.trade_id}, "
+                                f"new balance: {virtual_bankroll.balance}"
+                            )
+                        except Exception as e:
+                            logger.warning(f"  Error executing paper trade: {e}")
+                
+                else:
+                    logger.info("No pending paper trades found")
                 
                 # Log bankroll stats
                 stats = virtual_bankroll.get_stats()
