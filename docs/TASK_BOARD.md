@@ -152,7 +152,7 @@ Goals:
 - integrate settlement with VirtualBankroll.close_virtual_position()
 - ensure allocated capital is released on settlement
 - ensure win/loss counters are updated
-| TRD-410 | Add YES/NO outcome attribution for whale trades | TODO |
+| TRD-410 | Add YES/NO outcome attribution for whale trades | DONE |
 Description: Add explicit YES/NO outcome attribution for whale trades and downstream pipeline.
 
 ---
