@@ -361,7 +361,7 @@ class CopyTradingEngine:
                         WHERE market_id = :market_id 
                           AND whale_source = :whale_source
                           AND size = :size 
-                          AND price = :price
+                          AND open_price = :price
                           AND exchange = 'VIRTUAL'
                     """)
                     result_check = session.execute(query, {

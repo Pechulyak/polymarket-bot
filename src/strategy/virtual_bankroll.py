@@ -275,7 +275,7 @@ class VirtualBankroll:
         market_id: str,
         side: str,
         size: Decimal,
-        price: Decimal,
+        price: Decimal,  # entry price (open_price)
         commission: Decimal,
         gas_cost: Decimal,
         net_pnl: Decimal,
@@ -290,6 +290,7 @@ class VirtualBankroll:
         whale_source: str = "",
         market_title: Optional[str] = None,
         gas_cost_eth: Decimal = Decimal("0"),
+        close_price: Optional[Decimal] = None,  # exit/settlement price
     ) -> None:
         """Save virtual trade to PostgreSQL.
 
@@ -329,12 +330,12 @@ class VirtualBankroll:
         try:
             query = text("""
                 INSERT INTO trades (
-                    trade_id, market_id, side, size, price, exchange,
+                    trade_id, market_id, side, size, open_price, close_price, exchange,
                     commission, gas_cost_eth, gas_cost_usd, net_pnl,
                     status, executed_at, settled_at, opportunity_id,
                     fiat_fees, gross_pnl, total_fees, market_title, whale_source
                 ) VALUES (
-                    :trade_id, :market_id, :side, :size, :price, :exchange,
+                    :trade_id, :market_id, :side, :size, :open_price, :close_price, :exchange,
                     :commission, :gas_cost_eth, :gas_cost_usd, :net_pnl,
                     :status, :executed_at, :settled_at, :opportunity_id,
                     :fiat_fees, :gross_pnl, :total_fees, :market_title, :whale_source
@@ -342,6 +343,7 @@ class VirtualBankroll:
                 ON CONFLICT (trade_id) DO UPDATE SET
                     status = EXCLUDED.status,
                     settled_at = EXCLUDED.settled_at,
+                    close_price = EXCLUDED.close_price,
                     gross_pnl = EXCLUDED.gross_pnl,
                     total_fees = EXCLUDED.total_fees,
                     net_pnl = EXCLUDED.net_pnl
@@ -353,7 +355,8 @@ class VirtualBankroll:
                     "market_id": market_id,
                     "side": side,
                     "size": float(size),
-                    "price": float(price),
+                    "open_price": float(price),  # entry price
+                    "close_price": float(close_price) if close_price else None,
                     "exchange": "VIRTUAL",
                     "commission": float(db_commission),
                     "gas_cost_eth": float(db_gas_cost_eth),
@@ -635,7 +638,7 @@ class VirtualBankroll:
             market_id=result.market_id,
             side=result.side,
             size=result.size,
-            price=result.price,
+            price=result.price,  # entry price
             commission=result.commission,
             gas_cost=result.gas_cost,
             net_pnl=result.net_pnl,
@@ -649,6 +652,7 @@ class VirtualBankroll:
             opportunity_id=opportunity_id,
             market_title=market_title,
             gas_cost_eth=Decimal("0"),
+            close_price=None,  # no close price for open positions
         )
 
         # STEP 2: THEN allocate capital (only for BUY/open positions)
@@ -773,7 +777,7 @@ class VirtualBankroll:
             market_id=result.market_id,
             side=result.side,
             size=result.size,
-            price=result.price,
+            price=position.entry_price,  # entry price - preserved!
             commission=result.commission,
             gas_cost=result.gas_cost,
             net_pnl=result.net_pnl,
@@ -785,6 +789,7 @@ class VirtualBankroll:
             total_fees=total_fees_calc,
             whale_source=position.whale_source,
             gas_cost_eth=Decimal("0"),
+            close_price=close_price,  # exit/settlement price
         )
 
         # STEP 2: Update total balance

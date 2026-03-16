@@ -498,6 +498,64 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-16
+
+snapshot_date: 2026-03-16
+database: polymarket
+schema: public
+
+whales_rows: 5794
+whale_trades_rows: 6554
+paper_trades_rows: 446
+paper_trade_notifications_rows: 445
+trades_rows: 44
+bankroll_rows: 45
+
+whale_trades_last_24h: 871
+paper_trades_last_24h: 111
+notifications_last_24h: 112
+
+conversion_whale_to_paper_48h: 12.74%
+conversion_paper_to_notifications_48h: 100.9%
+
+stale_tables_24h:
+
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-03-15
+
+snapshot_date: 2026-03-15
+database: polymarket
+schema: public
+
+whales_rows: 5388
+whale_trades_rows: 6079
+paper_trades_rows: 361
+paper_trade_notifications_rows: 360
+trades_rows: 394
+bankroll_rows: 263
+
+whale_trades_last_24h: 262
+paper_trades_last_24h: 9
+notifications_last_24h: 9
+
+conversion_whale_to_paper_48h: 6.54%
+conversion_paper_to_notifications_48h: 100.0%
+
+stale_tables_24h:
+
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-14
 
 snapshot_date: 2026-03-14
@@ -1309,3 +1367,52 @@ paper_trades: 352
 whales: 5038
 
 notes: Removed test/dummy records from core trading tables. Production dataset integrity verified. Whale ids 1-8, 10 retained as they have associated trades in whale_trades.
+
+---
+
+## 32. TRADES TABLE MIGRATION (2026-03-16)
+
+### Migration: open_price / close_price
+
+### Purpose
+Separate entry price (open_price) from exit/settlement price (close_price) in trades table to fix settlement bug.
+
+### Changes Made
+
+**Database:**
+- Added `open_price NUMERIC(20,8)` column
+- Renamed `price` → `close_price`
+- Backfilled open_price for closed trades from paper_trades
+
+**Code Updates:**
+- `src/strategy/virtual_bankroll.py`: INSERT uses open_price, added close_price parameter
+- `src/strategy/paper_position_settlement.py`: Read open_price, UPDATE close_price
+- `src/main.py`: Deduplication check uses open_price
+- `src/execution/copy_trading_engine.py`: Deduplication check uses open_price
+
+### Verification (2026-03-16)
+- Bot restarted successfully
+- trades table: 47 records (15 open, 32 closed)
+- open_price filled: 47/47 ✓
+- close_price filled: 47/47 ✓
+
+### Example Trade
+```
+trade_id: 112e22b6-c6ff-434a-8eab-31f90258c89c
+market_id: 0xb1d50b81c07bef93e5882f022349b633920090407ec996405296bab2a3e0cf1d
+whale: 0x85e5669beee6b80d887493e724987dabc5f56056
+open_price: 0.95009170   (from paper_trades)
+close_price: 1.00000000   (settlement price)
+gross_pnl: 0.09981660    (correct: (1.0 - 0.95009170) * 2.0)
+status: closed
+```
+
+### Files Modified
+- scripts/init_db.sql (updated schema)
+- scripts/migration_add_open_price.sql (migration script)
+- src/strategy/virtual_bankroll.py
+- src/strategy/paper_position_settlement.py
+- src/main.py
+- src/execution/copy_trading_engine.py
+
+### Status: COMPLETED

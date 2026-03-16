@@ -237,7 +237,7 @@ class PaperPositionSettlementEngine:
                     t.market_id,
                     t.side,
                     t.size,
-                    t.price as entry_price,
+                    t.open_price as entry_price,  -- Use open_price instead of price
                     t.executed_at,
                     t.commission,
                     t.gas_cost_eth
@@ -305,12 +305,12 @@ class PaperPositionSettlementEngine:
             total_fees = commission + gas_cost
             net_pnl = gross_pnl - total_fees
 
-            # Update trade record
+            # Update trade record - set close_price, preserve open_price
             query = text("""
                 UPDATE trades
                 SET status = 'closed',
                     settled_at = NOW(),
-                    price = :close_price,
+                    close_price = :close_price,
                     gross_pnl = :gross_pnl,
                     total_fees = :total_fees,
                     net_pnl = :net_pnl

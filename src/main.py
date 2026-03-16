@@ -47,7 +47,7 @@ def _check_trade_exists(database_url: str, market_id: str, whale_address: str, s
             WHERE market_id = :market_id 
               AND whale_source = :whale_source
               AND size = :size 
-              AND price = :price
+              AND open_price = :price
               AND exchange = 'VIRTUAL'
         """)
         result = session.execute(query, {
@@ -97,7 +97,8 @@ def _get_pending_paper_trades(database_url: str, limit: int = 10) -> list:
                 pt.created_at,
                 pt.kelly_size
             FROM paper_trades pt
-            WHERE NOT EXISTS (
+            WHERE pt.created_at > NOW() - INTERVAL '15 minutes'
+              AND NOT EXISTS (
                 SELECT 1 FROM trades t 
                 WHERE t.market_id = pt.market_id 
                   AND t.whale_source = pt.whale_address
@@ -171,6 +172,8 @@ async def main():
         database_url=database_url
     )
     virtual_bankroll.set_database(database_url)
+    # Reset bankroll state to ensure clean start (avoid stale memory counters)
+    await virtual_bankroll.reset(new_balance=Decimal(str(args.bankroll)))
     logger.info(f"Virtual bankroll initialized: ${args.bankroll}")
 
     # Trading loop - fetch whale trades periodically

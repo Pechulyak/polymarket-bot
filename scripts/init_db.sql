@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS trades (
     whale_source VARCHAR(255),
     side VARCHAR(10) NOT NULL CHECK (side IN ('buy', 'sell')),
     size DECIMAL(20, 8) NOT NULL,
-    price DECIMAL(20, 8) NOT NULL,
+    open_price DECIMAL(20, 8),  -- Entry price (from paper_trades.price)
+    close_price DECIMAL(20, 8), -- Exit/settlement price (1.0 for winner, 0.0 for loser)
     exchange VARCHAR(50) NOT NULL,
     
     -- Fee breakdown
