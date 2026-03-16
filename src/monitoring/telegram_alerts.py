@@ -327,6 +327,7 @@ class TelegramAlerts:
         source: str,
         created_at: datetime,
         market_title: str = None,
+        outcome: str = None,
     ) -> None:
         """Send paper trade created notification.
 
@@ -342,6 +343,7 @@ class TelegramAlerts:
             source: Source (realtime/backfill)
             created_at: When trade was created
             market_title: Market title (optional, will fetch from DB if not provided)
+            outcome: Trade outcome (YES/NO) - optional
         """
         from datetime import timezone, timedelta
 
@@ -368,13 +370,19 @@ class TelegramAlerts:
         else:
             market_display = f"`{market_id[:12]}...{market_id[-8:]}`"
 
+        outcome_str = f"*{outcome.upper()}*" if outcome else ""
+        if outcome_str:
+            outcome_line = f"\n*Outcome:* {outcome_str}"
+        else:
+            outcome_line = ""
+
         message = f"""
 {side_emoji} *PAPER TRADE CREATED*
 
 *Source:* {source_emoji} {source.upper()}
 *Whale:* `{whale_address[:6]}...{whale_address[-4:]}`
 *Market:* {market_display}
-*Side:* {side.upper()}
+*Side:* {side.upper()}{outcome_line}
 *Size:* ${size_usd:,.2f}
 *Kelly:* {kelly_fraction*100:.1f}% → ${kelly_size:,.2f}
 *Price:* {price:.4f}

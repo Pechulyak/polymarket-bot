@@ -74,18 +74,20 @@
 | SYS-304 | Add TASK_BOARD governance rules | DONE |
 | SYS-305 | Generate docs/TASK_BOARD.html | DONE |
 | SYS-306 | Persistent local web server for TASK_BOARD | DONE |
-| SYS-309 | Daily Data Audit Snapshot | READY |
+| SYS-309 | Daily Data Audit Snapshot | DONE |
 | SYS-311 | Fix Whale Activity Counters | DONE |
 | SYS-312 | Whale Universe Quality Analysis | DONE |
 | SYS-313 | Hide DONE Tasks in HTML Task Board | DONE |
 | SYS-314 | Paper Trade Trigger Pipeline Audit | DONE |
 | SYS-315 | Fix Duplicate Suppression in Paper Trade Trigger | DONE |
 | SYS-317 | Audit trades lifecycle for paper performance tracking | DONE |
-| SYS-318 | Paper Position Settlement Engine | IN_PROGRESS |
+| SYS-318 | Paper Position Settlement Engine | DONE |
 | SYS-319 | Paper Execution Gap Audit | DONE |
 | SYS-320 | Paper Trade Close Lifecycle Audit | DONE |
 | SYS-321 | Подключение settlement engine для paper сделок | DONE |
-| SYS-322 | Security Hardening: No Public Ports Policy | READY |
+| SYS-322 | Security Hardening: No Public Ports Policy | DONE |
+| SYS-323 | Security Hardening: Firewall Configuration | DONE |
+| SYS-324 | Security Hardening: Port Exposure Scan | DONE |
 
 ---
 
@@ -101,10 +103,10 @@
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| SEC-401 | Full Security Audit (ports, env exposure, docker, firewall) | TODO |
-| SEC-402 | Verify No Public Ports Policy enforcement | TODO |
-| SEC-403 | Scan server for exposed services and vulnerabilities | TODO |
-| SEC-404 | Restrict Qdrant to localhost only | TODO |
+| SEC-401 | Full Security Audit (ports, env exposure, docker, firewall) | DONE |
+| SEC-402 | Verify No Public Ports Policy enforcement | DONE |
+| SEC-403 | Scan server for exposed services and vulnerabilities | DONE |
+| SEC-404 | Restrict Qdrant to localhost only | DONE |
 
 ---
 
@@ -161,10 +163,7 @@ Description: Add explicit YES/NO outcome attribution for whale trades and downst
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| DATA-401 | Remove test records from whales tables | TODO |
-| DATA-402 | Remove test records from whale_trades | TODO |
-| DATA-403 | Remove test records from trades table | TODO |
-| DATA-404 | Reset virtual bankroll for fresh paper trading cycle | TODO |
+| DATA-404 | Reset virtual bankroll for fresh paper trading cycle | DONE |
 | DATA-405 | Cleanup test records from database | DONE |
 
 ---

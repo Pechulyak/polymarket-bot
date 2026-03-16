@@ -64,7 +64,7 @@ class NotificationWorker:
             result = conn.execute(
                 text("""
                     SELECT id, whale_address, market_id, side, price, size,
-                           size_usd, kelly_fraction, kelly_size, source, created_at
+                           size_usd, kelly_fraction, kelly_size, source, created_at, outcome
                     FROM paper_trade_notifications
                     WHERE notified = FALSE
                     ORDER BY created_at ASC
@@ -105,6 +105,7 @@ class NotificationWorker:
             kelly_size=float(row.kelly_size) if row.kelly_size else 0.0,
             source=row.source or "unknown",
             created_at=row.created_at,
+            outcome=row.outcome,
         )
         logger.info(
             "notification_sent",

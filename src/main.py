@@ -95,7 +95,8 @@ def _get_pending_paper_trades(database_url: str, limit: int = 10) -> list:
                 pt.price,
                 pt.whale_address,
                 pt.created_at,
-                pt.kelly_size
+                pt.kelly_size,
+                pt.outcome
             FROM paper_trades pt
             WHERE pt.created_at > NOW() - INTERVAL '15 minutes'
               AND NOT EXISTS (
@@ -120,6 +121,7 @@ def _get_pending_paper_trades(database_url: str, limit: int = 10) -> list:
                 "whale_address": row[5],
                 "created_at": row[6],
                 "kelly_size": row[7],  # Kelly-sized position (capped at 2% of bankroll)
+                "outcome": row[8],  # YES/NO outcome
             })
         return trades
     except Exception as e:
@@ -253,6 +255,7 @@ async def main():
                                 whale_source=whale_addr or "",
                                 opportunity_id=opportunity_id,
                                 market_title=market_title,
+                                outcome=trade.get('outcome'),  # YES/NO from paper_trades
                             )
                             logger.info(
                                 f"  Paper trade executed: {result.trade_id}, "

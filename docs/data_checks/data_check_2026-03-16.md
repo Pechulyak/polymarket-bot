@@ -1,6 +1,6 @@
 # Daily Data Audit Snapshot
 
-**Generated:** 2026-03-16 08:00:02
+**Generated:** 2026-03-16 14:04:51
 
 ---
 
@@ -8,12 +8,12 @@
 
 | Table | Row Count | Rows 24h | Rows 48h | First Row | Last Row |
 |-------|-----------|----------|----------|-----------|----------|
-| whales | 5794 | 406 | 501 | 2026-02-23 18:18:13 | 2026-03-16 07:56:47 |
-| whale_trades | 6554 | 871 | 871 | 2026-03-04 17:53:05 | 2026-03-16 07:54:49 |
-| paper_trades | 446 | 111 | 111 | 2026-03-04 23:59:51 | 2026-03-16 07:09:57 |
-| paper_trade_notifications | 445 | 112 | 112 | 2026-03-05 18:08:25 | 2026-03-16 07:09:57 |
-| trades | 44 | N/A | N/A | 2026-03-15 17:39:20 | 2026-03-16 06:26:42 |
-| bankroll | 45 | 45 | 45 | 2026-03-15 17:39:20 | 2026-03-16 06:26:42 |
+| whales | 5897 | 404 | 509 | 2026-02-23 18:18:13 | 2026-03-16 13:57:00 |
+| whale_trades | 6766 | 908 | 1083 | 2026-03-04 17:53:05 | 2026-03-16 13:55:15 |
+| paper_trades | 459 | 100 | 124 | 2026-03-04 23:59:51 | 2026-03-16 13:35:11 |
+| paper_trade_notifications | 458 | 100 | 125 | 2026-03-05 18:08:25 | 2026-03-16 13:35:11 |
+| trades | 48 | N/A | N/A | 2026-03-15 17:39:20 | 2026-03-16 13:45:51 |
+| bankroll | 3 | 3 | 3 | 2026-03-16 12:30:02 | 2026-03-16 13:45:51 |
 
 ---
 
@@ -21,24 +21,24 @@
 
 ### whales
 
-- Unique addresses: 5794
-- Default risk_score (5): 1445
-- NULL qualification_path: 3695
-- Active whales (24h): 2303
-- Active whales (48h): 2423
+- Unique addresses: 5897
+- Default risk_score (5): 1435
+- NULL qualification_path: 3812
+- Active whales (24h): 941
+- Active whales (48h): 2427
 
 ### whale_trades
 
-- Unique whales: 3656
-- Unique whales (24h): 370
+- Unique whales: 3672
+- Unique whales (24h): 340
 - NULL price: 0
 - NULL size: 0
-- Latest trade: 2026-03-16 07:54:49
+- Latest trade: 2026-03-16 13:55:15
 
 ### paper_trades
 
-- Unique whales: 371
-- Unique whales (24h): 91
+- Unique whales: 378
+- Unique whales (24h): 82
 - NULL market_title: 28
 - NULL price: 0
 - NULL size: 0
@@ -48,27 +48,27 @@
 ### paper_trade_notifications
 
 - NULL market_title: 25
-- Latest notification: 2026-03-16 07:09:57
+- Latest notification: 2026-03-16 13:35:11
 
 ### trades
 
-- VIRTUAL rows: 44
-- Open trades: 12
+- VIRTUAL rows: 48
+- Open trades: 16
 - Closed trades: 32
 
 ### bankroll
 
-- Rows 24h: 45
-- Rows 48h: 45
-- Earliest: 2026-03-15 17:39:20
-- Latest: 2026-03-16 06:26:42
+- Rows 24h: 3
+- Rows 48h: 3
+- Earliest: 2026-03-16 12:30:02
+- Latest: 2026-03-16 13:45:51
 
 ---
 
 ## Cross-Table Consistency
 
-- whale_trades → paper_trades conversion (48h): 12.74%
-- paper_trades → notifications coverage (48h): 100.9%
+- whale_trades → paper_trades conversion (48h): 11.45%
+- paper_trades → notifications coverage (48h): 100.81%
 - Stale tables (>24h no new rows): None
 - Stale tables (>48h no new rows): None
 

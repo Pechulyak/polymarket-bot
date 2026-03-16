@@ -291,6 +291,7 @@ class VirtualBankroll:
         market_title: Optional[str] = None,
         gas_cost_eth: Decimal = Decimal("0"),
         close_price: Optional[Decimal] = None,  # exit/settlement price
+        outcome: Optional[str] = None,  # YES/NO outcome from paper_trades
     ) -> None:
         """Save virtual trade to PostgreSQL.
 
@@ -333,12 +334,12 @@ class VirtualBankroll:
                     trade_id, market_id, side, size, open_price, close_price, exchange,
                     commission, gas_cost_eth, gas_cost_usd, net_pnl,
                     status, executed_at, settled_at, opportunity_id,
-                    fiat_fees, gross_pnl, total_fees, market_title, whale_source
+                    fiat_fees, gross_pnl, total_fees, market_title, whale_source, outcome
                 ) VALUES (
                     :trade_id, :market_id, :side, :size, :open_price, :close_price, :exchange,
                     :commission, :gas_cost_eth, :gas_cost_usd, :net_pnl,
                     :status, :executed_at, :settled_at, :opportunity_id,
-                    :fiat_fees, :gross_pnl, :total_fees, :market_title, :whale_source
+                    :fiat_fees, :gross_pnl, :total_fees, :market_title, :whale_source, :outcome
                 )
                 ON CONFLICT (trade_id) DO UPDATE SET
                     status = EXCLUDED.status,
@@ -346,7 +347,8 @@ class VirtualBankroll:
                     close_price = EXCLUDED.close_price,
                     gross_pnl = EXCLUDED.gross_pnl,
                     total_fees = EXCLUDED.total_fees,
-                    net_pnl = EXCLUDED.net_pnl
+                    net_pnl = EXCLUDED.net_pnl,
+                    outcome = EXCLUDED.outcome
             """)
             session.execute(
                 query,
@@ -371,6 +373,7 @@ class VirtualBankroll:
                     "total_fees": float(db_total_fees),
                     "market_title": market_title,
                     "whale_source": whale_source,
+                    "outcome": outcome,
                 },
             )
             session.commit()
@@ -519,6 +522,7 @@ class VirtualBankroll:
         whale_source: str = "",
         opportunity_id: Optional[str] = None,
         market_title: Optional[str] = None,
+        outcome: Optional[str] = None,  # YES/NO outcome from paper_trades
     ) -> VirtualTradeResult:
         """Execute a virtual trade (does NOT execute real trade).
 
@@ -656,6 +660,7 @@ class VirtualBankroll:
             market_title=market_title,
             gas_cost_eth=Decimal("0"),
             close_price=None,  # no close price for open positions
+            outcome=outcome,
         )
 
         # STEP 2: THEN allocate capital (only for BUY/open positions)
@@ -702,6 +707,7 @@ class VirtualBankroll:
         close_price: Decimal,
         fees: Decimal = Decimal("0.00"),
         gas: Decimal = Decimal("0.00"),
+        outcome: Optional[str] = None,  # YES/NO outcome
     ) -> VirtualTradeResult:
         """Close an open virtual position and calculate PnL.
 
@@ -793,6 +799,7 @@ class VirtualBankroll:
             whale_source=position.whale_source,
             gas_cost_eth=Decimal("0"),
             close_price=close_price,  # exit/settlement price
+            outcome=outcome,
         )
 
         # STEP 2: Update total balance

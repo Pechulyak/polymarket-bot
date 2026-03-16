@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS paper_trade_notifications (
     kelly_fraction NUMERIC(10, 8),
     kelly_size NUMERIC(20, 8),
     source VARCHAR(20) DEFAULT 'unknown',
+    outcome TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     notified BOOLEAN DEFAULT FALSE
 );
@@ -134,6 +135,7 @@ BEGIN
         kelly_fraction,
         kelly_size,
         source,
+        outcome,
         created_at
     ) VALUES (
         NEW.id,
@@ -147,6 +149,7 @@ BEGIN
         NEW.kelly_fraction,
         NEW.kelly_size,
         NEW.source,
+        NEW.outcome,
         NEW.created_at
     );
     RETURN NEW;
