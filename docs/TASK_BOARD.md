@@ -143,6 +143,17 @@ Goals:
 | TRD-405 | Verify Kelly sizing logic | TODO |
 | TRD-406 | Fix zero-size paper trades on open path | TODO |
 | TRD-407 | Investigate execution gap (paper_trades vs trades) | TODO |
+| TRD-409 | Fix settlement integration with VirtualBankroll | IN_PROGRESS |
+Description: Fix two bugs in paper settlement pipeline:
+- open trades created with close_price = open_price instead of NULL
+- settlement engine doesn't call VirtualBankroll to release capital
+Goals:
+- fix close_price = NULL for open trades
+- integrate settlement with VirtualBankroll.close_virtual_position()
+- ensure allocated capital is released on settlement
+- ensure win/loss counters are updated
+| TRD-410 | Add YES/NO outcome attribution for whale trades | TODO |
+Description: Add explicit YES/NO outcome attribution for whale trades and downstream pipeline.
 
 ---
 

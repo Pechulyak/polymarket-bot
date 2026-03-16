@@ -369,7 +369,11 @@ class RealTimeWhaleMonitor:
             )
 
         market_title = await get_market_title(signal.market_id)
-        await self._save_whale_signal_to_db(signal, market_title=market_title)
+        
+        # Calculate outcome based on price and side (Polymarket binary convention)
+        outcome = "Yes" if (signal.side == "buy" and signal.price < 0.5) or (signal.side == "sell" and signal.price >= 0.5) else "No"
+        
+        await self._save_whale_signal_to_db(signal, market_title=market_title, outcome=outcome)
 
         if self.on_whale_signal:
             try:
@@ -388,12 +392,13 @@ class RealTimeWhaleMonitor:
             delay_ms=signal.delay_ms,
         )
 
-    async def _save_whale_signal_to_db(self, signal: WhaleTradeSignal, market_title: Optional[str] = None) -> None:
+    async def _save_whale_signal_to_db(self, signal: WhaleTradeSignal, market_title: Optional[str] = None, outcome: Optional[str] = None) -> None:
         """Save whale signal to database.
 
         Args:
             signal: The whale trade signal
             market_title: Market question/title from Polymarket API (optional)
+            outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
         """
         await self._ensure_database()
         if not self._Session:
@@ -403,9 +408,9 @@ class RealTimeWhaleMonitor:
         try:
             query = text("""
                 INSERT INTO whale_trades (
-                    market_id, market_title, side, size_usd, price, traded_at, source
+                    market_id, market_title, side, size_usd, price, outcome, traded_at, source
                 ) VALUES (
-                    :market_id, :market_title, :side, :size_usd, :price, :traded_at, :source
+                    :market_id, :market_title, :side, :size_usd, :price, :outcome, :traded_at, :source
                 )
             """)
             session.execute(
@@ -416,6 +421,7 @@ class RealTimeWhaleMonitor:
                     "side": signal.side,
                     "size_usd": float(signal.size_usd),
                     "price": float(signal.price),
+                    "outcome": outcome,
                     "traded_at": datetime.fromtimestamp(signal.timestamp),
                     "source": "REALTIME",
                 },

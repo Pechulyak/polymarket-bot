@@ -444,6 +444,7 @@ class VirtualBankroll:
         size_usd: Decimal,
         price: Decimal,
         market_title: Optional[str] = None,
+        outcome: Optional[str] = None,
     ) -> None:
         """Save whale trade record for tracking copy trading source.
 
@@ -454,6 +455,7 @@ class VirtualBankroll:
             size_usd: Trade size in USD
             price: Execution price
             market_title: Market question/title (optional)
+            outcome: Trade outcome (YES/NO) - optional
         """
         await self._ensure_database()
 
@@ -476,9 +478,9 @@ class VirtualBankroll:
 
             insert_query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, market_id, market_title, side, size_usd, price, traded_at, source
+                    whale_id, market_id, market_title, side, size_usd, price, outcome, traded_at, source
                 ) VALUES (
-                    :whale_id, :market_id, :market_title, :side, :size_usd, :price, NOW(), :source
+                    :whale_id, :market_id, :market_title, :side, :size_usd, :price, :outcome, NOW(), :source
                 )
             """)
             session.execute(
@@ -490,6 +492,7 @@ class VirtualBankroll:
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
+                    "outcome": outcome,
                     "source": "REALTIME",
                 },
             )

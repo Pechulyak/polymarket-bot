@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-07 (market_title Pipeline VERIFIED)
-version: 1.2.2
+Обновлено: 2026-03-16 (TRD-410: Whale Trades Outcome Field)
+version: 1.2.3
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -127,7 +127,29 @@ Docker контейнеры: OK (все healthy)
 builder_api_status: VERIFIED
 last_e2e_test: 2026-03-01
 e2e_test_result: PASS
-last_fix: 2026-03-04 (datetime - int в calculate_risk_score)
+last_fix: 2026-03-16 (TRD-409: settlement integration with VirtualBankroll)
+
+---
+
+## 5.1. TRADING CORRECTNESS / FIXES
+
+### TRD-409: Settlement Integration Fix
+- **Date:** 2026-03-16
+- **Status:** IMPLEMENTED
+- **Root Cause:**
+  - Issue 1: open trades had close_price = open_price (from migration renaming price → close_price)
+  - Issue 2: settlement engine directly updated DB without calling VirtualBankroll.close_virtual_position()
+- **Fix Applied:**
+  - Fixed 15 existing open trades: UPDATE trades SET close_price = NULL WHERE status='open'
+  - Modified paper_position_settlement.py to accept VirtualBankroll instance
+  - settle_position() now calls VirtualBankroll.close_virtual_position() which:
+    - Releases allocated capital
+    - Updates win/loss counters
+    - Saves bankroll history
+  - Falls back to direct DB update for legacy positions
+- **Verification:**
+  - Open trades now have close_price = NULL ✓
+  - Settlement code integrates with VirtualBankroll ✓
 
 ---
 
@@ -198,12 +220,20 @@ notes: |
 ## 12. WHALE DETECTION VERIFICATION
 
 ### whale_trades_ingestion
-whale_trades_ingestion.status: WRITES_OK
+whale_trades_ingestion.status: OUTCOME_FIXED
 whale_trades_ingestion.entrypoint: "python src/run_whale_detection.py"
-whale_trades_ingestion.source_files: ["src/research/real_time_whale_monitor.py:398", "src/research/whale_tracker.py:696", "src/research/whale_detector.py:707", "src/strategy/virtual_bankroll.py:383"]
-whale_trades.last_seen: "2026-03-04 18:29:11"
-whale_trades_ingestion.last_audit: "2026-03-04"
-whale_trades_ingestion.last_fix: "2026-03-04"
+whale_trades_ingestion.source_files: ["src/research/real_time_whale_monitor.py:405", "src/research/whale_tracker.py:702", "src/research/whale_detector.py:953", "src/strategy/virtual_bankroll.py:477"]
+whale_trades.last_seen: "2026-03-16 13:05:07"
+whale_trades_ingestion.last_audit: "2026-03-16"
+whale_trades_ingestion.last_fix: "2026-03-16 (TRD-410)"
+
+#### TRD-410: Outcome Field Fix
+- **Проблема:** Поле outcome (YES/NO) не заполнялось при INSERT в whale_trades
+- **Решение:** 
+  - Добавлен outcome в INSERT statements (whale_detector, whale_tracker, real_time_whale_monitor)
+  - Исправлен virtual_bankroll._save_whale_trade_record()
+  - Обновлено 6725 старых записей с NULL outcome
+- **Результат:** Все 6727 записей в whale_trades имеют outcome
 
 **Комментарий:** WRITES_OK — исправление успешно (save_whale_trade добавлен). 41 запись получена от 22 уникальных трейдеров. Записи добавляются регулярно.
 
