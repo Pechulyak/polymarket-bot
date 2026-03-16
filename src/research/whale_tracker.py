@@ -673,6 +673,7 @@ class WhaleTracker:
         profit_usd: Optional[Decimal] = None,
         market_title: Optional[str] = None,
         source: str = "BACKFILL",
+        outcome: Optional[str] = None,
     ) -> bool:
         """Save a whale trade to database.
 
@@ -686,6 +687,7 @@ class WhaleTracker:
             profit_usd: Profit in USD
             market_title: Market question/title from Polymarket API
             source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
+            outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
 
         Returns:
             True if saved successfully
@@ -699,10 +701,10 @@ class WhaleTracker:
         try:
             query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, market_id, market_title, side, size_usd, price,
+                    whale_id, market_id, market_title, side, size_usd, price, outcome,
                     is_winner, profit_usd, traded_at, source
                 ) VALUES (
-                    :whale_id, :market_id, :market_title, :side, :size_usd, :price,
+                    :whale_id, :market_id, :market_title, :side, :size_usd, :price, :outcome,
                     :is_winner, :profit_usd, NOW(), :source
                 )
             """)
@@ -715,6 +717,7 @@ class WhaleTracker:
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
+                    "outcome": outcome,
                     "is_winner": is_winner,
                     "profit_usd": float(profit_usd) if profit_usd else None,
                     "source": source,

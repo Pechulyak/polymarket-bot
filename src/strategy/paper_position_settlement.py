@@ -14,12 +14,16 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import aiohttp
 import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
+# Import VirtualBankroll for integration
+if TYPE_CHECKING:
+    from src.strategy.virtual_bankroll import VirtualBankroll
 
 logger = structlog.get_logger(__name__)
 
@@ -94,23 +98,33 @@ class PaperPositionSettlementEngine:
 
     Attributes:
         database_url: PostgreSQL connection URL
+        virtual_bankroll: Optional VirtualBankroll instance for capital management
     """
 
-    def __init__(self, database_url: str) -> None:
+    def __init__(
+        self,
+        database_url: str,
+        virtual_bankroll: Optional["VirtualBankroll"] = None,
+    ) -> None:
         """Initialize settlement engine.
 
         Args:
             database_url: PostgreSQL connection URL
+            virtual_bankroll: Optional VirtualBankroll instance for capital management
         """
         self.database_url = database_url
         self._engine = create_engine(database_url)
         self._Session = sessionmaker(bind=self._engine)
+        self.virtual_bankroll = virtual_bankroll
 
         # Fee constants (Polymarket fees)
         self.trading_fee_rate = Decimal("0.02")  # 2% trading fee
         self.gas_cost = Decimal("1.50")  # Estimated gas cost
 
-        logger.info("paper_position_settlement_engine_initialized")
+        logger.info(
+            "paper_position_settlement_engine_initialized",
+            has_virtual_bankroll=virtual_bankroll is not None,
+        )
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session for API calls."""
@@ -292,6 +306,56 @@ class PaperPositionSettlementEngine:
         Returns:
             True if settlement successful, False otherwise
         """
+        # First, try to use VirtualBankroll if available
+        if self.virtual_bankroll is not None:
+            try:
+                # Check if there's an open position in VirtualBankroll
+                open_positions = self.virtual_bankroll.get_open_positions()
+                if market_id in open_positions:
+                    # Use VirtualBankroll to close position - this handles:
+                    # - Capital release (allocated -= entry_value, available += exit_value)
+                    # - Win/loss counters update
+                    # - Bankroll history
+                    logger.info(
+                        "settling_via_virtual_bankroll",
+                        trade_id=trade_id,
+                        market_id=market_id[:20],
+                    )
+                    # Call close_virtual_position - it handles all the logic
+                    # including capital release, PnL calculation, win/loss counters
+                    asyncio.get_event_loop().run_until_complete(
+                        self.virtual_bankroll.close_virtual_position(
+                            market_id=market_id,
+                            close_price=close_price,
+                            fees=commission,
+                            gas=gas_cost,
+                        )
+                    )
+                    logger.info(
+                        "position_settled_via_virtual_bankroll",
+                        trade_id=trade_id,
+                        market_id=market_id[:20],
+                        side=side,
+                        entry_price=str(entry_price),
+                        close_price=str(close_price),
+                    )
+                    return True
+            except ValueError as e:
+                # No open position in VirtualBankroll - fall through to direct DB update
+                logger.debug(
+                    "no_virtual_position_for_market",
+                    market_id=market_id[:20],
+                    error=str(e),
+                )
+            except Exception as e:
+                logger.error(
+                    "virtual_bankroll_settlement_error",
+                    trade_id=trade_id,
+                    error=str(e),
+                )
+                # Fall back to direct DB update
+
+        # Fallback: Direct database update (for legacy positions or errors)
         session = self._Session()
         try:
             # Calculate PnL
@@ -329,7 +393,7 @@ class PaperPositionSettlementEngine:
             session.commit()
 
             logger.info(
-                "position_settled",
+                "position_settled_direct_db",
                 trade_id=trade_id,
                 market_id=market_id[:20],
                 side=side,
@@ -471,16 +535,20 @@ class PaperPositionSettlementEngine:
         return result
 
 
-async def run_settlement_cycle(database_url: str) -> Dict[str, Any]:
+async def run_settlement_cycle(
+    database_url: str,
+    virtual_bankroll: Optional["VirtualBankroll"] = None,
+) -> Dict[str, Any]:
     """Run a single settlement cycle.
 
     Args:
         database_url: PostgreSQL connection URL
+        virtual_bankroll: Optional VirtualBankroll instance for capital management
 
     Returns:
         Settlement results dict
     """
-    engine = PaperPositionSettlementEngine(database_url)
+    engine = PaperPositionSettlementEngine(database_url, virtual_bankroll)
     try:
         return await engine.settle_resolved_paper_positions()
     finally:
@@ -488,20 +556,24 @@ async def run_settlement_cycle(database_url: str) -> Dict[str, Any]:
 
 
 async def run_settlement_loop(
-    database_url: str, interval_seconds: int = 600
+    database_url: str,
+    interval_seconds: int = 600,
+    virtual_bankroll: Optional["VirtualBankroll"] = None,
 ) -> None:
     """Run settlement engine in a loop.
 
     Args:
         database_url: PostgreSQL connection URL
         interval_seconds: Seconds between settlement checks (default: 600 = 10 min)
+        virtual_bankroll: Optional VirtualBankroll instance for capital management
     """
     logger.info(
         "settlement_loop_started",
         interval_seconds=interval_seconds,
+        has_virtual_bankroll=virtual_bankroll is not None,
     )
 
-    engine = PaperPositionSettlementEngine(database_url)
+    engine = PaperPositionSettlementEngine(database_url, virtual_bankroll)
 
     try:
         while True:

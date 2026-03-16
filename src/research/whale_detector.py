@@ -40,6 +40,36 @@ from src.research.whale_tracker import calculate_risk_score
 logger = structlog.get_logger(__name__)
 
 
+def convert_outcome_to_yes_no(outcome: Optional[str], outcome_index: Optional[int] = None) -> Optional[str]:
+    """Convert Polymarket API outcome to Yes/No format.
+    
+    Polymarket API can return:
+    - outcome: "Up"/"Down" or "Yes"/"No" 
+    - outcomeIndex: 0 (Yes/Up) or 1 (No/Down)
+    
+    This function normalizes to "Yes"/"No" for database storage.
+    
+    Args:
+        outcome: Raw outcome string from API (Up/Down or Yes/No)
+        outcome_index: Optional outcomeIndex (0 = Yes, 1 = No)
+    
+    Returns:
+        Normalized outcome: "Yes" or "No", or None if unknown
+    """
+    if outcome_index is not None:
+        return "Yes" if outcome_index == 0 else "No"
+    
+    if outcome:
+        outcome_lower = outcome.lower()
+        if outcome_lower in ("yes", "no"):
+            return outcome  # Already normalized
+        elif outcome_lower in ("up", "down"):
+            # Convert Up->Yes, Down->No
+            return "Yes" if outcome_lower == "up" else "No"
+    
+    return None
+
+
 @dataclass
 class TradeRecord:
     """Record of a single trade for whale detection.
@@ -864,6 +894,7 @@ class WhaleDetector:
         tx_hash: Optional[str] = None,
         market_title: Optional[str] = None,
         source: str = "BACKFILL",
+        outcome: Optional[str] = None,
     ) -> bool:
         """Save trade to whale_trades table.
 
@@ -880,6 +911,7 @@ class WhaleDetector:
             tx_hash: Transaction hash for deduplication
             market_title: Market question/title from Polymarket API
             source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
+            outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
 
         Returns:
             True if trade was saved, False if it was a duplicate.
@@ -908,7 +940,7 @@ class WhaleDetector:
             whale_id = None
             try:
                 query = text("""
-                    SELECT id FROM whales WHERE wallet_address = :address
+                    SELECT id FROM whales WHERE LOWER(wallet_address) = LOWER(:address)
                 """)
                 result = session.execute(query, {"address": trader_lower})
                 row = result.fetchone()
@@ -920,9 +952,9 @@ class WhaleDetector:
             # Insert trade with tx_hash for deduplication
             insert_query = text("""
                 INSERT INTO whale_trades (
-                    whale_id, wallet_address, market_id, market_title, side, size_usd, price, traded_at, tx_hash, source
+                    whale_id, wallet_address, market_id, market_title, side, size_usd, price, outcome, traded_at, tx_hash, source
                 ) VALUES (
-                    :whale_id, :wallet_address, :market_id, :market_title, :side, :size_usd, :price, :traded_at, :tx_hash, :source
+                    :whale_id, :wallet_address, :market_id, :market_title, :side, :size_usd, :price, :outcome, :traded_at, :tx_hash, :source
                 )
             """)
             session.execute(
@@ -935,6 +967,7 @@ class WhaleDetector:
                     "side": side,
                     "size_usd": float(size_usd),
                     "price": float(price),
+                    "outcome": outcome,
                     "traded_at": traded_at,
                     "tx_hash": tx_hash,
                     "source": source,
@@ -1117,6 +1150,9 @@ class WhaleDetector:
                     # Get market_id from condition_id
                     market_id = trade.condition_id or ""
                     
+                    # Convert outcome to Yes/No format using helper function
+                    normalized_outcome = convert_outcome_to_yes_no(trade.outcome)
+                    
                     # Save trade to database with tx_hash for deduplication
                     await self.save_trade_to_db(
                         trader=trade.trader,
@@ -1128,6 +1164,7 @@ class WhaleDetector:
                         tx_hash=trade.tx_hash,
                         market_title=trade.market_title,
                         source="BACKFILL",
+                        outcome=normalized_outcome,
                     )
                     saved_trades_count += 1
                 except Exception as e:

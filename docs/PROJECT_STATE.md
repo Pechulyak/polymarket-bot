@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-16 (TRD-410: Whale Trades Outcome Field)
-version: 1.2.3
+Обновлено: 2026-03-16 (TRD-409 + TRD-410: Settlement Fix + Docker Rebuild)
+version: 1.2.4
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -14,7 +14,7 @@ paper_pipeline_status: OK
 risk_module_status: OK
 last_architecture_check: 2026-03-01
 
-notes: Все сервисы запущены. Исправлена проблема с PostgreSQL auth (pg_hba.conf). Whale detection активен, получает WebSocket данные. Kelly Criterion реализован в copy_trading_engine.py. Risk модуль (KillSwitch, PositionLimits) доступен. ИСПРАВЛЕНО: повторные трейды китов (DETECTION_WINDOW_HOURS=72, убран continue для known whales).
+notes: Все сервисы запущены. Исправлена проблема с PostgreSQL auth (pg_hba.conf). Whale detection активен, получает WebSocket данные. Kelly Criterion реализован в copy_trading_engine.py. Risk модуль (KillSwitch, PositionLimits) доступен. ИСПРАВЛЕНО: повторные трейды китов (DETECTION_WINDOW_HOURS=72, убран continue для known whales). ИСПРАВЛЕНО: TRD-410 — outcome field (YES/NO) добавлен в whale_trades.
 
 ---
 
@@ -127,7 +127,7 @@ Docker контейнеры: OK (все healthy)
 builder_api_status: VERIFIED
 last_e2e_test: 2026-03-01
 e2e_test_result: PASS
-last_fix: 2026-03-16 (TRD-409: settlement integration with VirtualBankroll)
+last_fix: 2026-03-16 (TRD-409: settlement integration + TRD-410: outcome field)
 
 ---
 
@@ -1446,3 +1446,39 @@ status: closed
 - src/execution/copy_trading_engine.py
 
 ### Status: COMPLETED
+
+---
+
+## 34. WHALE TRADE OUTCOME ATTRIBUTION
+
+```markdown
+outcome_attribution_status: COMPLETED
+outcome_source_of_truth: Polymarket Data API (outcome field)
+market_id_semantics: conditionId (hex string)
+token_id_persisted: YES
+outcome_field_added: YES
+new_whale_trades_checked: 463
+new_trades_with_outcome: 463
+new_trades_with_null_outcome: 0
+legacy_null_outcome_records: 0 (backfilled)
+ambiguous_old_records_remaining: 0
+backfill_status: COMPLETED
+fix_date: 2026-03-16
+```
+
+### Fix Details (TRD-410)
+- **Problem:** The outcome field (YES/NO) was not being populated on INSERT to whale_trades
+- **Solution:**
+  - Added outcome to INSERT statements (whale_detector, whale_tracker, real_time_whale_monitor)
+  - Fixed virtual_bankroll._save_whale_trade_record()
+  - Backfilled 6725 old records with NULL outcome
+- **Verification (2026-03-16):**
+  - All 463 new trades today have outcome=YES/NO
+  - 0 old records with NULL outcome
+  - Backfill: COMPLETED
+
+### Files Modified
+- src/research/whale_detector.py (outcome field added to INSERT)
+- src/research/whale_tracker.py (outcome field added to INSERT)
+- src/research/real_time_whale_monitor.py (outcome field added to INSERT)
+- src/strategy/virtual_bankroll.py (outcome field in _save_whale_trade_record)

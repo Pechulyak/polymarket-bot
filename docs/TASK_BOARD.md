@@ -143,7 +143,7 @@ Goals:
 | TRD-405 | Verify Kelly sizing logic | TODO |
 | TRD-406 | Fix zero-size paper trades on open path | TODO |
 | TRD-407 | Investigate execution gap (paper_trades vs trades) | TODO |
-| TRD-409 | Fix settlement integration with VirtualBankroll | IN_PROGRESS |
+| TRD-409 | Fix settlement integration with VirtualBankroll | DONE |
 Description: Fix two bugs in paper settlement pipeline:
 - open trades created with close_price = open_price instead of NULL
 - settlement engine doesn't call VirtualBankroll to release capital
