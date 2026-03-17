@@ -156,6 +156,14 @@ Goals:
 - ensure win/loss counters are updated
 | TRD-410 | Add YES/NO outcome attribution for whale trades | DONE |
 Description: Add explicit YES/NO outcome attribution for whale trades and downstream pipeline.
+| TRD-411 | Audit whale exit handling and buy/sell event recording across pipeline | DONE |
+Description: Audit how whale position exit is represented in whale_trades and propagated through downstream pipeline.
+Goals:
+- verify whether whale buy and whale sell are stored as separate rows in whale_trades
+- verify that existing whale_trades rows are not overwritten on exit
+- find real examples where the same whale first buys and later sells the same market
+- verify how these events propagate into paper_trades and trades
+- verify whether whale exit is interpreted as close event, opposite signal, or ignored |
 
 ---
 

@@ -528,6 +528,35 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-17
+
+snapshot_date: 2026-03-17
+database: polymarket
+schema: public
+
+whales_rows: 6085
+whale_trades_rows: 7243
+paper_trades_rows: 509
+paper_trade_notifications_rows: 509
+trades_rows: 93
+bankroll_rows: 49
+
+whale_trades_last_24h: 687
+paper_trades_last_24h: 63
+notifications_last_24h: 64
+
+conversion_whale_to_paper_48h: 11.15%
+conversion_paper_to_notifications_48h: 101.15%
+
+stale_tables_24h:
+
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-16
 
 snapshot_date: 2026-03-16
@@ -1475,6 +1504,123 @@ status: closed
 - src/execution/copy_trading_engine.py
 
 ### Status: COMPLETED
+
+---
+
+## 35. WHALE EXIT HANDLING AUDIT (TRD-411)
+
+### Audit Date
+audit_date: 2026-03-17
+
+### Pipeline Architecture (Verified)
+
+| Component | Recording Mode | INSERT/UPDATE | Notes |
+|-----------|---------------|---------------|-------|
+| whale_trades | SEPARATE_ROWS | INSERT (no UPDATE) | Each trade creates new row |
+| paper_trades | TRIGGER_BASED | INSERT via trigger | Filter: top-50 + recent 24h |
+| trades | EXECUTION_BASED | INSERT/UPDATE | Only executed trades |
+
+### Database Stats
+
+| Metric | Value |
+|--------|-------|
+| whale_trades total | 7,452 |
+| whale_trades unique markets | 3,118 |
+| whale_trades unique whales | 4,426 |
+| paper_trades total | 521 |
+| trades (VIRTUAL) total | 33 |
+| whale_to_paper conversion | ~7% |
+| paper_to_trades conversion | ~6% |
+
+### Findings
+
+#### 1. BUY/SELL Recording (✅ VERIFIED)
+- **Status:** BUY and SELL stored as SEPARATE ROWS
+- **Verification:** Found 10+ real examples of whale round-trips (same whale, same market, buy then sell)
+- **No overwrite detected:** Each trade creates new INSERT, no UPDATE path exists
+
+#### 2. Trigger Filter Issue (⚠️ ISSUE FOUND)
+- **Trigger:** `trigger_copy_whale_trade` filters by top-50 + recent 24h
+- **Problem:** Not all whale trades reach paper_trades
+- **Evidence:** Fresh round-trips (last 24h) did NOT appear in paper_trades
+- **Impact:** We may miss whale entry signals
+
+#### 3. Exit Signal Interpretation (❌ NOT IMPLEMENTED)
+- **Status:** WHALE EXIT IS NOT INTERPRETED AS CLOSE
+- **Evidence:** All closed trades in `trades` table have close_price=1.0 (settlement), not whale exit
+- **Root Cause:** 
+  - `_handle_whale_exit()` exists in copy_trading_engine.py but NOT integrated with WebSocket pipeline
+  - Real-time monitor (`real_time_whale_monitor.py`) saves to whale_trades but does NOT call close logic
+  - Settlement engine only closes on market resolution, not whale exit
+
+#### 4. Position Key Risk (⚠️ ARCHITECTURAL ISSUE)
+- **Status:** YES - market_id only key
+- **Evidence:**
+  - `copy_trading_engine.py:160`: `positions[market_id]` - only market_id
+  - `virtual_bankroll.py:179`: `_open_positions[market_id]` - only market_id
+- **Risk:** 
+  - Multiple entries from different whales in same market: overwrites
+  - Flip (No → Yes): overwrites without proper close
+  - Partial close: not supported (all or nothing)
+
+#### 5. Side Overwrite Detection (❌ NOT DETECTED)
+- **Status:** N/A - separate rows used
+- **Verification:** Confirmed via SQL query - buy and sell create separate rows
+
+### Real Round-Trip Examples Found
+
+| # | Whale Address | Market | Buy→Sell | Time Diff |
+|---|---------------|--------|----------|-----------|
+| 1 | 0x00d5f82b... | 0x32fe01... | No→No (partial) | 36 min |
+| 2 | 0x017024dc... | 0x5cd80b8... | No→Yes (flip!) | 14h |
+| 3 | 0x08f059c7... | 0xc530075... | No→Yes (flip!) | 22h |
+| 4 | 0x22c3f19a... | 0xb189090... | Yes→No (flip!) | 10 min |
+| 5 | 0x29cf1696... | 0x3bc69cb... | No→No (partial) | 1.5h |
+
+**Key Observation:** Flip (No↔Yes) represents position reversal, not close!
+
+### Downstream Pipeline Chain
+
+```
+whale_trades (buy)  →  [BLOCKED: not top-50]  →  NOT IN paper_trades
+whale_trades (sell) →  [BLOCKED: not top-50]  →  NOT IN paper_trades
+                          OR
+                        [INSERTED if top-50]  →  paper_trades
+                                                      ↓
+                                                [NOT EXECUTED] →  trades (empty)
+                                                                 
+OR (settlement only):
+whale_trades → paper_trades → trades (open) → trades (closed: close_price=1.0)
+```
+
+### Summary
+
+| Aspect | Status | Notes |
+|--------|--------|-------|
+| whale_buy_sell_recording_mode | SEPARATE_ROWS | ✅ Verified |
+| side_overwrite_detected | NO | Each trade = new row |
+| exit_signal_interpretation | NOT_IMPLEMENTED | Close only on settlement |
+| paper_close_path_verified | NO | Whale exit not connected |
+| market_id_position_key_risk | YES | Overwrites on flip/multiple entries |
+| partial_close_support | NO | All or nothing |
+| fix_needed | YES | See recommendations |
+
+### Recommendations
+
+1. **High Priority:** Connect whale exit detection to close pipeline
+   - Integrate `_handle_whale_exit()` with real_time_whale_monitor
+   - Or add separate trigger for sell-side whale trades
+
+2. **Medium Priority:** Fix position key to include outcome
+   - Change `positions[market_id]` → `positions[(market_id, outcome)]`
+   - Or add `outcome` field to CopyPosition
+
+3. **Low Priority:** Add partial close support
+   - Track cumulative size vs close size
+   - Allow multiple partial closes
+
+### Fix Needed
+fix_needed: YES
 
 ---
 
