@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-16 (TRD-409 + TRD-410: Settlement Fix + Docker Rebuild)
-version: 1.2.4
+Обновлено: 2026-03-17 (SYS-326: Whale Observation Mode + Suspension of Execution Layers)
+version: 1.2.5
 Фаза: Неделя 1 (Подготовка)
 
 ---
@@ -1657,3 +1657,53 @@ fix_date: 2026-03-16
 - src/research/whale_tracker.py (outcome field added to INSERT)
 - src/research/real_time_whale_monitor.py (outcome field added to INSERT)
 - src/strategy/virtual_bankroll.py (outcome field in _save_whale_trade_record)
+
+---
+
+## 36. WHALE OBSERVATION MODE (SYS-326)
+
+### Overview
+observation_mode_status: COMPLETED
+observation_mode_reason: Temporarily suspended execution layers to switch project into Whale Observation Mode for pipeline verification
+
+### Active Components (Running)
+whales_active: YES
+whale_trades_active: YES
+paper_trades_active: YES
+
+### Suspended Components
+trades_suspended: YES
+bankroll_suspended: YES
+settlement_suspended: YES
+paper_trade_notifications_suspended: YES
+telegram_notifications_suspended: YES
+
+### Dependency Analysis
+dependency_on_trades_found: NO
+dependency_summary: |
+  Paper_trades generation (whale_trades → SQL trigger → paper_trades) is completely
+  independent of downstream components (trades, bankroll, notifications).
+  No dependencies found - safe to suspend execution layers.
+
+### Implementation Details
+observation_mode_enabled_via: OBSERVATION_MODE environment variable
+trigger_dropped: trigger_notify_paper_trade (reversible via scripts/enable_notifications.sql)
+
+### Verification Results (2026-03-17)
+new_whale_trades_checked: 31 (last 1h)
+new_paper_trades_checked: 4 (last 1h)
+new_trades_created_after_suspend: 0 (after 18:49)
+new_notifications_after_suspend: 0 (after 18:49)
+
+### Files Modified
+- src/main.py (added observation mode support with --observation-mode flag and OBSERVATION_MODE env var)
+- docker-compose.yml (added OBSERVATION_MODE=true for bot service)
+- scripts/disable_notifications.sql (SQL to drop notification trigger)
+- scripts/enable_notifications.sql (SQL to re-enable notification trigger)
+
+### How to Resume Normal Mode
+1. Remove OBSERVATION_MODE=true from docker-compose.yml
+2. Run: docker compose up -d bot
+3. Re-enable notification trigger: docker exec polymarket_postgres psql -U postgres -d polymarket -f /docker-entrypoint-initdb.d/enable_notifications.sql
+
+fix_date: 2026-03-17

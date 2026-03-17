@@ -88,6 +88,27 @@
 | SYS-322 | Security Hardening: No Public Ports Policy | DONE |
 | SYS-323 | Security Hardening: Firewall Configuration | DONE |
 | SYS-324 | Security Hardening: Port Exposure Scan | DONE |
+| SYS-326 | Safely suspend execution/downstream layers after paper_trades | DONE |
+Description: Temporarily suspend runtime layers after paper_trades to switch project into Whale Observation Mode.
+
+Active layers must remain:
+- whales
+- whale_trades
+- paper_trades
+
+Suspended layers:
+- trades
+- bankroll
+- settlement
+- paper_trade_notifications
+- Telegram notifications
+- other downstream side effects after paper_trades
+
+Goals:
+- stop unreliable execution and accounting layers
+- preserve core whale observation pipeline
+- verify that whales / whale_trades / paper_trades continue working normally
+- if any suspended component is actually required for paper_trades generation, analyze first and do not break pipeline blindly |
 
 ---
 

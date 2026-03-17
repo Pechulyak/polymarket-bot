@@ -902,6 +902,86 @@ class VirtualBankroll:
             ),
         }
 
+    async def load_open_positions_from_db(self) -> int:
+        """Load open positions from database into memory.
+
+        Used for recovery after bot restart - loads all positions with
+        status='open' from trades table.
+
+        Returns:
+            Number of positions loaded
+        """
+        await self._ensure_database()
+
+        if not self._Session:
+            logger.warning("load_open_positions_no_session")
+            return 0
+
+        session = self._Session()
+        try:
+            query = text("""
+                SELECT
+                    t.trade_id,
+                    t.market_id,
+                    t.side,
+                    t.size,
+                    t.open_price as entry_price,
+                    t.executed_at,
+                    t.commission,
+                    t.gas_cost_eth,
+                    t.whale_source
+                FROM trades t
+                WHERE t.exchange = 'VIRTUAL'
+                  AND t.status = 'open'
+            """)
+            result = session.execute(query)
+            loaded = 0
+            for row in result:
+                market_id = str(row[1])
+                # Skip if already in memory
+                if market_id in self._open_positions:
+                    continue
+                position = VirtualPosition(
+                    trade_id=str(row[0]),
+                    market_id=market_id,
+                    side=str(row[2]),
+                    size=Decimal(str(row[3])),
+                    entry_price=Decimal(str(row[4])),
+                    commission=Decimal(str(row[6])) if row[6] else Decimal("0"),
+                    gas_cost=Decimal(str(row[7])) if row[7] else Decimal("0"),
+                    opened_at=row[5],
+                    strategy="copy_whale",  # Default strategy for loaded positions
+                    whale_source=str(row[8]) if row[8] else "",
+                )
+                self._open_positions[market_id] = position
+                # Track allocated capital (entry cost)
+                entry_cost = position.size * position.entry_price
+                self.allocated += entry_cost
+                self.available -= entry_cost
+                loaded += 1
+
+            logger.info(
+                "open_positions_loaded_from_db",
+                count=loaded,
+                allocated=str(self.allocated),
+                available=str(self.available),
+            )
+            
+            # Save bankroll state after loading positions
+            if loaded > 0:
+                await self._save_bankroll_history(
+                    balance=self.balance,
+                    trade_id=None,
+                    action="load_positions_from_db"
+                )
+            
+            return loaded
+        except Exception as e:
+            logger.error("load_open_positions_error", error=str(e))
+            return 0
+        finally:
+            session.close()
+
     async def reset(self, new_balance: Optional[Decimal] = None) -> None:
         """Reset bankroll to initial state.
 
