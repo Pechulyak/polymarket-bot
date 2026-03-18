@@ -69,12 +69,13 @@ BEGIN
             v_kelly_size := v_max_position;
         END IF;
 
-        -- Insert into paper_trades with market_title and source
+        -- Insert into paper_trades with market_title, source and outcome
         INSERT INTO paper_trades (
             whale_address,
             market_id,
             market_title,
             side,
+            outcome,
             price,
             size,
             size_usd,
@@ -87,6 +88,7 @@ BEGIN
             NEW.market_id,
             NEW.market_title,
             NEW.side,
+            NEW.outcome,
             NEW.price,
             NEW.size_usd / NULLIF(NEW.price, 0),
             NEW.size_usd,

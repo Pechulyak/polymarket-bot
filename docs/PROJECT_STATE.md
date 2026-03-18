@@ -528,6 +528,35 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-18
+
+snapshot_date: 2026-03-18
+database: polymarket
+schema: public
+
+whales_rows: 6369
+whale_trades_rows: 7982
+paper_trades_rows: 574
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 739
+paper_trades_last_24h: 65
+notifications_last_24h: 19
+
+conversion_whale_to_paper_48h: 8.98%
+conversion_paper_to_notifications_48h: 64.84%
+
+stale_tables_24h:
+
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-17
 
 snapshot_date: 2026-03-17
@@ -1705,5 +1734,68 @@ new_notifications_after_suspend: 0 (after 18:49)
 1. Remove OBSERVATION_MODE=true from docker-compose.yml
 2. Run: docker compose up -d bot
 3. Re-enable notification trigger: docker exec polymarket_postgres psql -U postgres -d polymarket -f /docker-entrypoint-initdb.d/enable_notifications.sql
+
+fix_date: 2026-03-17
+
+---
+
+## 37. WHALE ROUNDTRIP RECONSTRUCTION (TRD-412)
+
+### Overview
+whale_roundtrip_table_status: COMPLETED
+roundtrip_table_name: whale_trade_roundtrips
+source_table: whale_trades
+position_reconstruction_status: ACTIVE
+
+### Existing Algorithms Reused
+- P&L calculation: Reused from virtual_bankroll.py (gross_pnl = exit_value - entry_value)
+- Position matching logic: Implemented new (whale_trades is event log, needs aggregation)
+
+### New Algorithms Added
+- position_key generation: SHA256 hash of wallet_address + market_id + outcome + open_trade_id
+- close_type detection: SELL, SETTLEMENT_WIN, SETTLEMENT_LOSS, FLIP, PARTIAL, UNKNOWN
+- matching_method: DIRECT_SELL, SETTLEMENT, FLIP, PARTIAL, MANUAL_REVIEW
+- matching_confidence: HIGH, MEDIUM, LOW
+
+### Market Category
+market_category_source: NOT_AVAILABLE
+notes: |
+  Polymarket Data API does not provide groupItemTitle/category field.
+  Will implement fallback using market_title keywords if needed.
+
+### Historical Backfill Status
+historical_backfill_status: COMPLETED
+backfill_date: 2026-03-17
+
+### Roundtrip Statistics
+roundtrips_total: 5333
+roundtrips_open: 5276
+roundtrips_closed: 19
+roundtrips_partial: 38
+roundtrips_flipped: 0
+roundtrips_unresolved: 0
+
+### P&L Status Distribution
+pnl_confirmed_rows: 57 (CLOSED + PARTIAL with full data)
+pnl_estimated_rows: 0
+pnl_unavailable_rows: 5276 (OPEN positions)
+
+### Verification Examples
+1. CLOSED (buy→sell): market_id=0x7054..., outcome=Yes, open_price=0.476, close_price=0.999, gross_pnl=$2199.56, status=CONFIRMED
+2. PARTIAL: market_id=0x3bc6..., outcome=No, open=$1521, close=$1520, gross_pnl=-$3.04, status=CONFIRMED
+3. OPEN: market_id=0x47bf..., outcome=Yes, open=$15229, no close yet, pnl_status=UNAVAILABLE
+
+### Files Created
+- scripts/migration_whale_trade_roundtrips.sql (DDL for whale_trade_roundtrips table)
+- src/strategy/whale_roundtrip_reconstructor.py (reconstruction logic module)
+
+### Notes
+whale_analytics_readiness: |
+  Whale position reconstruction layer is now active.
+  - 5333 positions reconstructed from 7554 whale_trades events
+  - 19 fully closed positions with CONFIRMED P&L
+  - 38 partial closes with CONFIRMED P&L
+  - 5276 open positions awaiting close events
+  - Reconstruction is independent from paper_trades/trades pipeline
 
 fix_date: 2026-03-17

@@ -185,6 +185,16 @@ Goals:
 - find real examples where the same whale first buys and later sells the same market
 - verify how these events propagate into paper_trades and trades
 - verify whether whale exit is interpreted as close event, opposite signal, or ignored |
+| TRD-412 | Create whale_trade_roundtrips table and implement whale position reconstruction logic | TODO |
+Description: Introduce a new analytical layer that reconstructs whale positions (round-trips) from the event-level table `whale_trades`.
+Goals:
+- Create new table `whale_trade_roundtrips` - Store reconstructed whale positions (not individual trades)
+- Implement position reconstruction logic - Build positions from whale_trades, detect open/close/flip/partial close
+- Implement PnL calculation at position level - Calculate gross and net PnL only when close is reliably determined
+- Reuse existing logic where possible - Check if algorithm already exists before implementing
+- Add market context - Include market_title and market_category
+- Perform historical backfill - Reconstruct positions for existing whale_trades
+- Ensure analytical correctness - Do not depend on paper_trades or trades |
 
 ---
 

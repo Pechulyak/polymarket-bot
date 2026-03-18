@@ -392,6 +392,56 @@ class PaperPositionSettlementEngine:
             )
             session.commit()
 
+            # Update bankroll if VirtualBankroll is available
+            if self.virtual_bankroll is not None:
+                try:
+                    # Get current bankroll stats from DB and update
+                    entry_value = size * entry_price
+                    exit_value = size * close_price
+
+                    # Release allocated capital
+                    self.virtual_bankroll.allocated -= entry_value
+                    self.virtual_bankroll.available += exit_value
+
+                    # Update balance with PnL
+                    self.virtual_bankroll.balance += net_pnl
+
+                    # Update win/loss counters
+                    if net_pnl > 0:
+                        self.virtual_bankroll._winning_trades += 1
+                        self.virtual_bankroll._consecutive_losses = 0
+                    else:
+                        self.virtual_bankroll._losing_trades += 1
+                        self.virtual_bankroll._consecutive_losses += 1
+                        self.virtual_bankroll._max_consecutive_losses = max(
+                            self.virtual_bankroll._max_consecutive_losses,
+                            self.virtual_bankroll._consecutive_losses
+                        )
+
+                    self.virtual_bankroll._total_pnl += net_pnl
+                    self.virtual_bankroll._total_trades += 1
+
+                    # Save bankroll history
+                    asyncio.get_event_loop().run_until_complete(
+                        self.virtual_bankroll._save_bankroll_history(
+                            balance=self.virtual_bankroll.balance,
+                            trade_id=trade_id,
+                            action="settlement_fallback"
+                        )
+                    )
+                    logger.info(
+                        "bankroll_updated_from_fallback",
+                        trade_id=trade_id,
+                        net_pnl=str(net_pnl),
+                        new_balance=str(self.virtual_bankroll.balance),
+                    )
+                except Exception as e:
+                    logger.error(
+                        "bankroll_fallback_update_error",
+                        trade_id=trade_id,
+                        error=str(e),
+                    )
+
             logger.info(
                 "position_settled_direct_db",
                 trade_id=trade_id,

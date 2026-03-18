@@ -1,6 +1,84 @@
 # Errors Log — что пошло не так и как решили
 
 ## Формат записи
+
+---
+
+### [2026-03-17] TRD-412: Ошибка подключения к БД при выполнении reconstruction
+
+- **Симптом:** При запуске backfill скрипт подключался к SQLite (`:memory:`) вместо PostgreSQL
+- **Причина:** `settings.database_url` возвращал `sqlite:///:memory:`, не читая из `.env`
+- **Решение:** Передавал database_url напрямую в класс:
+  ```python
+  reconstructor = WhaleRoundtripReconstructor(database_url='postgresql://postgres:Artem15@localhost:5433/polymarket')
+  ```
+- **Правило:** При использовании SQLAlchemy напрямую - всегда передавать полный database_url, не полагаться на settings
+
+---
+
+### [2026-03-17] TRD-412: NotNullViolation для whale_id/wallet_address
+
+- **Симптом:** При сохранении roundtrips возникала ошибка "null value in column 'wallet_address' violates not-null constraint"
+- **Причина:** 781 записей в whale_trades не имеют关联 к whales (whale_id = NULL)
+- **Решение:** 
+  1. Обновил SQL схему: `ALTER TABLE whale_trade_roundtrips ALTER COLUMN whale_id/wallet_address DROP NOT NULL`
+  2. Обновил scripts/migration_whale_trade_roundtrips.sql
+- **Проверка:** Backfill успешно завершён - 5333 roundtrips создано
+- **Правило:** Для таблиц, связанных с внешними данными (whale_trades) - учитывать orphaned records
+
+---
+
+### [2026-03-18] TRD-412: Settlement detection not working
+
+- **Симптом:** 0 из 100 рынков определены как settled, хотя многие рынки должны быть закрыты
+- **Причина:** Polymarket Gamma API возвращает 422 Unprocessable Entity для старых рынков. Возможно:
+  1. Рынки удалены из API после завершения
+  2. API endpoint изменился
+  3. Формат market_id неправильный
+- **Решение:** 
+  1. Settlement detection приостановлен до выяснения причины
+  2. Позиции остаются OPEN если нет явного SELL события
+  3. CLOSED/PARTIAL создаются только при наличии SELL в whale_trades
+- **Правило:** Использовать paper_trades settlement engine для проверки рабочего resolution API
+
+### [2026-03-18] TRD-412: Settlement detection not implemented
+
+- **Симптом:** 5276 позиций имеют status=OPEN, хотя рынки уже завершились (settlement)
+- **Причина:** Алгоритм reconstruction не проверяет Polymarket API для определения resolution рынков
+- **Решение:** Нужно добавить:
+  1. Settlement detection через Polymarket Gamma API (как в paper_position_settlement.py)
+  2. Для OPEN позиций на закрытых рынках - проставить SETTLEMENT_WIN/SETTLEMENT_LOSS
+  3. P&L рассчитывается по settlement price
+- **Правило:** Использовать paper_position_settlement.py get_market_resolution() для определения settlement
+
+---
+
+### [2026-03-18] TRD-412: No incremental updates
+
+- **Симптом:** Данные не обновляются после 2026-03-17 19:17 - новые whale_trades не добавляются в roundtrips
+- **Причина:** Reconstruction запускается один раз как backfill, нет механизма инкрементного обновления
+- **Решение:** Нужно добавить:
+  1. Проверку новых whale_trades при каждом запуске
+  2. Создание roundtrip для новых buy events
+  3. Обновление close для новых sell events
+- **Правило:** При деплое добавить вызов reconstruction в scheduled job
+
+---
+
+### [2026-03-18] TRD-412: Null fields in whale_trade_roundtrips
+
+- **Симптом:** many fields are null (market_category, whale_id, wallet_address)
+- **Причина:** 
+  - whale_id/wallet_address - orphaned trades without whale record
+  - market_category - Polymarket API doesn't provide this field
+- **Решение:** 
+  - whale_id/wallet_address - уже исправлено (nullable columns)
+  - market_category - оставить nullable, fallback to market_title keywords if needed
+- **Правило:** Документировать что market_category недоступен из API
+
+---
+
+## Формат записи
 ### [ДАТА] Короткое название ошибки
 - **Симптом:** что наблюдалось
 - **Причина:** почему произошло
