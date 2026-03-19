@@ -40,24 +40,42 @@ from src.research.whale_tracker import calculate_risk_score
 logger = structlog.get_logger(__name__)
 
 
-def convert_outcome_to_yes_no(outcome: Optional[str], outcome_index: Optional[int] = None) -> Optional[str]:
-    """Convert Polymarket API outcome to Yes/No format.
+def normalize_outcome(
+    outcome: Optional[str], 
+    outcome_index: Optional[int] = None,
+    market_type: Optional[str] = None
+) -> Optional[str]:
+    """Normalize Polymarket API outcome to standard format.
     
     Polymarket API can return:
-    - outcome: "Up"/"Down" or "Yes"/"No" 
-    - outcomeIndex: 0 (Yes/Up) or 1 (No/Down)
+    - Binary: "Yes"/"No" 
+    - Up/Down: "Up"/"Down"
+    - Over/Under: "Over"/"Under"
+    - Team vs Team: team names (e.g., "BNK FEARX", "Team Secret Whales")
+    - outcomeIndex: 0 (Yes/Up/Over/First) or 1 (No/Down/Under/Second)
     
-    This function normalizes to "Yes"/"No" for database storage.
+    Mapping based on market_type:
+    - "binary": Yes/No -> Yes/No
+    - "up_down": Up/Down -> Yes/No (Up=Yes, Down=No)
+    - "over_under": Over/Under -> Yes/No (Over=Yes, Under=No)
+    - "team": outcomeIndex 0 -> "Team1", 1 -> "Team2"
+    - None (auto-detect): Try to detect from outcome string
     
     Args:
-        outcome: Raw outcome string from API (Up/Down or Yes/No)
-        outcome_index: Optional outcomeIndex (0 = Yes, 1 = No)
+        outcome: Raw outcome string from API
+        outcome_index: Optional outcomeIndex (0 = first, 1 = second)
+        market_type: Optional hint about market type ("binary", "up_down", "over_under", "team")
     
     Returns:
-        Normalized outcome: "Yes" or "No", or None if unknown
+        Normalized outcome: "Yes", "No", "Team1", "Team2", or original
     """
+    # Use outcome_index if provided (most reliable)
     if outcome_index is not None:
-        return "Yes" if outcome_index == 0 else "No"
+        if market_type == "team":
+            return "Team1" if outcome_index == 0 else "Team2"
+        else:
+            # Default: 0 = Yes, 1 = No
+            return "Yes" if outcome_index == 0 else "No"
     
     if outcome:
         outcome_lower = outcome.lower()
@@ -66,8 +84,19 @@ def convert_outcome_to_yes_no(outcome: Optional[str], outcome_index: Optional[in
         elif outcome_lower in ("up", "down"):
             # Convert Up->Yes, Down->No
             return "Yes" if outcome_lower == "up" else "No"
+        elif outcome_lower in ("over", "under"):
+            # Convert Over->Yes, Under->No (for O/U markets)
+            return "Yes" if outcome_lower == "over" else "No"
+        else:
+            # For unknown outcomes (team names, etc.), return as-is
+            # Caller should pass market_type="team" for proper Team1/Team2 mapping
+            return outcome
     
     return None
+
+
+# Keep backward compatibility alias
+convert_outcome_to_yes_no = normalize_outcome
 
 
 @dataclass
