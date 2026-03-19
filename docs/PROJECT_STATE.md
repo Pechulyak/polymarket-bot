@@ -528,6 +528,37 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-19
+
+snapshot_date: 2026-03-19
+database: polymarket
+schema: public
+
+whales_rows: 6716
+whale_trades_rows: 8769
+paper_trades_rows: 622
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 787
+paper_trades_last_24h: 48
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 7.4%
+conversion_paper_to_notifications_48h: 16.81%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-18
 
 snapshot_date: 2026-03-18
@@ -1799,3 +1830,77 @@ whale_analytics_readiness: |
   - Reconstruction is independent from paper_trades/trades pipeline
 
 fix_date: 2026-03-17
+
+---
+
+## 38. CRITICAL: Whale Trade Ingestion Gap (TRD-413)
+
+### Issue Date
+issue_date: 2026-03-18
+
+### Critical Problem
+**Whale trades are NOT being fully ingested from Polymarket Data API.**
+
+### Investigation Results
+
+#### API Returns 157 Trades
+```bash
+API call: fetch_trader_trades(address=0x99c63f3c137a01ace52a544539094adee24fc33b)
+Result: 157 trades returned
+```
+
+#### Database Has Only 2 Trades
+```sql
+SELECT COUNT(*) FROM whale_trades WHERE wallet_address = '0x99c63f3c...';
+-- Result: 2 trades
+```
+
+### Root Cause Analysis
+
+The whale_detector.py uses `fetch_recent_trades()` which:
+1. Returns only the most recent 500 trades globally
+2. Filters by min_size_usd (default $1000)
+3. Does NOT fetch all trades for specific whale addresses
+
+The function `fetch_trader_trades()` EXISTS in polymarket_data_client.py but is NOT USED in the whale detection pipeline.
+
+### Impact
+- Whale positions are incomplete (missing 155 out of 157 trades for this whale)
+- Analytics based on whale_trade_roundtrips is inaccurate
+- Cannot properly evaluate whale performance
+
+### Example
+Whale: 0x99c63f3c137a01ace52a544539094adee24fc33b
+- API: 157 trades on March 18
+- DB: 2 trades in whale_trades
+- **Gap: 155 missing trades (98.7%)**
+
+### Recommended Fix
+1. Modify whale_detector.py to use `fetch_trader_trades()` for known whales
+2. OR add a backfill job to fetch historical trades for all whales
+3. Consider adding pagination to handle large trade histories
+
+### Status
+issue_status: DOCUMENTED
+priority: CRITICAL
+fix_required: YES
+
+fix_date: 2026-03-18
+
+---
+
+## 39. WHALE_TRADES INGESTION COMPLETENESS AUDIT
+
+- whale_trades_ingestion_audit_status: COMPLETED
+- audit_scope: whale_trades only
+- tracked_whales_checked: 4
+- api_vs_db_examples_checked: 4
+- max_missing_pct_found: 99.3%
+- critical_data_loss_detected: YES
+- root_cause_summary: Global 500-trade window limit in whale_detector.py + no per-wallet backfill mechanism
+- global_feed_limit_issue: YES
+- per_wallet_fetch_missing: YES  
+- pagination_missing: YES (API supports it but not used)
+- min_size_filter_impact: YES ($1000 filter additional to 500 limit)
+- fix_required: YES
+- audit_date: 2026-03-19

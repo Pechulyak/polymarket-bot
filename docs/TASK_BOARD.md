@@ -195,6 +195,19 @@ Goals:
 - Add market context - Include market_title and market_category
 - Perform historical backfill - Reconstruct positions for existing whale_trades
 - Ensure analytical correctness - Do not depend on paper_trades or trades |
+| TRD-413 | Audit whale_trades ingestion completeness for tracked whales | TODO |
+Description: Провести аудит полноты записи сделок китов в таблицу whale_trades.
+
+Ключевая проблема: для некоторых китов в whale_trades сохраняется менее 1% фактических сделок из API.
+
+Пример:
+- wallet_address = 0x99c63f3c137a01ace52a544539094adee24fc33b
+- По API: 268 сделок
+- В БД: 2 записи (99.3% потерь)
+
+Root cause: global 500-trade window limit + отсутствие per-wallet backfill
+
+Статус: АУДИТ ЗАВЕРШЁН - ожидает Review |
 
 ---
 
