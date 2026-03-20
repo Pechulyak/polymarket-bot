@@ -2002,3 +2002,19 @@ fix_date: 2026-03-18
 
 ### Note
 All whale_trades in database referenced whales with status != 'qualified'. After cleanup, whale_trades table is empty because qualified whales had no trade records in the database.
+
+---
+
+## 44. WHALES SCHEMA REDESIGN
+
+- whales_schema_redesign_status: COMPLETED
+- schema_version: v2_activity_based_clean
+- legacy_fields_removed: NO (staged migration - fields retained for code compatibility)
+- legacy_fields_retained_temporarily: status, qualification_path, days_active, win_rate, total_profit_usd, is_active
+- constraints_added: YES (qualification_status CHECK, tier CHECK, trades_* CHECK, risk_score CHECK)
+- comments_added: YES (all new columns have SQL comments)
+- indexes_added: YES (qualification_status, tier, last_active_at, last_seen_in_feed, last_targeted_fetch_at)
+- rows_in_whales_after_migration: 38
+- migration_date: 2026-03-20
+- migration_type: STAGED (new columns added, legacy preserved for code compatibility)
+- next_step: Update code (whale_detector.py, whale_tracker.py) to use new field names, then drop legacy columns
