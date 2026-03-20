@@ -92,30 +92,43 @@ ALTER TABLE whales ADD CONSTRAINT whales_risk_score_check
     CHECK (risk_score >= 1 AND risk_score <= 10 OR risk_score IS NULL);
 
 -- ============================================================
--- PHASE 4: Add Comments
+-- PHASE 4: Add Comments (for DBeaver display)
 -- ============================================================
 
-COMMENT ON COLUMN whales.wallet_address IS 'Адрес кошелька кита, основной уникальный идентификатор записи';
-COMMENT ON COLUMN whales.source_new IS 'Источник обнаружения адреса: discovery, backfill, manual и т.п.';
-COMMENT ON COLUMN whales.notes IS 'Служебные заметки по адресу, для ручных комментариев и аудита';
-COMMENT ON COLUMN whales.qualification_status IS 'Текущий статус адреса в системе: discovered / candidate / tracked / qualified / cold';
-COMMENT ON COLUMN whales.tier IS 'Частота наблюдения за адресом: HOT / WARM / COLD';
+-- Legacy columns
+COMMENT ON COLUMN whales.id IS 'Уникальный идентификатор записи';
+COMMENT ON COLUMN whales.wallet_address IS 'Адрес кошелька кита (уникальный идентификатор)';
+COMMENT ON COLUMN whales.first_seen_at IS 'Время первого обнаружения адреса (legacy)';
+COMMENT ON COLUMN whales.total_trades IS 'Общее количество сделок (legacy - использовать trades_count)';
+COMMENT ON COLUMN whales.win_rate IS 'Процент выигрышных сделок (legacy)';
+COMMENT ON COLUMN whales.total_profit_usd IS 'Общая прибыль в USD (legacy)';
+COMMENT ON COLUMN whales.avg_trade_size_usd IS 'Средний размер сделки в USD';
+COMMENT ON COLUMN whales.last_active_at IS 'Время последней активности';
+COMMENT ON COLUMN whales.is_active IS 'Признак активности (legacy)';
+COMMENT ON COLUMN whales.risk_score IS 'Оценка риска (1-10)';
+COMMENT ON COLUMN whales.source IS 'Источник обнаружения (legacy)';
+COMMENT ON COLUMN whales.notes IS 'Заметки по адресу';
+COMMENT ON COLUMN whales.created_at IS 'Время создания записи';
+COMMENT ON COLUMN whales.updated_at IS 'Время последнего обновления записи';
+COMMENT ON COLUMN whales.total_volume_usd IS 'Общий объём торгов в USD';
+COMMENT ON COLUMN whales.status IS 'Статус (legacy - использовать qualification_status)';
+COMMENT ON COLUMN whales.trades_last_3_days IS 'Количество сделок за последние 3 дня';
+COMMENT ON COLUMN whales.days_active IS 'Количество активных дней (legacy - использовать days_active_7d/30d)';
+COMMENT ON COLUMN whales.qualification_path IS 'Путь квалификации (legacy)';
+COMMENT ON COLUMN whales.trades_last_7_days IS 'Количество сделок за последние 7 дней';
+
+-- New activity-based columns
+COMMENT ON COLUMN whales.qualification_status IS 'Статус квалификации: discovered/candidate/tracked/qualified/cold';
+COMMENT ON COLUMN whales.source_new IS 'Источник обнаружения: discovery/backfill/manual';
+COMMENT ON COLUMN whales.tier IS 'Уровень наблюдения: HOT/WARM/COLD';
 COMMENT ON COLUMN whales.first_discovered_at IS 'Время первого обнаружения адреса системой';
 COMMENT ON COLUMN whales.last_seen_in_feed IS 'Последний момент, когда адрес был замечен в discovery feed';
-COMMENT ON COLUMN whales.last_targeted_fetch_at IS 'Время последнего целевого запроса API по этому адресу';
+COMMENT ON COLUMN whales.last_targeted_fetch_at IS 'Время последнего целевого запроса API по адресу';
+COMMENT ON COLUMN whales.trades_count IS 'Общее количество сделок адреса в истории';
+COMMENT ON COLUMN whales.days_active_7d IS 'Количество уникальных дней торгов за последние 7 дней';
+COMMENT ON COLUMN whales.days_active_30d IS 'Количество уникальных дней торгов за последние 30 дней';
+COMMENT ON COLUMN whales.trades_per_day IS 'Среднее число сделок в день';
 COMMENT ON COLUMN whales.last_qualified_at IS 'Время последнего подтверждения статуса qualified';
-COMMENT ON COLUMN whales.trades_count IS 'Общее количество сделок адреса в загруженной истории';
-COMMENT ON COLUMN whales.total_volume_usd IS 'Общий объём сделок адреса в долларах, сумма размеров всех сделок';
-COMMENT ON COLUMN whales.avg_trade_size_usd IS 'Средний размер сделки адреса в долларах';
-COMMENT ON COLUMN whales.last_active_at IS 'Время последней зафиксированной сделки адреса';
-COMMENT ON COLUMN whales.trades_last_3_days IS 'Количество сделок адреса за последние 3 дня';
-COMMENT ON COLUMN whales.trades_last_7_days IS 'Количество сделок адреса за последние 7 дней';
-COMMENT ON COLUMN whales.days_active_7d IS 'Количество уникальных дней, когда адрес торговал за последние 7 дней';
-COMMENT ON COLUMN whales.days_active_30d IS 'Количество уникальных дней, когда адрес торговал за последние 30 дней';
-COMMENT ON COLUMN whales.trades_per_day IS 'Среднее число сделок в день по загруженному окну истории';
-COMMENT ON COLUMN whales.risk_score IS 'Оценка риска адреса на основе activity-метрик';
-COMMENT ON COLUMN whales.created_at IS 'Время создания записи в таблице';
-COMMENT ON COLUMN whales.updated_at IS 'Время последнего обновления записи';
 
 -- ============================================================
 -- PHASE 5: Add Indexes
