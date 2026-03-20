@@ -217,6 +217,7 @@ Root cause: global 500-trade window limit + отсутствие per-wallet back
 |----|--------|--------|
 | TRD-414 | Backup whales and whale_trades + snapshot report | DONE |
 | TRD-415 | Freeze whale discovery and whale_trades writes before cleanup | DONE |
+| TRD-416 | Reduce whales universe to qualified subset and clean whale_trades | DONE |
 | DATA-404 | Reset virtual bankroll for fresh paper trading cycle | DONE |
 | DATA-405 | Cleanup test records from database | DONE |
 

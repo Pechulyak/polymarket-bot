@@ -528,6 +528,37 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-20
+
+snapshot_date: 2026-03-20
+database: polymarket
+schema: public
+
+whales_rows: 6835
+whale_trades_rows: 9001
+paper_trades_rows: 632
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 230
+paper_trades_last_24h: 10
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 5.69%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-19
 
 snapshot_date: 2026-03-19
@@ -1948,3 +1979,26 @@ fix_date: 2026-03-18
 - postgres_container: RUNNING
 - redis_container: RUNNING
 - paper_settlement_container: RUNNING
+
+---
+
+## 42. WHALES UNIVERSE REDUCTION
+
+- whales_before: 6835
+- whales_after: 38
+- whale_trades_before: 9001
+- whale_trades_after: 0
+- cleanup_scope: qualified only
+- data_pruned: YES
+- cleanup_date: 2026-03-20
+
+### Cleanup Details
+
+- Qualified whales snapshot: /backups/qualified_whales_2026-03-19.csv (38 addresses)
+- whales deleted: 6797 (all non-qualified)
+- whale_trades deleted: 9001 (all records referenced non-qualified whales)
+- whale_trade_roundtrips deleted: 5816 (orphaned after whale_trades cleanup)
+- Integrity check: PASSED (no orphan records)
+
+### Note
+All whale_trades in database referenced whales with status != 'qualified'. After cleanup, whale_trades table is empty because qualified whales had no trade records in the database.
