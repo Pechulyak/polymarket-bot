@@ -48,8 +48,18 @@ COMMIT;
 
 -- qualification_status CHECK
 ALTER TABLE whales DROP CONSTRAINT IF EXISTS whales_qualification_status_check;
-ALTER TABLE whales ADD CONSTRAINT whales_qualification_status_check 
-    CHECK (qualification_status IN ('discovered','candidate','tracked','qualified','cold'));
+ALTER TABLE whales ADD CONSTRAINT whales_qualification_status_check
+    CHECK (qualification_status IN ('discovered','candidate','tracked','qualified','ranked','cold'));
+
+-- Set activity values for manual whales to match auto_detected
+UPDATE whales
+SET trades_last_3_days = 0,
+    days_active_7d = 0,
+    days_active_30d = 0
+WHERE source_new = 'manual';
+
+-- Drop deprecated win_rate column
+ALTER TABLE whales DROP COLUMN IF EXISTS win_rate;
 
 -- tier CHECK
 ALTER TABLE whales DROP CONSTRAINT IF EXISTS whales_tier_check;

@@ -220,6 +220,7 @@ Root cause: global 500-trade window limit + отсутствие per-wallet back
 | TRD-416 | Reduce whales universe to qualified subset and clean whale_trades | DONE |
 | TRD-417 | Audit API response structure across market types before whales schema redesign | TODO |
 | TRD-418 | Transform whales table schema to approved activity-based structure | DONE |
+| TRD-419 | Migrate whales logic from legacy fields to new activity-based fields | DONE |
 | DATA-404 | Reset virtual bankroll for fresh paper trading cycle | DONE |
 | DATA-405 | Cleanup test records from database | DONE |
 

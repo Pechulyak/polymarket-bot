@@ -528,6 +528,40 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-21
+
+snapshot_date: 2026-03-21
+database: polymarket
+schema: public
+
+whales_rows: 38
+whale_trades_rows: 0
+paper_trades_rows: 632
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 0
+paper_trades_last_24h: 0
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 0%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- whales
+- whale_trades
+- paper_trades
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-20
 
 snapshot_date: 2026-03-20
@@ -2018,3 +2052,52 @@ All whale_trades in database referenced whales with status != 'qualified'. After
 - migration_date: 2026-03-20
 - migration_type: STAGED (new columns added, legacy preserved for code compatibility)
 - next_step: Update code (whale_detector.py, whale_tracker.py) to use new field names, then drop legacy columns
+
+---
+
+## 45. WHALES LOGIC MIGRATION TO NEW FIELDS (TRD-419)
+
+- whales_logic_migration_status: COMPLETED
+- migration_date: 2026-03-21
+
+### Code Changes
+- whale_detector.py: Added qualification_status, days_active_7d, days_active_30d to DetectedWhale
+- whale_tracker.py: Added new fields to WhaleStats, updated load_quality_whales
+
+### Legacy Fields References Removed
+- status → qualification_status (canonical)
+- is_active → qualification_status IN ('qualified','ranked','tracked')
+- days_active → days_active_7d (7-day window for qualification)
+- win_rate → REMOVED from qualification logic (always 0)
+- total_profit_usd → REMOVED from qualification logic (always 0)
+- qualification_path → REMOVED (redundant)
+
+### New Fields Canonical
+- qualification_status: YES (replaces status)
+- days_active_7d: YES (7-day activity window)
+- days_active_30d: YES (30-day activity window)
+- trades_count: YES (alias for total_trades)
+
+### Qualification Logic Updated
+- _evaluate_quality: Uses qualification_status
+- _load_known_whales: Queries by qualification_status
+- get_top_whales: Uses qualification_status
+- load_quality_whales: Uses activity-based criteria
+
+### Legacy Fields Still Required (backward compat)
+- status: Written for existing DB records
+- days_active: Written for existing DB records
+- source: Written for existing DB records
+
+### Legacy Fields Ready for Removal (next cleanup task)
+- win_rate (always 0)
+- total_profit_usd (always 0)
+- qualification_path (redundant)
+- is_active (replaced by qualification_status)
+
+### Database Verification
+```sql
+SELECT wallet_address, qualification_status, total_trades, total_volume_usd, risk_score 
+FROM whales WHERE qualification_status IN ('qualified', 'ranked', 'tracked');
+```
+Result: 10 qualified whales verified

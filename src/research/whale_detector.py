@@ -128,15 +128,22 @@ class TradeRecord:
 class DetectedWhale:
     """Represents a whale identified by the detector.
 
+    TRD-419 MIGRATION NOTES:
+    - NEW: qualification_status replaces status (discovered/candidate/tracked/qualified)
+    - NEW: days_active_7d / days_active_30d for activity windows
+    - NEW: trades_count as canonical field (alias for total_trades)
+    - DEPRECATED: status, days_active, win_rate, total_profit_usd, qualification_path
+      (kept for backward compatibility, will be removed in next cleanup)
+
     Attributes:
         wallet_address: Whale wallet address
         first_seen: When whale was first detected
         total_trades: Total number of trades observed
         total_volume: Total trading volume
         avg_trade_size: Average trade size
-        win_count: Number of winning trades
-        loss_count: Number of losing trades
-        win_rate: Win rate as decimal
+        win_count: Number of winning trades (DEPRECATED - API doesn't provide)
+        loss_count: Number of losing trades (DEPRECATED - API doesn't provide)
+        win_rate: Win rate as decimal (DEPRECATED - always 0)
         daily_trades: Trades per day (rolling)
         risk_score: Calculated risk score (1-10)
         is_quality: Whether whale meets quality criteria
@@ -149,17 +156,22 @@ class DetectedWhale:
     avg_trade_size: Decimal = Decimal("0")
     win_count: int = 0
     loss_count: int = 0
-    win_rate: Decimal = Decimal("0")
+    win_rate: Decimal = Decimal("0")  # DEPRECATED - always 0, API doesn't provide
     daily_trades: int = 0
     risk_score: int = 5
     is_quality: bool = False
-    # Stage 2: Discovery + Qualification + Ranking
-    status: str = "discovered"  # discovered | qualified | ranked
+    # DEPRECATED FIELDS (TRD-419 - to be removed in next cleanup):
+    status: str = "discovered"  # DEPRECATED -> use qualification_status
     trades_last_3_days: int = 0
-    trades_last_7_days: int = 0  # For dual-path qualification
-    days_active: int = 0
+    trades_last_7_days: int = 0  # DEPRECATED -> use trades_last_7_days from DB
+    days_active: int = 0  # DEPRECATED -> use days_active_7d
     name: str = ""  # Trader's name from Polymarket profile
-    qualification_path: Optional[str] = None  # ACTIVE | CONVICTION | None
+    qualification_path: Optional[str] = None  # DEPRECATED -> redundant with qualification_status
+
+    # NEW FIELDS (TRD-419 - activity-based):
+    qualification_status: str = "discovered"  # Replaces status
+    days_active_7d: int = 0  # Active days in last 7 days
+    days_active_30d: int = 0  # Active days in last 30 days
 
 
 @dataclass
@@ -316,8 +328,11 @@ class WhaleDetector:
 
         session = self._Session()
         try:
+            # TRD-419: Use qualification_status instead of deprecated is_active
+            # Whales are considered "active" if they have qualified status
             query = text("""
-                SELECT wallet_address FROM whales WHERE is_active = TRUE
+                SELECT wallet_address FROM whales
+                WHERE qualification_status IN ('qualified', 'ranked', 'tracked')
             """)
             result = session.execute(query)
             for row in result:
@@ -558,9 +573,10 @@ class WhaleDetector:
         
         is_qualified = all(qualification_criteria.values())
         
-        # Set status based on qualification
+        # Set status based on qualification (TRD-419: use qualification_status)
         if is_qualified:
-            whale.status = "qualified"
+            whale.qualification_status = "qualified"
+            whale.status = "qualified"  # Legacy - for backward compat
             whale.is_quality = True
             logger.debug(
                 "whale_qualified",
@@ -571,7 +587,8 @@ class WhaleDetector:
                 days_active=whale.days_active,
             )
         else:
-            whale.status = "discovered"
+            whale.qualification_status = "discovered"
+            whale.status = "discovered"  # Legacy - for backward compat
             whale.is_quality = False
             # Log why not qualified (for debugging)
             failed_criteria = [k for k, v in qualification_criteria.items() if not v]
@@ -718,12 +735,17 @@ class WhaleDetector:
                 )
                 
                 if qualification_path:
-                    # Update whale with new qualification
+                    # Update whale with new qualification (TRD-419: use new fields)
                     update_query = text("""
-                        UPDATE whales 
+                        UPDATE whales
                         SET qualification_path = :qualification_path,
+                            qualification_status = CASE
+                                WHEN :qualification_path IS NOT NULL THEN 'qualified'
+                                ELSE qualification_status
+                            END,
                             trades_last_7_days = :trades_last_7_days,
                             days_active = :days_active,
+                            days_active_7d = LEAST(:days_active, 7),
                             last_active_at = NOW(),
                             updated_at = NOW()
                         WHERE id = :whale_id
@@ -799,19 +821,26 @@ class WhaleDetector:
             """)
             session.execute(update_7d)
             
-            # Update days_active
+            # TRD-419: Update both legacy days_active and new days_active_7d/30d
+            # days_active is kept for backward compat, days_active_7d is the new canonical
             update_days = text("""
                 UPDATE whales w
                 SET days_active = t.days,
+                    days_active_7d = LEAST(t.days_7d, t.days),  -- 7d window
+                    days_active_30d = LEAST(t.days_30d, t.days),  -- 30d window
                     last_active_at = NOW(),
                     updated_at = NOW()
                 FROM (
-                    SELECT wallet_address, COUNT(DISTINCT DATE(traded_at)) as days
+                    SELECT
+                        wallet_address,
+                        COUNT(DISTINCT DATE(traded_at)) as days,
+                        COUNT(DISTINCT DATE(traded_at)) FILTER (WHERE traded_at >= NOW() - INTERVAL '7 days') as days_7d,
+                        COUNT(DISTINCT DATE(traded_at)) FILTER (WHERE traded_at >= NOW() - INTERVAL '30 days') as days_30d
                     FROM whale_trades
                     GROUP BY wallet_address
                 ) t
                 WHERE LOWER(w.wallet_address) = LOWER(t.wallet_address)
-                AND w.days_active != t.days
+                AND (w.days_active != t.days OR w.days_active_7d IS NULL OR w.days_active_30d IS NULL)
             """)
             session.execute(update_days)
             
@@ -855,29 +884,36 @@ class WhaleDetector:
 
         session = self._Session()
         try:
+            # TRD-419: Use new activity-based fields
+            # qualification_status replaces status
+            # days_active_7d replaces days_active (for 7-day window logic)
             query = text("""
                 INSERT INTO whales (
-                    wallet_address, total_trades, win_rate, total_profit_usd,
+                    wallet_address, total_trades, total_profit_usd,
                     total_volume_usd, avg_trade_size_usd, last_active_at, risk_score,
-                    status, trades_last_3_days, trades_last_7_days, days_active, 
-                    qualification_path, source, updated_at, notes
+                    qualification_status, trades_last_3_days, trades_last_7_days,
+                    days_active, days_active_7d, days_active_30d,
+                    qualification_path, source_new, updated_at, notes
                 ) VALUES (
-                    :wallet_address, :total_trades, :win_rate, :total_profit,
+                    :wallet_address, :total_trades, :total_profit,
                     :total_volume, :avg_trade_size, NOW(), :risk_score,
-                    :status, :trades_last_3_days, :trades_last_7_days, :days_active,
+                    :qualification_status, :trades_last_3_days, :trades_last_7_days,
+                    :days_active, :days_active_7d, :days_active_30d,
                     :qualification_path, 'auto_detected', NOW(), :notes
                 )
                 ON CONFLICT (wallet_address) DO UPDATE SET
                     total_trades = EXCLUDED.total_trades,
-                    win_rate = EXCLUDED.win_rate,
                     total_profit_usd = EXCLUDED.total_profit_usd,
                     total_volume_usd = EXCLUDED.total_volume_usd,
                     avg_trade_size_usd = EXCLUDED.avg_trade_size_usd,
                     risk_score = EXCLUDED.risk_score,
-                    status = EXCLUDED.status,
+                    qualification_status = EXCLUDED.qualification_status,
+                    status = EXCLUDED.qualification_status,  # Legacy compat
                     trades_last_3_days = EXCLUDED.trades_last_3_days,
                     trades_last_7_days = EXCLUDED.trades_last_7_days,
                     days_active = EXCLUDED.days_active,
+                    days_active_7d = EXCLUDED.days_active_7d,
+                    days_active_30d = EXCLUDED.days_active_30d,
                     qualification_path = EXCLUDED.qualification_path,
                     last_active_at = NOW(),
                     updated_at = NOW(),
@@ -888,18 +924,17 @@ class WhaleDetector:
                 {
                     "wallet_address": whale.wallet_address,
                     "total_trades": whale.total_trades,
-                    "win_rate": float(whale.win_rate),
-                    "total_profit": float(
-                        whale.total_volume * (whale.win_rate - Decimal("0.5")) * 2
-                    ),
+                    "total_profit": 0.0,  # DEPRECATED - always 0, API doesn't provide
                     "total_volume": float(whale.total_volume),
                     "avg_trade_size": float(whale.avg_trade_size),
                     "risk_score": whale.risk_score,
-                    "status": whale.status,
+                    "qualification_status": whale.qualification_status,
                     "trades_last_3_days": whale.trades_last_3_days,
                     "trades_last_7_days": whale.trades_last_7_days,
-                    "days_active": whale.days_active,
-                    "qualification_path": whale.qualification_path,
+                    "days_active": whale.days_active,  # Legacy - use days_active_7d
+                    "days_active_7d": whale.days_active_7d,
+                    "days_active_30d": whale.days_active_30d,
+                    "qualification_path": whale.qualification_path,  # DEPRECATED
                     "notes": whale.name if whale.name else None,
                 },
             )
@@ -1383,10 +1418,11 @@ class WhaleDetector:
         Returns:
             List of top whales sorted by rank score (best first)
         """
-        # Get all qualified whales
+        # Get all qualified whales (TRD-419: use qualification_status)
         qualified = [
             w for w in self._detected_whales.values()
-            if w.status in ("qualified", "ranked")
+            if w.qualification_status in ("qualified", "ranked")
+            or w.status in ("qualified", "ranked")  # Legacy compat
         ]
         
         if not qualified:
@@ -1405,9 +1441,10 @@ class WhaleDetector:
         # Sort by rank score descending
         ranked = sorted(qualified, key=rank_score, reverse=True)
         
-        # Update status to 'ranked' for top N
+        # Update status to 'ranked' for top N (TRD-419: also update qualification_status)
         for i, whale in enumerate(ranked[:limit]):
-            if whale.status != "ranked":
-                whale.status = "ranked"
+            if whale.qualification_status != "ranked":
+                whale.qualification_status = "ranked"
+                whale.status = "ranked"  # Legacy compat
         
         return ranked[:limit]

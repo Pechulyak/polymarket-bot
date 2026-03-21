@@ -114,12 +114,18 @@ class WhaleTrade:
 @dataclass
 class WhaleStats:
     """Statistical summary of a whale's trading activity.
-    
+
+    TRD-419 MIGRATION NOTES:
+    - NEW: qualification_status replaces status
+    - NEW: days_active_7d / days_active_30d for activity windows
+    - NEW: trades_count as canonical field
+    - DEPRECATED: win_rate, total_profit_usd, is_active
+
     IMPORTANT: win_rate and total_profit_usd are NOT reliable because:
     - Polymarket Data API does NOT provide `is_winner` field
     - Trade outcomes are unknown until market settlement
     - BUY != win, SELL != loss (incorrect assumption removed)
-    
+
     Use stats_mode to understand what metrics are available:
     - ACTIVITY_ONLY: Only activity metrics (safe default)
     - UNREALIZED_PROXY: Uses unrealizedPnl from positions snapshot
@@ -144,7 +150,14 @@ class WhaleStats:
     # Deprecated fields - kept for backward compatibility
     win_rate: Decimal = Decimal("0")
     total_profit_usd: Decimal = Decimal("0")
-    # New fields with clear semantics
+    # New fields with clear semantics (TRD-419)
+    qualification_status: str = "discovered"
+    trades_count: int = 0  # Alias for total_trades
+    trades_last_3_days: int = 0
+    trades_last_7_days: int = 0
+    days_active_7d: int = 0
+    days_active_30d: int = 0
+    # Legacy fields
     unrealized_pnl_usd: Decimal = Decimal("0")
     avg_trade_size_usd: Decimal = Decimal("0")
     total_volume_usd: Decimal = Decimal("0")
@@ -555,15 +568,14 @@ class WhaleTracker:
         try:
             query = text("""
                 INSERT INTO whales (
-                    wallet_address, total_trades, win_rate, total_profit_usd,
+                    wallet_address, total_trades, total_profit_usd,
                     avg_trade_size_usd, last_active_at, risk_score, updated_at
                 ) VALUES (
-                    :wallet_address, :total_trades, :win_rate, :total_profit_usd,
+                    :wallet_address, :total_trades, :total_profit_usd,
                     :avg_trade_size_usd, :last_active_at, :risk_score, NOW()
                 )
                 ON CONFLICT (wallet_address) DO UPDATE SET
                     total_trades = EXCLUDED.total_trades,
-                    win_rate = EXCLUDED.win_rate,
                     total_profit_usd = EXCLUDED.total_profit_usd,
                     avg_trade_size_usd = EXCLUDED.avg_trade_size_usd,
                     last_active_at = EXCLUDED.last_active_at,
@@ -618,16 +630,21 @@ class WhaleTracker:
 
         session = self._Session()
         try:
+            # TRD-419: Use new qualification_status instead of deprecated is_active
+            # win_rate is always 0, so we use activity-based criteria instead
+            # Sort by total_volume (activity metric) instead of win_rate
             query = text("""
                 SELECT
-                    wallet_address, total_trades, win_rate, total_profit_usd,
-                    avg_trade_size_usd, last_active_at, risk_score
+                    wallet_address, total_trades, total_volume_usd,
+                    avg_trade_size_usd, last_active_at, risk_score,
+                    qualification_status, trades_count, trades_last_3_days,
+                    trades_last_7_days, days_active_7d, days_active_30d
                 FROM whales
-                WHERE is_active = TRUE
-                    AND win_rate >= :min_win_rate
+                WHERE qualification_status IN ('qualified', 'ranked', 'tracked')
                     AND total_trades >= :min_trades
                     AND risk_score <= :max_risk_score
-                ORDER BY win_rate DESC, total_trades DESC
+                    AND total_volume_usd >= 500
+                ORDER BY total_volume_usd DESC, total_trades DESC
                 LIMIT 50
             """)
             result = session.execute(
@@ -641,15 +658,22 @@ class WhaleTracker:
 
             whales = []
             for row in result:
+                # TRD-419: Use new activity-based fields
                 whales.append(
                     WhaleStats(
                         wallet_address=row[0],
                         total_trades=row[1],
-                        win_rate=Decimal(str(row[2])),
-                        total_profit_usd=Decimal(str(row[3])),
-                        avg_trade_size_usd=Decimal(str(row[4])),
-                        last_active_at=row[5],
-                        risk_score=row[6],
+                        total_volume_usd=Decimal(str(row[2])),
+                        avg_trade_size_usd=Decimal(str(row[3])),
+                        last_active_at=row[4],
+                        risk_score=row[5],
+                        # New activity-based fields from DB
+                        qualification_status=row[6] if len(row) > 6 else 'qualified',
+                        trades_count=row[7] if len(row) > 7 else row[1],
+                        trades_last_3_days=row[8] if len(row) > 8 else 0,
+                        trades_last_7_days=row[9] if len(row) > 9 else 0,
+                        days_active_7d=row[10] if len(row) > 10 else 0,
+                        days_active_30d=row[11] if len(row) > 11 else 0,
                     )
                 )
 
