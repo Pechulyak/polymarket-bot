@@ -26,13 +26,17 @@ from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, Set
 from uuid import uuid4
 
+import asyncpg
 import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from data.ingestion.websocket_client import PolymarketWebSocket, WebSocketMessage
-from research.whale_tracker import WhaleTracker
+from src.data.ingestion.websocket_client import PolymarketWebSocket, WebSocketMessage
+from src.research.whale_tracker import WhaleTracker
+from src.research.whale_poller import WhalePoller
 from src.data.storage.market_title_cache import get_market_title
+from src.config.settings import settings
+from src.research.polymarket_data_client import PolymarketDataClient
 
 logger = structlog.get_logger(__name__)
 
@@ -121,6 +125,12 @@ class RealTimeWhaleMonitor:
         self.tracked_whales = tracked_whales or set()
         self.api_key = api_key
 
+        # Whale poller dependencies
+        self._db_pool: Optional[asyncpg.Pool] = None
+        self._polymarket_client: Optional[PolymarketDataClient] = None
+        self.config: dict = {}
+        self.whale_poller: Optional[WhalePoller] = None
+
         self._ws: Optional[PolymarketWebSocket] = None
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -143,6 +153,74 @@ class RealTimeWhaleMonitor:
         self._engine = create_engine(database_url)
         self._Session = sessionmaker(bind=self._engine)
         logger.info("whale_monitor_database_configured")
+
+    async def _init_whale_poller(self) -> None:
+        """Инициализировать whale poller."""
+        if self.whale_poller is not None:
+            logger.debug("whale_poller_already_initialized")
+            return
+
+        # Initialize asyncpg pool from database_url
+        if self._db_pool is None and self.database_url:
+            # Convert SQLAlchemy URL to asyncpg format
+            # postgresql://user:pass@host:port/db -> user:pass@host:port/db
+            db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql://")
+            db_url = db_url.replace("postgresql://", "")
+
+            # Parse components
+            if "@" in db_url:
+                auth, host_db = db_url.split("@")
+                user, password = auth.split(":")
+                if "/" in host_db:
+                    host, db = host_db.split("/")
+                    port = 5432
+                    if ":" in host:
+                        host, port = host.split(":")
+                else:
+                    host = host_db
+                    db = "postgres"
+                    port = 5432
+            else:
+                # Default fallback
+                user = "postgres"
+                password = "password"
+                host = "localhost"
+                port = 5433
+                db = "postgres"
+
+            try:
+                self._db_pool = await asyncpg.create_pool(
+                    host=host,
+                    port=int(port),
+                    user=user,
+                    password=password,
+                    database=db,
+                    min_size=2,
+                    max_size=10,
+                )
+                logger.info("whale_poller_db_pool_created")
+            except Exception as e:
+                logger.error("whale_poller_db_pool_failed", error=str(e))
+                return
+
+        # Initialize Polymarket Data client
+        if self._polymarket_client is None:
+            self._polymarket_client = PolymarketDataClient(
+                api_key=settings.polymarket_api_key
+            )
+            logger.info("whale_poller_polymarket_client_created")
+
+        # Initialize WhaleTracker
+        whale_tracker = WhaleTracker()
+
+        # Create WhalePoller
+        self.whale_poller = WhalePoller(
+            db_pool=self._db_pool,
+            polymarket_client=self._polymarket_client,
+            whale_tracker=whale_tracker,
+            config=self.config,
+        )
+        logger.info("whale_poller_initialized")
 
     def add_tracked_whale(self, address: str) -> None:
         """Add whale address to track."""
@@ -187,6 +265,14 @@ class RealTimeWhaleMonitor:
 
             self._task = asyncio.create_task(self._ws.start_listening())
 
+            # Инициализировать и запустить whale poller
+            await self._init_whale_poller()
+            if self.whale_poller:
+                asyncio.create_task(self.whale_poller.run_hot_polling())
+                asyncio.create_task(self.whale_poller.run_warm_polling())
+                asyncio.create_task(self.whale_poller.run_tier_downgrade_check())
+                logger.info("whale_poller_tasks_started")
+
         except Exception as e:
             logger.error("whale_monitor_start_failed", error=str(e))
             self._running = False
@@ -195,6 +281,17 @@ class RealTimeWhaleMonitor:
     async def stop(self) -> None:
         """Stop monitoring."""
         self._running = False
+
+        # Stop whale poller
+        if self.whale_poller:
+            logger.info("whale_poller_stopping")
+            self.whale_poller = None
+
+        # Close asyncpg pool
+        if self._db_pool:
+            await self._db_pool.close()
+            self._db_pool = None
+            logger.info("whale_poller_db_pool_closed")
 
         if self._task:
             self._task.cancel()

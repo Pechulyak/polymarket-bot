@@ -49,3 +49,21 @@ Polymarket API (эндпоинт `/markets`) возвращает следующ
 - `tags` - теги
 - `notifications_enabled` - включены ли уведомления
 - `enable_order_book` - включен ли ордербук
+
+
+1. Эндпоинт /categories — ✅ РАБОТАЕТ
+URL: GET https://gamma-api.polymarket.com/categories
+
+Возвращает 9 корневых категорий и 54 подкатегории:
+
+Корневые категории:
+ID	Название	Slug
+5546	AI	ai
+5456	Business	business
+5463	Coronavirus	coronavirus
+5466	Crypto	crypto
+5476	NFTs	nfts
+5481	Politics	politics
+5470	Pop Culture	pop-culture
+5478	Science	science
+5487	Sports	sports

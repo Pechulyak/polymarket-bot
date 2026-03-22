@@ -1,6 +1,6 @@
 # Daily Data Audit Snapshot
 
-**Generated:** 2026-03-22 08:00:02
+**Generated:** 2026-03-21 08:00:02
 
 ---
 
@@ -10,7 +10,7 @@
 |-------|-----------|----------|----------|-----------|----------|
 | whales | 38 | 0 | 0 | 2026-02-23 18:18:13 | 2026-03-02 13:30:53 |
 | whale_trades | 0 | 0 | 0 | N/A | N/A |
-| paper_trades | 632 | 0 | 0 | 2026-03-04 23:59:51 | 2026-03-19 14:13:37 |
+| paper_trades | 632 | 0 | 10 | 2026-03-04 23:59:51 | 2026-03-19 14:13:37 |
 | paper_trade_notifications | 528 | 0 | 0 | 2026-03-05 18:08:25 | 2026-03-17 17:56:37 |
 | trades | 42 | N/A | N/A | 2026-03-15 17:56:44 | 2026-03-17 18:47:22 |
 | bankroll | 14 | 0 | 0 | 2026-03-17 15:59:51 | 2026-03-17 18:47:56 |
@@ -68,9 +68,9 @@
 ## Cross-Table Consistency
 
 - whale_trades → paper_trades conversion (48h): 0%
-- paper_trades → notifications coverage (48h): 0%
+- paper_trades → notifications coverage (48h): 0.0%
 - Stale tables (>24h no new rows): whales, whale_trades, paper_trades, paper_trade_notifications, trades, bankroll
-- Stale tables (>48h no new rows): whales, whale_trades, paper_trades, paper_trade_notifications, trades, bankroll
+- Stale tables (>48h no new rows): whales, whale_trades, paper_trade_notifications, trades, bankroll
 
 ---
 

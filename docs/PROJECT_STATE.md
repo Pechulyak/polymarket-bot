@@ -528,6 +528,40 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-03-22
+
+snapshot_date: 2026-03-22
+database: polymarket
+schema: public
+
+whales_rows: 38
+whale_trades_rows: 0
+paper_trades_rows: 632
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 0
+paper_trades_last_24h: 0
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 0%
+conversion_paper_to_notifications_48h: 0%
+
+stale_tables_24h:
+- whales
+- whale_trades
+- paper_trades
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-03-21
 
 snapshot_date: 2026-03-21
@@ -2101,3 +2135,26 @@ SELECT wallet_address, qualification_status, total_trades, total_volume_usd, ris
 FROM whales WHERE qualification_status IN ('qualified', 'ranked', 'tracked');
 ```
 Result: 10 qualified whales verified
+
+---
+
+## Whale Discovery (TRD-420)
+Status: COMPLETED
+
+### Architecture Changes:
+- Initial history fetch: При первом обнаружении — разовый API-запрос (fetch_trader_trades)
+- Tiered polling: HOT (4 часа), WARM (24 часа), COLD (не опрашивается)
+- whale_trades: содержит только актуальные сделки (исторические не пишутся)
+- Bootstrap: обрабатывает существующих китов при старте
+
+### Schema Changes:
+- initial_history_fetched: BOOLEAN
+- history_trade_count: INTEGER
+- history_volume_usd: DECIMAL(20,8)
+- idx_whales_tier_fetch: INDEX (tier, last_targeted_fetch_at)
+
+### Current Metrics:
+- Total tracked: 138 whales
+- Tier distribution: HOT=20, WARM=16, COLD=3 (initial)
+- Whale detector: RUNNING
+- Initial history fetch: ENABLED

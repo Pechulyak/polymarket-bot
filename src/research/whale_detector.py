@@ -275,6 +275,11 @@ class WhaleDetector:
 
         await self._load_known_whales()
 
+        # TRD-420 Bootstrap: Fetch initial history for existing whales
+        # This assigns tier to 38 existing whales that have initial_history_fetched = NULL
+        if self.polymarket_client:
+            await self._bootstrap_existing_whales()
+
         if self.polymarket_client:
             await self.start_polymarket_polling()
 
@@ -348,6 +353,55 @@ class WhaleDetector:
             logger.error("load_known_whales_failed", error=str(e))
         finally:
             session.close()
+
+    async def _bootstrap_existing_whales(self) -> None:
+        """TRD-420 Bootstrap: Fetch initial history for existing whales.
+        
+        Called at startup to assign tier to whales that have:
+        - initial_history_fetched = FALSE
+        - OR initial_history_fetched IS NULL
+        
+        This ensures all existing whales get tier assigned (HOT/WARM/COLD)
+        based on their last trading activity from Polymarket API.
+        """
+        await self._ensure_database()
+        if not self._Session:
+            logger.warning("bootstrap_no_session")
+            return
+
+        session = self._Session()
+        try:
+            # Get whales that need initial history fetched
+            query = text("""
+                SELECT wallet_address 
+                FROM whales 
+                WHERE initial_history_fetched IS NULL 
+                   OR initial_history_fetched = FALSE
+            """)
+            result = session.execute(query)
+            addresses = [row[0] for row in result]
+            
+            if not addresses:
+                logger.info("bootstrap_no_whales_needed")
+                session.close()
+                return
+                
+            logger.info("bootstrap_starting", whales_count=len(addresses))
+            session.close()
+            
+            # Fetch history for each whale (non-blocking, sequential)
+            for address in addresses:
+                try:
+                    await self._fetch_initial_history(address)
+                    # Small delay to avoid rate limiting
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.error("bootstrap_whale_failed", address=address[:10], error=str(e))
+            
+            logger.info("bootstrap_complete", whales_processed=len(addresses))
+            
+        except Exception as e:
+            logger.error("bootstrap_failed", error=str(e))
 
     async def process_trade(
         self,
@@ -908,7 +962,7 @@ class WhaleDetector:
                     avg_trade_size_usd = EXCLUDED.avg_trade_size_usd,
                     risk_score = EXCLUDED.risk_score,
                     qualification_status = EXCLUDED.qualification_status,
-                    status = EXCLUDED.qualification_status,  # Legacy compat
+                    status = EXCLUDED.qualification_status,
                     trades_last_3_days = EXCLUDED.trades_last_3_days,
                     trades_last_7_days = EXCLUDED.trades_last_7_days,
                     days_active = EXCLUDED.days_active,
@@ -924,17 +978,17 @@ class WhaleDetector:
                 {
                     "wallet_address": whale.wallet_address,
                     "total_trades": whale.total_trades,
-                    "total_profit": 0.0,  # DEPRECATED - always 0, API doesn't provide
+                    "total_profit": 0.0,
                     "total_volume": float(whale.total_volume),
                     "avg_trade_size": float(whale.avg_trade_size),
                     "risk_score": whale.risk_score,
                     "qualification_status": whale.qualification_status,
                     "trades_last_3_days": whale.trades_last_3_days,
                     "trades_last_7_days": whale.trades_last_7_days,
-                    "days_active": whale.days_active,  # Legacy - use days_active_7d
+                    "days_active": whale.days_active,
                     "days_active_7d": whale.days_active_7d,
                     "days_active_30d": whale.days_active_30d,
-                    "qualification_path": whale.qualification_path,  # DEPRECATED
+                    "qualification_path": whale.qualification_path,
                     "notes": whale.name if whale.name else None,
                 },
             )
@@ -946,6 +1000,152 @@ class WhaleDetector:
             session.rollback()
         finally:
             session.close()
+
+        # TRD-420: Fetch initial history for new whales
+        # Check if initial_history_fetched is FALSE or NULL
+        # Use asyncio.create_task to NOT block the main loop
+        if self.polymarket_client:
+            # Check if we need to fetch initial history (non-blocking check)
+            asyncio.create_task(self._fetch_initial_history(whale.wallet_address))
+
+    async def _fetch_initial_history(self, address: str) -> None:
+        """
+        Разовый API-запрос при первом обнаружении адреса.
+        Агрегирует историю в памяти → пишет только в whales.
+        НЕ пишет в whale_trades.
+
+        Args:
+            address: Whale wallet address to fetch history for
+        """
+        if not self.polymarket_client:
+            logger.debug("fetch_initial_history_no_client", address=address[:10])
+            return
+
+        await self._ensure_database()
+        if not self._Session:
+            logger.warning("fetch_initial_history_no_session", address=address[:10])
+            return
+
+        # Check if already fetched
+        session = self._Session()
+        try:
+            check_query = text("""
+                SELECT initial_history_fetched, last_seen_in_feed
+                FROM whales
+                WHERE LOWER(wallet_address) = LOWER(:address)
+            """)
+            result = session.execute(check_query, {"address": address})
+            row = result.fetchone()
+
+            if row and row[0] is True:
+                logger.debug("initial_history_already_fetched", address=address[:10])
+                session.close()
+                return
+
+        except Exception as e:
+            logger.error("check_initial_history_failed", error=str(e), address=address[:10])
+            session.close()
+            return
+        finally:
+            session.close()
+
+        # Fetch trader history from Polymarket API
+        try:
+            logger.info("fetching_initial_history", address=address[:10])
+            trades = await self.polymarket_client.fetch_trader_trades(address, limit=500)
+
+            if not trades:
+                logger.info("no_trades_for_history", address=address[:10])
+                return
+
+            # Aggregate in memory
+            total_volume = Decimal("0")
+            trade_count = len(trades)
+            timestamps = []
+
+            for t in trades:
+                total_volume += t.size_usd
+                timestamps.append(t.timestamp)
+
+            # Calculate unique trading days
+            unique_days = len(set(
+                datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+                for ts in timestamps
+            ))
+
+            # Calculate average trade size
+            avg_size = total_volume / Decimal(trade_count) if trade_count > 0 else Decimal("0")
+
+            # Determine last_seen timestamp
+            last_seen_ts = max(timestamps) if timestamps else None
+            last_seen_dt = datetime.fromtimestamp(last_seen_ts) if last_seen_ts else None
+
+            # Determine tier based on days since last seen
+            tier = "COLD"  # Default
+            if last_seen_ts:
+                days_since_last = (time.time() - last_seen_ts) / 86400
+                if days_since_last <= 7:
+                    tier = "HOT"
+                elif days_since_last <= 30:
+                    tier = "WARM"
+                # else: tier remains "COLD"
+
+            # Update whales table with aggregated history
+            session = self._Session()
+            try:
+                # Determine qualification_path based on tier and volume
+                qualification_path = None
+                if tier == "HOT" and total_volume >= Decimal("500"):
+                    qualification_path = "ACTIVE"
+                elif tier in ("WARM", "COLD") and total_volume >= Decimal("10000"):
+                    qualification_path = "CONVICTION"
+                
+                # Determine last_qualified_at
+                last_qualified_at = datetime.now() if qualification_path else None
+                
+                update_query = text("""
+                    UPDATE whales
+                    SET initial_history_fetched = TRUE,
+                        history_trade_count = :trade_count,
+                        history_volume_usd = :total_volume,
+                        tier = :tier,
+                        last_seen_in_feed = :last_seen,
+                        last_targeted_fetch_at = NOW(),
+                        source_new = 'auto_detected',
+                        qualification_path = :qualification_path,
+                        last_qualified_at = :last_qualified_at,
+                        updated_at = NOW()
+                    WHERE LOWER(wallet_address) = LOWER(:address)
+                """)
+                session.execute(update_query, {
+                    "trade_count": trade_count,
+                    "total_volume": float(total_volume),
+                    "tier": tier,
+                    "last_seen": last_seen_dt,
+                    "qualification_path": qualification_path,
+                    "last_qualified_at": last_qualified_at,
+                    "address": address,
+                })
+                session.commit()
+
+                logger.info(
+                    "initial_history_fetched",
+                    address=address[:10],
+                    trade_count=trade_count,
+                    total_volume=float(total_volume),
+                    unique_days=unique_days,
+                    avg_size=float(avg_size),
+                    tier=tier,
+                )
+
+            except Exception as e:
+                logger.error("update_whale_history_failed", error=str(e), address=address[:10])
+                session.rollback()
+            finally:
+                session.close()
+
+        except Exception as e:
+            logger.error("fetch_initial_history_error", error=str(e), address=address[:10])
 
     async def save_trade_to_db(
         self,
@@ -1205,34 +1405,35 @@ class WhaleDetector:
                 min_size_usd=min_size,
             )
             
-            # Save each trade to whale_trades table
-            for trade in trades:
-                try:
-                    # Determine side from trade
-                    side = "buy" if trade.side.upper() == "BUY" else "sell"
-                    
-                    # Get market_id from condition_id
-                    market_id = trade.condition_id or ""
-                    
-                    # Convert outcome to Yes/No format using helper function
-                    normalized_outcome = convert_outcome_to_yes_no(trade.outcome)
-                    
-                    # Save trade to database with tx_hash for deduplication
-                    await self.save_trade_to_db(
-                        trader=trade.trader,
-                        market_id=market_id,
-                        side=side,
-                        size_usd=trade.size_usd,
-                        price=trade.price,
-                        timestamp=float(trade.timestamp),
-                        tx_hash=trade.tx_hash,
-                        market_title=trade.market_title,
-                        source="BACKFILL",
-                        outcome=normalized_outcome,
-                    )
-                    saved_trades_count += 1
-                except Exception as e:
-                    logger.debug("trade_save_error", error=str(e), trader=trade.trader[:10] if trade.trader else "unknown")
+            # TEMPORARILY DISABLED for initial bootstrap of 38 whales
+            # TODO: Re-enable after tier assignment is complete (TRD-420)
+            # for trade in trades:
+            #     try:
+            #         # Determine side from trade
+            #         side = "buy" if trade.side.upper() == "BUY" else "sell"
+            #         
+            #         # Get market_id from condition_id
+            #         market_id = trade.condition_id or ""
+            #         
+            #         # Convert outcome to Yes/No format using helper function
+            #         normalized_outcome = convert_outcome_to_yes_no(trade.outcome)
+            #         
+            #         # Save trade to database with tx_hash for deduplication
+            #         await self.save_trade_to_db(
+            #             trader=trade.trader,
+            #             market_id=market_id,
+            #             side=side,
+            #             size_usd=trade.size_usd,
+            #             price=trade.price,
+            #             timestamp=float(trade.timestamp),
+            #             tx_hash=trade.tx_hash,
+            #             market_title=trade.market_title,
+            #             source="BACKFILL",
+            #             outcome=normalized_outcome,
+            #         )
+            #         saved_trades_count += 1
+            #     except Exception as e:
+            #         logger.debug("trade_save_error", error=str(e), trader=trade.trader[:10] if trade.trader else "unknown")
             
             # Now get aggregated stats
             aggregated = await self.polymarket_client.aggregate_by_address(
