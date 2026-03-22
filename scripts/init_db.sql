@@ -153,26 +153,42 @@ INSERT INTO fee_schedule (exchange, fee_type, fee_percentage, fixed_fee, currenc
 ('ethereum', 'gas', NULL, NULL, 'ETH')
 ON CONFLICT DO NOTHING;
 
--- Whales tracking table
+-- Whales tracking table (TRD-419: activity-based schema)
 CREATE TABLE IF NOT EXISTS whales (
     id SERIAL PRIMARY KEY,
     wallet_address VARCHAR(66) NOT NULL UNIQUE,
     first_seen_at TIMESTAMP NOT NULL DEFAULT NOW(),
     total_trades INTEGER NOT NULL DEFAULT 0,
-    win_rate DECIMAL(5, 4) NOT NULL DEFAULT 0,
+    -- win_rate REMOVED - API does not provide settlement outcomes
     total_profit_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
     total_volume_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
     avg_trade_size_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
     last_active_at TIMESTAMP NOT NULL DEFAULT NOW(),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    risk_score INTEGER NOT NULL DEFAULT 5 CHECK (risk_score >= 1 AND risk_score <= 10),
+    risk_score INTEGER CHECK (risk_score >= 1 AND risk_score <= 10 OR risk_score IS NULL),
     
-    -- Stage 2: Discovery + Qualification + Ranking
-    status VARCHAR(20) NOT NULL DEFAULT 'discovered' CHECK (status IN ('discovered', 'qualified', 'ranked')),
+    -- Legacy status (deprecated - use qualification_status)
+    status VARCHAR(20) CHECK (status IN ('discovered', 'candidate', 'tracked', 'qualified', 'ranked', 'cold') OR status IS NULL),
     trades_last_3_days INTEGER NOT NULL DEFAULT 0,
+    trades_last_7_days INTEGER NOT NULL DEFAULT 0,
     days_active INTEGER NOT NULL DEFAULT 0,
     last_qualified_at TIMESTAMP,
     last_ranked_at TIMESTAMP,
+    
+    -- TRD-419: New activity-based schema
+    qualification_status VARCHAR(20) NOT NULL DEFAULT 'discovered' CHECK (qualification_status IN ('discovered', 'candidate', 'tracked', 'qualified', 'ranked', 'cold')),
+    source_new VARCHAR(32) NOT NULL DEFAULT 'discovery',
+    tier VARCHAR(10) CHECK (tier IN ('HOT', 'WARM', 'COLD') OR tier IS NULL),
+    first_discovered_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    last_seen_in_feed TIMESTAMP,
+    last_targeted_fetch_at TIMESTAMP,
+    trades_count INTEGER NOT NULL DEFAULT 0,
+    days_active_7d INTEGER NOT NULL DEFAULT 0,
+    days_active_30d INTEGER NOT NULL DEFAULT 0,
+    trades_per_day NUMERIC(20, 8) NOT NULL DEFAULT 0,
+    
+    -- Qualification tracking
+    qualification_path VARCHAR(20),
     
     -- Additional metadata
     source VARCHAR(50),
@@ -182,50 +198,42 @@ CREATE TABLE IF NOT EXISTS whales (
 );
 
 CREATE INDEX IF NOT EXISTS idx_whales_address ON whales(wallet_address);
-CREATE INDEX IF NOT EXISTS idx_whales_winrate ON whales(win_rate DESC);
 CREATE INDEX IF NOT EXISTS idx_whales_active ON whales(is_active, last_active_at);
 CREATE INDEX IF NOT EXISTS idx_whales_risk ON whales(risk_score);
--- Stage 2: Discovery + Qualification + Ranking indexes
+-- Legacy indexes (deprecated)
 CREATE INDEX IF NOT EXISTS idx_whales_status ON whales(status);
-CREATE INDEX IF NOT EXISTS idx_whales_qualified ON whales(status, risk_score);
-CREATE INDEX IF NOT EXISTS idx_whales_ranked ON whales(status, last_ranked_at);
 CREATE INDEX IF NOT EXISTS idx_whales_trades_3days ON whales(trades_last_3_days DESC);
+CREATE INDEX IF NOT EXISTS idx_whales_trades_7days ON whales(trades_last_7_days DESC);
+-- TRD-419: New activity-based indexes
+CREATE INDEX IF NOT EXISTS idx_whales_qualification_status ON whales(qualification_status);
+CREATE INDEX IF NOT EXISTS idx_whales_tier ON whales(tier);
+CREATE INDEX IF NOT EXISTS idx_whales_last_active_at ON whales(last_active_at);
+CREATE INDEX IF NOT EXISTS idx_whales_last_seen_in_feed ON whales(last_seen_in_feed);
+CREATE INDEX IF NOT EXISTS idx_whales_last_targeted_fetch_at ON whales(last_targeted_fetch_at);
 
 -- Whale trades history (for analysis)
 CREATE TABLE IF NOT EXISTS whale_trades (
     id SERIAL PRIMARY KEY,
-    whale_id INTEGER NOT NULL REFERENCES whales(id),
+    whale_id INTEGER REFERENCES whales(id),
+    wallet_address VARCHAR(66) NOT NULL,
     market_id VARCHAR(255) NOT NULL,
+    market_title VARCHAR(500),
     side VARCHAR(10) NOT NULL CHECK (side IN ('buy', 'sell')),
     size_usd DECIMAL(20, 8) NOT NULL,
     price DECIMAL(20, 8) NOT NULL,
     outcome VARCHAR(50),
     is_winner BOOLEAN,
     profit_usd DECIMAL(20, 8),
-    traded_at TIMESTAMP NOT NULL DEFAULT NOW()
+    traded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    tx_hash VARCHAR(66),
+    source VARCHAR(32) NOT NULL DEFAULT 'BACKFILL'
 );
 
 CREATE INDEX IF NOT EXISTS idx_whale_trades_whale ON whale_trades(whale_id, traded_at);
 CREATE INDEX IF NOT EXISTS idx_whale_trades_market ON whale_trades(market_id, traded_at);
+CREATE INDEX IF NOT EXISTS idx_whale_trades_wallet ON whale_trades(wallet_address, traded_at);
+CREATE INDEX IF NOT EXISTS idx_whale_trades_tx_hash ON whale_trades(tx_hash) WHERE tx_hash IS NOT NULL;
 
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
 VALUES (100.00, 0, 100.00, 0, 0);
-
--- ============================================================
--- Stage 2: Whale Discovery + Qualification + Ranking Migration
--- ============================================================
-
--- Add missing columns to whales table
-ALTER TABLE whales ADD COLUMN IF NOT EXISTS total_volume_usd DECIMAL(20, 8) NOT NULL DEFAULT 0;
-ALTER TABLE whales ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'discovered' CHECK (status IN ('discovered', 'qualified', 'ranked'));
-ALTER TABLE whales ADD COLUMN IF NOT EXISTS trades_last_3_days INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE whales ADD COLUMN IF NOT EXISTS days_active INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE whales ADD COLUMN IF NOT EXISTS last_qualified_at TIMESTAMP;
-ALTER TABLE whales ADD NOT NULL CONSTRAINT whales_status_check CHECK (status IN ('discovered', 'qualified', 'ranked'));
-
--- Add indexes for Stage 2 queries
-CREATE INDEX IF NOT EXISTS idx_whales_status ON whales(status);
-CREATE INDEX IF NOT EXISTS idx_whales_qualified ON whales(status, risk_score);
-CREATE INDEX IF NOT EXISTS idx_whales_ranked ON whales(status, last_qualified_at);
-CREATE INDEX IF NOT EXISTS idx_whales_trades_3days ON whales(trades_last_3_days DESC);
