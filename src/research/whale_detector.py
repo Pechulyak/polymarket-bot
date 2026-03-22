@@ -1202,7 +1202,7 @@ class WhaleDetector:
         # Ensure async engine exists
         if not hasattr(self, '_async_engine') or self._async_engine is None:
             from sqlalchemy.ext.asyncio import create_async_engine
-            async_db_url = self._database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self._database_url else self._database_url.replace("postgresql://", "postgresql+asyncpg://")
+            async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self.database_url else self.database_url.replace("postgresql://", "postgresql+asyncpg://")
             self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
         # Get market category
@@ -1245,7 +1245,7 @@ class WhaleDetector:
                 if "duplicate" in str(e).lower() or "unique" in str(e).lower():
                     logger.debug("trade_duplicate_skip", tx_hash=tx_hash[:16] if tx_hash else None)
                     return False
-                logger.info("trade_save_failed", error=str(e), trader=trader_lower[:10] if trader_lower else "unknown")
+                logger.warning("trade_save_error", error=str(e), trader=trader_lower[:10] if trader_lower else "unknown")
                 return False
 
     def get_detected_whales(self) -> List[DetectedWhale]:
@@ -1391,35 +1391,54 @@ class WhaleDetector:
                 min_size_usd=min_size,
             )
             
-            # TRD-423: PAUSED - Trade ingestion disabled pending investigation
-            # Issue: Trades are fetched but not saved to whale_trades table
-            # for trade in trades:
-            #     try:
-            #         # Determine side from trade
-            #         side = "buy" if trade.side.upper() == "BUY" else "sell"
-            #         
-            #         # Get market_id from condition_id
-            #         market_id = trade.condition_id or ""
-            #         
-            #         # Convert outcome to Yes/No format using helper function
-            #         normalized_outcome = convert_outcome_to_yes_no(trade.outcome)
-            #         
-            #         # Save trade to database with tx_hash for deduplication
-            #         await self.save_trade_to_db(
-            #             trader=trade.trader,
-            #             market_id=market_id,
-            #             side=side,
-            #             size_usd=trade.size_usd,
-            #             price=trade.price,
-            #             timestamp=float(trade.timestamp),
-            #             tx_hash=trade.tx_hash,
-            #             market_title=trade.market_title,
-            #             source="BACKFILL",
-            #             outcome=normalized_outcome,
-            #         )
-            #         saved_trades_count += 1
-            #     except Exception as e:
-            #         logger.debug("trade_save_error", error=str(e), trader=trade.trader[:10] if trade.trader else "unknown")
+            # TRD-423: Re-enabled - Trade ingestion fixed
+            # Save trades to whale_trades table for analysis
+            # DEBUG: Log first few trades to diagnose filtering
+            logger.warning("DEBUG_TRADES_RECEIVED", 
+                count=len(trades),
+                min_size_used=str(min_size),
+                sample_trades=[
+                    {
+                        "trader": str(t.trader)[:10] if t.trader else "NONE",
+                        "condition_id": str(t.condition_id)[:20] if t.condition_id else "NONE",
+                        "size_usd": str(t.size_usd),
+                        "tx_hash": str(t.tx_hash)[:16] if t.tx_hash else "NONE",
+                    }
+                    for t in trades[:3]
+                ] if trades else []
+            )
+            
+            for trade in trades:
+                try:
+                    # Determine side from trade
+                    side = "buy" if trade.side.upper() == "BUY" else "sell"
+                    
+                    # Get market_id from condition_id - guard against empty
+                    market_id = trade.condition_id or ""
+                    if not market_id:
+                        logger.warning("trade_skip_empty_market_id", 
+                                     trader=trade.trader[:10] if trade.trader else "unknown")
+                        continue
+                    
+                    # Convert outcome to Yes/No format using helper function
+                    normalized_outcome = convert_outcome_to_yes_no(trade.outcome)
+                    
+                    # Save trade to database with tx_hash for deduplication
+                    await self.save_trade_to_db(
+                        trader=trade.trader,
+                        market_id=market_id,
+                        side=side,
+                        size_usd=trade.size_usd,
+                        price=trade.price,
+                        timestamp=float(trade.timestamp),
+                        tx_hash=trade.tx_hash,
+                        market_title=trade.market_title,
+                        source="BACKFILL",
+                        outcome=normalized_outcome,
+                    )
+                    saved_trades_count += 1
+                except Exception as e:
+                    logger.warning("trade_save_error", error=str(e), trader=trade.trader[:10] if trade.trader else "unknown")
             
             # Now get aggregated stats
             aggregated = await self.polymarket_client.aggregate_by_address(

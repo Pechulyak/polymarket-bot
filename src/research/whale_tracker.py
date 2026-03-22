@@ -746,8 +746,9 @@ class WhaleTracker:
         market_category = await get_market_category(market_id)
 
         # Ensure async engine exists for unified method
+        # TRD-423: Fixed attribute name (was _database_url)
         if not hasattr(self, '_async_engine') or self._async_engine is None:
-            async_db_url = self._database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self._database_url else self._database_url.replace("postgresql://", "postgresql+asyncpg://")
+            async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self.database_url else self.database_url.replace("postgresql://", "postgresql+asyncpg://")
             self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
         # Create async session
