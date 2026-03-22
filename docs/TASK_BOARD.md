@@ -209,6 +209,16 @@ Root cause: global 500-trade window limit + отсутствие per-wallet back
 
 Статус: АУДИТ ЗАВЕРШЁН - ожидает Review |
 | TRD-420 | Run one-time targeted API backfill for current whales subset | TODO |
+| TRD-421 | Аудит whale_trades — Завершён | DONE |
+Description: Аудит полноты данных в таблице whale_trades. Найдено 5 источников INSERT. Критическая проблема: real_time_whale_monitor не записывает whale_id/wallet_address. Предложения: добавить market_category, исправить real_time_whale_monitor. Отчёт: docs/whale_audit_report.md
+| TRD-422 | Добавить market_category в whale_trades и унифицировать запись | DONE |
+Description: Добавить поле market_category в таблицу whale_trades и унифицировать логику записи через единый writer.
+Выполненные работы:
+- Создан скрипт миграции: scripts/migration_trd422_whale_trades_category.sql (колонка market_category + индекс)
+- Создан унифицированный writer: src/research/whale_trade_writer.py (функция save_whale_trade с дедупликацией по tx_hash)
+- Создан кэш категорий: src/data/storage/market_category_cache.py (функция get_market_category через CLOB API)
+- Мигрированы модули: real_time_whale_monitor.py, whale_detector.py, whale_tracker.py, virtual_bankroll.py
+- Валидация: колонка и индекс созданы, контейнеры работают
 
 ---
 

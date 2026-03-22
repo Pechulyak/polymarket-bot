@@ -1,5 +1,9 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-17 (SYS-326: Whale Observation Mode + Suspension of Execution Layers)
+Обновлено: 2026-03-22 (TRD-421: Аудит whale_trades — ✅ Завершён)
+- Найдено 5 источников INSERT в whale_trades
+- Критическая проблема: real_time_whale_monitor не записывает whale_id/wallet_address
+- Предложения: добавить market_category, исправить real_time_whale_monitor
+- Отчёт: docs/whale_audit_report.md
 version: 1.2.5
 Фаза: Неделя 1 (Подготовка)
 
@@ -166,6 +170,10 @@ last_fix: 2026-03-16 (TRD-409: settlement integration + TRD-410: outcome field)
 1. Проверить обновление whale_trades после исправления (ждать новых трейдов)
 2. Дождаться квалификации китов (trades_last_3_days, days_active)
 3. Запустить paper trading на 7+ дней
+4. TRD-421: Аудит whale_trades — ✅ Завершён (см. docs/whale_audit_report.md)
+   - Найдено 5 источников INSERT в whale_trades
+   - Критическая проблема: real_time_whale_monitor не записывает whale_id/wallet_address
+   - Предложения: добавить market_category, исправить real_time_whale_monitor
 
 ---
 
@@ -1988,7 +1996,70 @@ fix_date: 2026-03-18
 
 ---
 
-## 39. WHALE_TRADES INGESTION COMPLETENESS AUDIT
+## 39. TRD-423: CRITICAL — whale_trades NOT SAVING AFTER UNCOMMENT
+
+### Issue Date
+issue_date: 2026-03-22
+
+### Problem
+After uncommenting the trade ingestion code in whale_detector.py (lines 1394-1422):
+- Code was successfully uncommented
+- Container was restarted at 16:41:31
+- Trades ARE being fetched (logs show `polymarket_trades_fetched count=4`)
+- BUT whale_trades table still has 0 rows after 50+ minutes
+- NO "whale_trade_saved" or "trade_save_error" logs appearing
+
+### Evidence
+```
+polymarket_whale_detector  | 2026-03-22 17:38:05 [info] polymarket_trades_fetched count=4
+polymarket_whale_detector  | 2026-03-22 17:38:05 [info] polymarket_aggregated total_trades=4 unique_traders=4
+polymarket_whale_detector  | 2026-03-22 17:41:05 [info] polymarket_trades_fetched count=4
+
+# Database query shows:
+whale_trades: 0 rows
+```
+
+### Root Cause
+The uncommented code block in _fetch_polymarket_whales() is not executing the save path, OR there is a silent exception being caught somewhere.
+
+### Code Block (uncommented at 16:41)
+```python
+# TRD-423: Re-enabled trade ingestion with unified writer
+for trade in trades:
+    try:
+        side = "buy" if trade.side.upper() == "BUY" else "sell"
+        market_id = trade.condition_id or ""
+        normalized_outcome = convert_outcome_to_yes_no(trade.outcome)
+        await self.save_trade_to_db(
+            trader=trade.trader,
+            market_id=market_id,
+            side=side,
+            size_usd=trade.size_usd,
+            price=trade.price,
+            timestamp=float(trade.timestamp),
+            tx_hash=trade.tx_hash,
+            market_title=trade.market_title,
+            source="BACKFILL",
+            outcome=normalized_outcome,
+        )
+        saved_trades_count += 1
+    except Exception as e:
+        logger.debug("trade_save_error", error=str(e), trader=trade.trader[:10] if trade.trader else "unknown")
+```
+
+### Status
+trd423_status: PAUSED
+action_taken: Stopping whale_trades writing pending investigation
+
+### Investigation Needed
+1. Check if save_trade_to_db is actually being called
+2. Check for silent exceptions in the try/except block
+3. Verify trade object has all required fields
+4. Check database connection in the save method
+
+---
+
+## 40. WHALE_TRADES INGESTION COMPLETENESS AUDIT
 
 - whale_trades_ingestion_audit_status: COMPLETED
 - audit_scope: whale_trades only

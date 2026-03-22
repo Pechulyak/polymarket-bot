@@ -29,14 +29,17 @@ from uuid import uuid4
 import asyncpg
 import structlog
 from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from src.data.ingestion.websocket_client import PolymarketWebSocket, WebSocketMessage
 from src.research.whale_tracker import WhaleTracker
 from src.research.whale_poller import WhalePoller
 from src.data.storage.market_title_cache import get_market_title
+from src.data.storage.market_category_cache import get_market_category
 from src.config.settings import settings
 from src.research.polymarket_data_client import PolymarketDataClient
+from src.research.whale_trade_writer import save_whale_trade
 
 logger = structlog.get_logger(__name__)
 
@@ -490,45 +493,45 @@ class RealTimeWhaleMonitor:
         )
 
     async def _save_whale_signal_to_db(self, signal: WhaleTradeSignal, market_title: Optional[str] = None, outcome: Optional[str] = None) -> None:
-        """Save whale signal to database.
+        """Save whale signal to database using unified save_whale_trade method.
 
         Args:
             signal: The whale trade signal
             market_title: Market question/title from Polymarket API (optional)
             outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
         """
-        await self._ensure_database()
-        if not self._Session:
-            return
+        # Ensure async engine exists
+        if not hasattr(self, '_async_engine') or self._async_engine is None:
+            from sqlalchemy.ext.asyncio import create_async_engine
+            # Convert postgresql+psycopg2:// to postgresql+asyncpg://
+            async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+            self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
-        session = self._Session()
-        try:
-            query = text("""
-                INSERT INTO whale_trades (
-                    market_id, market_title, side, size_usd, price, outcome, traded_at, source
-                ) VALUES (
-                    :market_id, :market_title, :side, :size_usd, :price, :outcome, :traded_at, :source
+        # Get market category
+        market_category = await get_market_category(signal.market_id)
+
+        # Create async session
+        from sqlalchemy.ext.asyncio import AsyncSession
+        async_session_maker = sessionmaker(
+            self._async_engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+        async with async_session_maker() as session:
+            try:
+                await save_whale_trade(
+                    session=session,
+                    wallet_address=signal.trader_address,
+                    market_id=signal.market_id,
+                    side=signal.side,
+                    size_usd=signal.size_usd,
+                    price=signal.price,
+                    outcome=outcome,
+                    market_title=market_title,
+                    market_category=market_category,
+                    source="REALTIME",
                 )
-            """)
-            session.execute(
-                query,
-                {
-                    "market_id": signal.market_id,
-                    "market_title": market_title,
-                    "side": signal.side,
-                    "size_usd": float(signal.size_usd),
-                    "price": float(signal.price),
-                    "outcome": outcome,
-                    "traded_at": datetime.fromtimestamp(signal.timestamp),
-                    "source": "REALTIME",
-                },
-            )
-            session.commit()
-        except Exception as e:
-            logger.debug("whale_signal_save_failed", error=str(e))
-            session.rollback()
-        finally:
-            session.close()
+            except Exception as e:
+                logger.debug("whale_signal_save_failed", error=str(e))
 
     def _get_stats(self) -> Dict[str, Any]:
         """Get monitoring statistics."""
