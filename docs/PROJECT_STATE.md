@@ -2048,8 +2048,12 @@ for trade in trades:
 ```
 
 ### Status
-trd423_status: PAUSED
-action_taken: Stopping whale_trades writing pending investigation
+trd423_status: DONE
+action_taken: Fixed - Added POLLER to source check constraint + all code fixes applied
+fixed_date: 2026-03-22
+records_saved: 7613
+unique_traders: 197
+whale-detector_stopped: true
 
 ### Investigation Needed
 1. Check if save_trade_to_db is actually being called
