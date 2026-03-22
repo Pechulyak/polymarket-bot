@@ -430,10 +430,16 @@ CREATE TABLE IF NOT EXISTS api_health (
 #### Initialize Database
 ```bash
 # Run schema
-psql -U postgres -d postgres -f scripts/init_db.sql
+# NOTE: Database name is "polymarket" NOT "postgres"
+psql -U postgres -d polymarket -f scripts/init_db.sql
 
 # Or via Docker
-docker exec -i polymarket-postgres-1 psql -U postgres -d postgres < scripts/init_db.sql
+# NOTE: Container name is "polymarket_postgres" (with underscore), database is "polymarket"
+docker exec -i polymarket_postgres psql -U postgres -d polymarket < scripts/init_db.sql
+
+# ❌ INCORRECT - DO NOT USE (kept for reference only):
+# docker exec -i polymarket_postgres psql -U postgres -d postgres < scripts/init_db.sql
+#    ^^^ "postgres" database does not exist, correct name is "polymarket"
 ```
 
 #### Virtual Trades Note
