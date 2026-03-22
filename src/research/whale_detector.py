@@ -791,17 +791,16 @@ class WhaleDetector:
                 )
                 
                 if qualification_path:
-                    # Update whale with new qualification (TRD-419: use new fields)
+                    # Update whale with new qualification (ARC-501: removed deprecated columns)
                     update_query = text("""
                         UPDATE whales
-                        SET qualification_path = :qualification_path,
-                            qualification_status = CASE
-                                WHEN :qualification_path IS NOT NULL THEN 'qualified'
-                                ELSE qualification_status
-                            END,
+                        SET qualification_status = CASE
+                            WHEN :qualification_path IS NOT NULL THEN 'qualified'
+                            ELSE qualification_status
+                        END,
                             trades_last_7_days = :trades_last_7_days,
-                            days_active = :days_active,
                             days_active_7d = LEAST(:days_active, 7),
+                            days_active_30d = LEAST(:days_active, 30),
                             last_active_at = NOW(),
                             updated_at = NOW()
                         WHERE id = :whale_id
@@ -943,34 +942,31 @@ class WhaleDetector:
             # TRD-419: Use new activity-based fields
             # qualification_status replaces status
             # days_active_7d replaces days_active (for 7-day window logic)
+            # ARC-501: Removed deprecated columns (total_profit_usd, qualification_path, status, days_active)
             query = text("""
                 INSERT INTO whales (
-                    wallet_address, total_trades, total_profit_usd,
+                    wallet_address, total_trades,
                     total_volume_usd, avg_trade_size_usd, last_active_at, risk_score,
                     qualification_status, trades_last_3_days, trades_last_7_days,
-                    days_active, days_active_7d, days_active_30d,
-                    qualification_path, source_new, updated_at, notes
+                    days_active_7d, days_active_30d,
+                    source_new, updated_at, notes
                 ) VALUES (
-                    :wallet_address, :total_trades, :total_profit,
+                    :wallet_address, :total_trades,
                     :total_volume, :avg_trade_size, NOW(), :risk_score,
                     :qualification_status, :trades_last_3_days, :trades_last_7_days,
-                    :days_active, :days_active_7d, :days_active_30d,
-                    :qualification_path, 'auto_detected', NOW(), :notes
+                    :days_active_7d, :days_active_30d,
+                    'auto_detected', NOW(), :notes
                 )
                 ON CONFLICT (wallet_address) DO UPDATE SET
                     total_trades = EXCLUDED.total_trades,
-                    total_profit_usd = EXCLUDED.total_profit_usd,
                     total_volume_usd = EXCLUDED.total_volume_usd,
                     avg_trade_size_usd = EXCLUDED.avg_trade_size_usd,
                     risk_score = EXCLUDED.risk_score,
                     qualification_status = EXCLUDED.qualification_status,
-                    status = EXCLUDED.qualification_status,
                     trades_last_3_days = EXCLUDED.trades_last_3_days,
                     trades_last_7_days = EXCLUDED.trades_last_7_days,
-                    days_active = EXCLUDED.days_active,
                     days_active_7d = EXCLUDED.days_active_7d,
                     days_active_30d = EXCLUDED.days_active_30d,
-                    qualification_path = EXCLUDED.qualification_path,
                     last_active_at = NOW(),
                     updated_at = NOW(),
                     notes = EXCLUDED.notes
@@ -980,17 +976,14 @@ class WhaleDetector:
                 {
                     "wallet_address": whale.wallet_address,
                     "total_trades": whale.total_trades,
-                    "total_profit": 0.0,
                     "total_volume": float(whale.total_volume),
                     "avg_trade_size": float(whale.avg_trade_size),
                     "risk_score": whale.risk_score,
                     "qualification_status": whale.qualification_status,
                     "trades_last_3_days": whale.trades_last_3_days,
                     "trades_last_7_days": whale.trades_last_7_days,
-                    "days_active": whale.days_active,
                     "days_active_7d": whale.days_active_7d,
                     "days_active_30d": whale.days_active_30d,
-                    "qualification_path": whale.qualification_path,
                     "notes": whale.name if whale.name else None,
                 },
             )
@@ -1092,62 +1085,49 @@ class WhaleDetector:
                     tier = "WARM"
                 # else: tier remains "COLD"
 
-            # Update whales table with aggregated history
-            session = self._Session()
-            try:
-                # Determine qualification_path based on tier and volume
-                qualification_path = None
-                if tier == "HOT" and total_volume >= Decimal("500"):
-                    qualification_path = "ACTIVE"
-                elif tier in ("WARM", "COLD") and total_volume >= Decimal("10000"):
-                    qualification_path = "CONVICTION"
-                
-                # Determine last_qualified_at
-                last_qualified_at = datetime.now() if qualification_path else None
-                
-                update_query = text("""
-                    UPDATE whales
-                    SET initial_history_fetched = TRUE,
-                        history_trade_count = :trade_count,
-                        history_volume_usd = :total_volume,
-                        tier = :tier,
-                        last_seen_in_feed = :last_seen,
-                        last_targeted_fetch_at = NOW(),
-                        source_new = 'auto_detected',
-                        qualification_path = :qualification_path,
-                        last_qualified_at = :last_qualified_at,
-                        updated_at = NOW()
-                    WHERE LOWER(wallet_address) = LOWER(:address)
-                """)
-                session.execute(update_query, {
-                    "trade_count": trade_count,
-                    "total_volume": float(total_volume),
-                    "tier": tier,
-                    "last_seen": last_seen_dt,
-                    "qualification_path": qualification_path,
-                    "last_qualified_at": last_qualified_at,
-                    "address": address,
-                })
-                session.commit()
+            # Determine last_qualified_at (不使用 qualification_path - удалён в ARC-501)
+            last_qualified_at = datetime.now() if (tier == "HOT" and total_volume >= Decimal("500")) or (tier in ("WARM", "COLD") and total_volume >= Decimal("10000")) else None
+            
+            # ARC-501: Removed deprecated columns from UPDATE
+            update_query = text("""
+                UPDATE whales
+                SET initial_history_fetched = TRUE,
+                    history_trade_count = :trade_count,
+                    history_volume_usd = :total_volume,
+                    tier = :tier,
+                    last_seen_in_feed = :last_seen,
+                    last_targeted_fetch_at = NOW(),
+                    source_new = 'auto_detected',
+                    last_qualified_at = :last_qualified_at,
+                    updated_at = NOW()
+                WHERE LOWER(wallet_address) = LOWER(:address)
+            """)
+            session.execute(update_query, {
+                "trade_count": trade_count,
+                "total_volume": float(total_volume),
+                "tier": tier,
+                "last_seen": last_seen_dt,
+                "last_qualified_at": last_qualified_at,
+                "address": address,
+            })
+            session.commit()
 
-                logger.info(
-                    "initial_history_fetched",
-                    address=address[:10],
-                    trade_count=trade_count,
-                    total_volume=float(total_volume),
-                    unique_days=unique_days,
-                    avg_size=float(avg_size),
-                    tier=tier,
-                )
-
-            except Exception as e:
-                logger.error("update_whale_history_failed", error=str(e), address=address[:10])
-                session.rollback()
-            finally:
-                session.close()
+            logger.info(
+                "initial_history_fetched",
+                address=address[:10],
+                trade_count=trade_count,
+                total_volume=float(total_volume),
+                unique_days=unique_days,
+                avg_size=float(avg_size),
+                tier=tier,
+            )
 
         except Exception as e:
-            logger.error("fetch_initial_history_error", error=str(e), address=address[:10])
+            logger.error("update_whale_history_failed", error=str(e), address=address[:10])
+            if session.is_active:
+                session.rollback()
+        finally:
+            session.close()
 
     async def save_trade_to_db(
         self,

@@ -570,17 +570,17 @@ class WhaleTracker:
 
         session = self._Session()
         try:
+            # ARC-501: Removed total_profit_usd from INSERT
             query = text("""
                 INSERT INTO whales (
-                    wallet_address, total_trades, total_profit_usd,
+                    wallet_address, total_trades,
                     avg_trade_size_usd, last_active_at, risk_score, updated_at
                 ) VALUES (
-                    :wallet_address, :total_trades, :total_profit_usd,
+                    :wallet_address, :total_trades,
                     :avg_trade_size_usd, :last_active_at, :risk_score, NOW()
                 )
                 ON CONFLICT (wallet_address) DO UPDATE SET
                     total_trades = EXCLUDED.total_trades,
-                    total_profit_usd = EXCLUDED.total_profit_usd,
                     avg_trade_size_usd = EXCLUDED.avg_trade_size_usd,
                     last_active_at = EXCLUDED.last_active_at,
                     risk_score = EXCLUDED.risk_score,
@@ -591,8 +591,6 @@ class WhaleTracker:
                 {
                     "wallet_address": stats.wallet_address.lower(),
                     "total_trades": stats.total_trades,
-                    "win_rate": float(stats.win_rate),
-                    "total_profit_usd": float(stats.total_profit_usd),
                     "avg_trade_size_usd": float(stats.avg_trade_size_usd),
                     "last_active_at": stats.last_active_at,
                     "risk_score": stats.risk_score,
@@ -637,11 +635,12 @@ class WhaleTracker:
             # TRD-419: Use new qualification_status instead of deprecated is_active
             # win_rate is always 0, so we use activity-based criteria instead
             # Sort by total_volume (activity metric) instead of win_rate
+            # ARC-501: Use total_trades instead of trades_count (deprecated)
             query = text("""
                 SELECT
                     wallet_address, total_trades, total_volume_usd,
                     avg_trade_size_usd, last_active_at, risk_score,
-                    qualification_status, trades_count, trades_last_3_days,
+                    qualification_status, total_trades, trades_last_3_days,
                     trades_last_7_days, days_active_7d, days_active_30d
                 FROM whales
                 WHERE qualification_status IN ('qualified', 'ranked', 'tracked')

@@ -1,10 +1,11 @@
 # СОСТОЯНИЕ ПРОЕКТА
-Обновлено: 2026-03-22 (TRD-421: Аудит whale_trades — ✅ Завершён)
-- Найдено 5 источников INSERT в whale_trades
-- Критическая проблема: real_time_whale_monitor не записывает whale_id/wallet_address
-- Предложения: добавить market_category, исправить real_time_whale_monitor
-- Отчёт: docs/whale_audit_report.md
-version: 1.2.5
+Обновлено: 2026-03-22 (ARC-501: Whales schema cleanup — ✅ Завершён)
+- Удалены мёртвые поля: total_profit_usd, is_active, status, qualification_path, source, trades_count, days_active, first_discovered_at
+- Добавлены P&L поля: win_count, loss_count, total_roundtrips, total_pnl_usd, avg_pnl_usd, win_rate_confirmed, last_pnl_updated
+- Backup создан: backups/whales_pre_arc501_20260322_190604.sql
+- whales rows: 355 (без изменений)
+- init_db.sql обновлён
+version: 1.2.6
 Фаза: Неделя 1 (Подготовка)
 
 ---

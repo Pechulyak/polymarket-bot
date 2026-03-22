@@ -153,25 +153,23 @@ INSERT INTO fee_schedule (exchange, fee_type, fee_percentage, fixed_fee, currenc
 ('ethereum', 'gas', NULL, NULL, 'ETH')
 ON CONFLICT DO NOTHING;
 
--- Whales tracking table (TRD-419: activity-based schema)
+-- Whales tracking table (TRD-419: activity-based schema, ARC-501: P&L fields added)
 CREATE TABLE IF NOT EXISTS whales (
     id SERIAL PRIMARY KEY,
     wallet_address VARCHAR(66) NOT NULL UNIQUE,
     first_seen_at TIMESTAMP NOT NULL DEFAULT NOW(),
     total_trades INTEGER NOT NULL DEFAULT 0,
-    -- win_rate REMOVED - API does not provide settlement outcomes
-    total_profit_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    -- total_profit_usd REMOVED - API does not provide, use total_pnl_usd
     total_volume_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
     avg_trade_size_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
     last_active_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    -- is_active REMOVED - use qualification_status
     risk_score INTEGER CHECK (risk_score >= 1 AND risk_score <= 10 OR risk_score IS NULL),
     
-    -- Legacy status (deprecated - use qualification_status)
-    status VARCHAR(20) CHECK (status IN ('discovered', 'candidate', 'tracked', 'qualified', 'ranked', 'cold') OR status IS NULL),
+    -- status REMOVED - use qualification_status
     trades_last_3_days INTEGER NOT NULL DEFAULT 0,
     trades_last_7_days INTEGER NOT NULL DEFAULT 0,
-    days_active INTEGER NOT NULL DEFAULT 0,
+    -- days_active REMOVED - use days_active_7d
     last_qualified_at TIMESTAMP,
     last_ranked_at TIMESTAMP,
     
@@ -179,29 +177,38 @@ CREATE TABLE IF NOT EXISTS whales (
     qualification_status VARCHAR(20) NOT NULL DEFAULT 'discovered' CHECK (qualification_status IN ('discovered', 'candidate', 'tracked', 'qualified', 'ranked', 'cold')),
     source_new VARCHAR(32) NOT NULL DEFAULT 'discovery',
     tier VARCHAR(10) CHECK (tier IN ('HOT', 'WARM', 'COLD') OR tier IS NULL),
-    first_discovered_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    -- first_discovered_at REMOVED - use first_seen_at
     last_seen_in_feed TIMESTAMP,
     last_targeted_fetch_at TIMESTAMP,
-    trades_count INTEGER NOT NULL DEFAULT 0,
+    -- trades_count REMOVED - use total_trades
     days_active_7d INTEGER NOT NULL DEFAULT 0,
     days_active_30d INTEGER NOT NULL DEFAULT 0,
     trades_per_day NUMERIC(20, 8) NOT NULL DEFAULT 0,
     
-    -- Qualification tracking
-    qualification_path VARCHAR(20),
+    -- qualification_path REMOVED - redundant
+    -- source REMOVED - duplicate of source_new
     
     -- Additional metadata
-    source VARCHAR(50),
     notes TEXT,
+    
+    -- ARC-501: P&L fields (calculated from whale_trade_roundtrips)
+    win_count INTEGER NOT NULL DEFAULT 0,
+    loss_count INTEGER NOT NULL DEFAULT 0,
+    total_roundtrips INTEGER NOT NULL DEFAULT 0,
+    total_pnl_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    avg_pnl_usd DECIMAL(20, 8) NOT NULL DEFAULT 0,
+    win_rate_confirmed DECIMAL(5, 4) NOT NULL DEFAULT 0,
+    last_pnl_updated TIMESTAMP,
+    
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_whales_address ON whales(wallet_address);
-CREATE INDEX IF NOT EXISTS idx_whales_active ON whales(is_active, last_active_at);
+-- idx_whales_active REMOVED - is_active column removed
+-- idx_whales_status REMOVED - status column removed
 CREATE INDEX IF NOT EXISTS idx_whales_risk ON whales(risk_score);
 -- Legacy indexes (deprecated)
-CREATE INDEX IF NOT EXISTS idx_whales_status ON whales(status);
 CREATE INDEX IF NOT EXISTS idx_whales_trades_3days ON whales(trades_last_3_days DESC);
 CREATE INDEX IF NOT EXISTS idx_whales_trades_7days ON whales(trades_last_7_days DESC);
 -- TRD-419: New activity-based indexes
