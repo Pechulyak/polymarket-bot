@@ -539,12 +539,12 @@ notes:
     # Read current PROJECT_STATE.md
     content = PROJECT_STATE_PATH.read_text()
     
-    # Find the DAILY DATA SNAPSHOT section
-    marker_start = "## DAILY DATA SNAPSHOT"
+    # Find the DAILY DATA SNAPSHOT section (may have section number prefix like "## 9.")
+    marker_start = "DAILY DATA SNAPSHOT"
     marker_end = "<!-- END AUTO-GENERATED -->"
     
     if marker_start in content and marker_end in content:
-        # Extract existing snapshots
+        # Extract existing snapshots (use find to get FIRST end marker)
         start_idx = content.find(marker_start)
         end_idx = content.find(marker_end) + len(marker_end)
         
@@ -573,11 +573,12 @@ notes:
         if current_date:
             existing_snapshots.append((current_date, '\n'.join(current_lines)))
         
-        # Add new snapshot
+        # Add new snapshot (replace if same date already exists)
+        existing_snapshots = [(d, c) for d, c in existing_snapshots if d != today]
         existing_snapshots.append((today, snapshot.strip()))
         
-        # Keep only last 2 days
-        existing_snapshots = existing_snapshots[-2:]
+        # Keep only last 3 days
+        existing_snapshots = existing_snapshots[-3:]
         
         # Rebuild section
         new_section = f"""{marker_start}
