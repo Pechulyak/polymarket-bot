@@ -186,11 +186,11 @@ async def save_whale_trade(
                 INSERT INTO whale_trades (
                     whale_id, wallet_address, market_id, market_title,
                     side, size_usd, price, outcome, traded_at,
-                    tx_hash, source, market_tags
+                    tx_hash, source, market_category
                 ) VALUES (
                     :whale_id, :wallet_address, :market_id, :market_title,
                     :side, :size_usd, :price, :outcome, :traded_at,
-                    :tx_hash, :source, :market_tags
+                    :tx_hash, :source, :market_category
                 )
             """),
             {
@@ -205,7 +205,7 @@ async def save_whale_trade(
                 "traded_at": datetime.utcnow(),
                 "tx_hash": tx_hash,
                 "source": source,
-                "market_tags": tags_str,
+                "market_category": market_category,
             }
         )
         

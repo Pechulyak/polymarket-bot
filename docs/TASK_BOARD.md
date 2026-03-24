@@ -16,24 +16,6 @@
 
 ---
 
-## Статусы задач
-
-| Статус | Описание |
-|--------|----------|
-| TODO | Задача в бэклоге, ожидает реализации |
-| IN_PROGRESS | Задача передана Roo, идёт работа |
-| READY | Задача выполнена, готова к тестированию |
-| TESTED | Задача протестирована, готова к merge |
-| DONE | Задача закоммичена и запушена |
-
----
-
-## Текущий приоритет
-
-*(None - waiting for tasks)*
-
----
-
 ## EPIC 1 — WHALE COPY STRATEGY
 
 | ID | Задача | Статус |
@@ -71,44 +53,8 @@
 |----|--------|--------|
 | SYS-301 | Docker Orchestration & Deployment | TODO |
 | SYS-302 | Monitoring & Alerting System | TODO |
-| SYS-304 | Add TASK_BOARD governance rules | DONE |
-| SYS-305 | Generate docs/TASK_BOARD.html | DONE |
-| SYS-306 | Persistent local web server for TASK_BOARD | DONE |
-| SYS-309 | Daily Data Audit Snapshot | DONE |
-| SYS-311 | Fix Whale Activity Counters | DONE |
-| SYS-312 | Whale Universe Quality Analysis | DONE |
-| SYS-313 | Hide DONE Tasks in HTML Task Board | DONE |
-| SYS-314 | Paper Trade Trigger Pipeline Audit | DONE |
-| SYS-315 | Fix Duplicate Suppression in Paper Trade Trigger | DONE |
-| SYS-317 | Audit trades lifecycle for paper performance tracking | DONE |
-| SYS-318 | Paper Position Settlement Engine | DONE |
-| SYS-319 | Paper Execution Gap Audit | DONE |
-| SYS-320 | Paper Trade Close Lifecycle Audit | DONE |
-| SYS-321 | Подключение settlement engine для paper сделок | DONE |
-| SYS-322 | Security Hardening: No Public Ports Policy | DONE |
-| SYS-323 | Security Hardening: Firewall Configuration | DONE |
-| SYS-324 | Security Hardening: Port Exposure Scan | DONE |
 | SYS-326 | Safely suspend execution/downstream layers after paper_trades | DONE |
-Description: Temporarily suspend runtime layers after paper_trades to switch project into Whale Observation Mode.
-
-Active layers must remain:
-- whales
-- whale_trades
-- paper_trades
-
-Suspended layers:
-- trades
-- bankroll
-- settlement
-- paper_trade_notifications
-- Telegram notifications
-- other downstream side effects after paper_trades
-
-Goals:
-- stop unreliable execution and accounting layers
-- preserve core whale observation pipeline
-- verify that whales / whale_trades / paper_trades continue working normally
-- if any suspended component is actually required for paper_trades generation, analyze first and do not break pipeline blindly |
+Description: Observation mode enabled. Execution layers suspended. Verified whale_trades → paper_trades pipeline works independently.
 
 ---
 
@@ -135,9 +81,12 @@ Goals:
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| SYS-401 | Project cleanup (logs, temp files, unused scripts) | TODO |
+| SYS-401 | Project cleanup (logs, temp files, unused scripts) | READY |
 | SYS-402 | Remove unused docker images and dangling volumes | TODO |
 | SYS-403 | Verify .env permissions and secret handling | TODO |
+| SYS-500 | Whale Roundtrip Reconstructor — Завершён | DONE |
+
+Description: Реализован модуль `whale_roundtrip_reconstructor.py` для реконструкции позиций китов из событийного уровня whale_trades. Создана таблица whale_trade_roundtrips с аналитической логикой open/close/flip/partial close.
 
 ---
 
@@ -167,24 +116,11 @@ Goals:
 | TRD-406 | Fix zero-size paper trades on open path | TODO |
 | TRD-407 | Investigate execution gap (paper_trades vs trades) | TODO |
 | TRD-409 | Fix settlement integration with VirtualBankroll | DONE |
-Description: Fix two bugs in paper settlement pipeline:
-- open trades created with close_price = open_price instead of NULL
-- settlement engine doesn't call VirtualBankroll to release capital
-Goals:
-- fix close_price = NULL for open trades
-- integrate settlement with VirtualBankroll.close_virtual_position()
-- ensure allocated capital is released on settlement
-- ensure win/loss counters are updated
+Description: Completed (details in PROJECT_STATE)
 | TRD-410 | Add YES/NO outcome attribution for whale trades | DONE |
-Description: Add explicit YES/NO outcome attribution for whale trades and downstream pipeline.
+Description: Completed (details in PROJECT_STATE)
 | TRD-411 | Audit whale exit handling and buy/sell event recording across pipeline | DONE |
-Description: Audit how whale position exit is represented in whale_trades and propagated through downstream pipeline.
-Goals:
-- verify whether whale buy and whale sell are stored as separate rows in whale_trades
-- verify that existing whale_trades rows are not overwritten on exit
-- find real examples where the same whale first buys and later sells the same market
-- verify how these events propagate into paper_trades and trades
-- verify whether whale exit is interpreted as close event, opposite signal, or ignored |
+Description: Completed (details in PROJECT_STATE)
 | TRD-412 | Create whale_trade_roundtrips table and implement whale position reconstruction logic | TODO |
 Description: Introduce a new analytical layer that reconstructs whale positions (round-trips) from the event-level table `whale_trades`.
 Goals:
@@ -196,29 +132,11 @@ Goals:
 - Perform historical backfill - Reconstruct positions for existing whale_trades
 - Ensure analytical correctness - Do not depend on paper_trades or trades |
 | TRD-413 | Audit whale_trades ingestion completeness for tracked whales | TODO |
-Description: Провести аудит полноты записи сделок китов в таблицу whale_trades.
-
-Ключевая проблема: для некоторых китов в whale_trades сохраняется менее 1% фактических сделок из API.
-
-Пример:
-- wallet_address = 0x99c63f3c137a01ace52a544539094adee24fc33b
-- По API: 268 сделок
-- В БД: 2 записи (99.3% потерь)
-
-Root cause: global 500-trade window limit + отсутствие per-wallet backfill
-
-Статус: АУДИТ ЗАВЕРШЁН - ожидает Review |
-| TRD-420 | Run one-time targeted API backfill for current whales subset | TODO |
+Description: Whale trades ingestion incomplete (~99% loss for some whales). Root cause: global 500-trade limit + no per-wallet backfill. Audit completed, awaiting fix.
 | TRD-421 | Аудит whale_trades — Завершён | DONE |
-Description: Аудит полноты данных в таблице whale_trades. Найдено 5 источников INSERT. Критическая проблема: real_time_whale_monitor не записывает whale_id/wallet_address. Предложения: добавить market_category, исправить real_time_whale_monitor. Отчёт: docs/whale_audit_report.md
+Description: Completed (details in PROJECT_STATE)
 | TRD-422 | Добавить market_category в whale_trades и унифицировать запись | DONE |
-Description: Добавить поле market_category в таблицу whale_trades и унифицировать логику записи через единый writer.
-Выполненные работы:
-- Создан скрипт миграции: scripts/migration_trd422_whale_trades_category.sql (колонка market_category + индекс)
-- Создан унифицированный writer: src/research/whale_trade_writer.py (функция save_whale_trade с дедупликацией по tx_hash)
-- Создан кэш категорий: src/data/storage/market_category_cache.py (функция get_market_category через CLOB API)
-- Мигрированы модули: real_time_whale_monitor.py, whale_detector.py, whale_tracker.py, virtual_bankroll.py
-- Валидация: колонка и индекс созданы, контейнеры работают
+Description: Completed (details in PROJECT_STATE)
 
 ---
 
@@ -233,13 +151,7 @@ Description: Добавить поле market_category в таблицу whale_t
 | TRD-418 | Transform whales table schema to approved activity-based structure | DONE |
 | TRD-419 | Migrate whales logic from legacy fields to new activity-based fields | DONE |
 | TRD-420 | Рефакторинг whale discovery: initial history aggregation + tiered polling | IN_PROGRESS |
-Description: Переработать логику обнаружения и квалификации китов.
-Goals:
-- при первом обнаружении адреса в feed — делать разовый API-запрос на историю
-- агрегировать историю в памяти, писать только в whales (не в whale_trades)
-- ввести tier-систему HOT/WARM/COLD для ongoing мониторинга
-- whale_trades заполнять только актуальными сделками (HOT/WARM polling)
-- добавить недостающие поля в таблицу whales
+Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | DATA-404 | Reset virtual bankroll for fresh paper trading cycle | DONE |
 | DATA-405 | Cleanup test records from database | DONE |
 
@@ -256,22 +168,12 @@ Goals:
 
 ---
 
-## Правила управления задачами
+## SYSTEM TASKS
 
-1. **Создание задач**: Только STRATEGY может добавлять новые задачи
-2. **Изменение статусов**: Roo обновляет статус после подтверждения выполнения
-3. **Переход к IN_PROGRESS**: Roo запрашивает подтверждение перед стартом
-4. **Готовность к TESTING**: После завершения работы Roo помечает READY
-5. **Merge в DONE**: После review и merge STRATEGY помечает DONE
+| ID | Задача | Статус |
+|----|--------|--------|
+| SYS-501 | Project Filesystem Cleanup (logs, temp, md artifacts) | DONE |
 
 ---
 
-## Workflow
-
-```
-STRATEGY → [TASK_PACK] → ROO → [выполнение] → STRATEGY → [review] → DONE
-```
-
----
-
-*Обновлено: 2026-03-13*
+*Обновлено: 2026-03-23*

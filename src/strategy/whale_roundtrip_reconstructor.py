@@ -215,7 +215,7 @@ class WhaleRoundtripReconstructor:
                 wt.market_title,
                 wt.traded_at
             FROM whale_trades wt
-            LEFT JOIN whales w ON wt.whale_id = w.id
+            LEFT JOIN whales w ON LOWER(w.wallet_address) = LOWER(wt.wallet_address)
             ORDER BY wt.whale_id, wt.market_id, wt.traded_at
         """)
         
@@ -762,7 +762,7 @@ class WhaleRoundtripReconstructor:
                 wt.market_title,
                 wt.traded_at
             FROM whale_trades wt
-            LEFT JOIN whales w ON wt.whale_id = w.id
+            LEFT JOIN whales w ON LOWER(w.wallet_address) = LOWER(wt.wallet_address)
             WHERE wt.id > :last_trade_id
             ORDER BY wt.id
         """)

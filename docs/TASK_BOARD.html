@@ -138,42 +138,6 @@
     
     <p><em>Единственный source of truth для статусов и списка задач проекта.</em></p>
 
-    <h2>📌 Статусы задач</h2>
-    <table class="status-table">
-        <thead>
-            <tr>
-                <th>Статус</th>
-                <th>Описание</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                <td>Описание</td>
-            </tr>
-            <tr>
-                <td><span class="status-badge status-TODO">TODO</span></td>
-                <td>Задача в бэклоге, ожидает реализации</td>
-            </tr>
-            <tr>
-                <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                <td>Задача передана Roo, идёт работа</td>
-            </tr>
-            <tr>
-                <td><span class="status-badge status-READY">READY</span></td>
-                <td>Задача выполнена, готова к тестированию</td>
-            </tr>
-            <tr>
-                <td><span class="status-badge status-TESTED">TESTED</span></td>
-                <td>Задача протестирована, готова к merge</td>
-            </tr>
-            <tr>
-                <td><span class="status-badge status-DONE">DONE</span></td>
-                <td>Задача закоммичена и запушена</td>
-            </tr>
-        </tbody>
-    </table>
-
     <div class="epic-card">
         <h2>EPIC 1 — WHALE COPY STRATEGY</h2>
         <table>
@@ -467,11 +431,6 @@
                     <td>Audit whale_trades ingestion completeness for tracked whales</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
-                <tr>
-                    <td class="task-id">TRD-420</td>
-                    <td>Run one-time targeted API backfill for current whales subset</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
             </tbody>
         </table>
 
@@ -497,6 +456,11 @@
                     <td class="task-id">TRD-417</td>
                     <td>Audit API response structure across market types before whales schema redesign</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-420</td>
+                    <td>Рефакторинг whale discovery: initial history aggregation + tiered polling</td>
+                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
             </tbody>
         </table>
@@ -544,22 +508,8 @@
 
     </div>
 
-    <h2>📜 Правила управления задачами</h2>
-    <div class="rules">
-        <p>**Создание задач**: Только STRATEGY может добавлять новые задачи</p>
-        <p>**Изменение статусов**: Roo обновляет статус после подтверждения выполнения</p>
-        <p>**Переход к IN_PROGRESS**: Roo запрашивает подтверждение перед стартом</p>
-        <p>**Готовность к TESTING**: После завершения работы Roo помечает READY</p>
-        <p>**Merge в DONE**: После review и merge STRATEGY помечает DONE</p>
-    </div>
-
-    <h2>🔄 Workflow</h2>
-    <div class="workflow">
-        STRATEGY → [TASK_PACK] → ROO → [выполнение] → STRATEGY → [review] → DONE
-    </div>
-
     <div class="footer">
-        <p>Обновлено: 2026-03-13</p>
+        <p>Обновлено: 2026-03-23</p>
         <p class="generated">HTML сгенерирован автоматически из docs/TASK_BOARD.md</p>
     </div>
 </body>

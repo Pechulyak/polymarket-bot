@@ -1,6 +1,6 @@
 # Daily Data Audit Snapshot
 
-**Generated:** 2026-03-21 08:00:02
+**Generated:** 2026-03-24 08:00:02
 
 ---
 
@@ -8,9 +8,9 @@
 
 | Table | Row Count | Rows 24h | Rows 48h | First Row | Last Row |
 |-------|-----------|----------|----------|-----------|----------|
-| whales | 38 | 0 | 0 | 2026-02-23 18:18:13 | 2026-03-02 13:30:53 |
-| whale_trades | 0 | 0 | 0 | N/A | N/A |
-| paper_trades | 632 | 0 | 10 | 2026-03-04 23:59:51 | 2026-03-19 14:13:37 |
+| whales | 0 | N/A | N/A | N/A | N/A |
+| whale_trades | 7648 | 11 | 7648 | 2026-03-22 10:28:37 | 2026-03-23 14:43:42 |
+| paper_trades | 730 | 0 | 98 | 2026-03-04 23:59:51 | 2026-03-22 21:19:45 |
 | paper_trade_notifications | 528 | 0 | 0 | 2026-03-05 18:08:25 | 2026-03-17 17:56:37 |
 | trades | 42 | N/A | N/A | 2026-03-15 17:56:44 | 2026-03-17 18:47:22 |
 | bankroll | 14 | 0 | 0 | 2026-03-17 15:59:51 | 2026-03-17 18:47:56 |
@@ -21,23 +21,23 @@
 
 ### whales
 
-- Unique addresses: 38
-- Default risk_score (5): 33
+- Unique addresses: 0
+- Default risk_score (5): 0
 - NULL qualification_path: 0
 - Active whales (24h): 0
 - Active whales (48h): 0
 
 ### whale_trades
 
-- Unique whales: 0
-- Unique whales (24h): 0
+- Unique whales: 199
+- Unique whales (24h): 1
 - NULL price: 0
 - NULL size: 0
-- Latest trade: N/A
+- Latest trade: 2026-03-23 14:43:42
 
 ### paper_trades
 
-- Unique whales: 453
+- Unique whales: 456
 - Unique whales (24h): 0
 - NULL market_title: 87
 - NULL price: 0
@@ -67,10 +67,10 @@
 
 ## Cross-Table Consistency
 
-- whale_trades → paper_trades conversion (48h): 0%
+- whale_trades → paper_trades conversion (48h): 1.28%
 - paper_trades → notifications coverage (48h): 0.0%
-- Stale tables (>24h no new rows): whales, whale_trades, paper_trades, paper_trade_notifications, trades, bankroll
-- Stale tables (>48h no new rows): whales, whale_trades, paper_trade_notifications, trades, bankroll
+- Stale tables (>24h no new rows): paper_trades, paper_trade_notifications, trades, bankroll
+- Stale tables (>48h no new rows): paper_trade_notifications, trades, bankroll
 
 ---
 
