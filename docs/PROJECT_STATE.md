@@ -259,6 +259,12 @@
   task: SYS-302
   note: active
 
+- PROJECT_STATE_GOVERNANCE.md
+  status: OK
+  updated: 2026-03-24
+  task: 
+  note: governance rules
+
 
   ## 9. DAILY DATA SNAPSHOT
 
@@ -284,6 +290,38 @@ conversion_whale_to_paper_48h: 1.28%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-03-24
+
+snapshot_date: 2026-03-24
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 7648
+paper_trades_rows: 730
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 11
+paper_trades_last_24h: 0
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 1.28%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trades
 - paper_trade_notifications
 - trades
 - bankroll
