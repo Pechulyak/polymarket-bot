@@ -265,6 +265,12 @@
   task: 
   note: governance rules
 
+- PROJECT_CHANGELOG.md
+  status: OK
+  updated: 2026-03-24
+  task: 
+  note: main changelog
+
 
   ## 9. DAILY DATA SNAPSHOT
 
