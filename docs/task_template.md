@@ -5,7 +5,6 @@ Code
 Preview
 # ORCHESTRATOR TASK PACK
 
-## META
 - **TASK_ID**: `[УНИКАЛЬНЫЙ_ИДЕНТИФИКАТОР]`
 - **Задача**: `[Краткое описание цели задачи]`
 - **Тип**: `[WRITE / DATA PIPELINE / ANALYSIS / INTEGRATION / REFACTORING / STAGING / PRODUCTION]`
