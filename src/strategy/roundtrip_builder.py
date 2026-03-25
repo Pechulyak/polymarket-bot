@@ -357,10 +357,11 @@ class RoundtripBuilder:
         skipped_keys = []
         
         for position_key, close_data in grouped_sells.items():
-            # Find OPEN roundtrip for this position_key
+            # Find OPEN roundtrips for this position_key
+            # First try exact match
             query = text("""
                 SELECT 
-                    id, whale_id, open_price, open_size_usd, status
+                    id, whale_id, open_price, open_size_usd, status, outcome
                 FROM whale_trade_roundtrips
                 WHERE position_key = :position_key AND status = 'OPEN'
                 LIMIT 1
@@ -371,11 +372,35 @@ class RoundtripBuilder:
                 row = result.fetchone()
             
             if not row:
+                # No exact match - try fuzzy matching for short selling (sell before buy)
+                # Look for any OPEN roundtrip for same wallet + market (different outcome)
+                wallet_address = close_data['wallet_address']
+                market_id = close_data['market_id']
+                
+                fuzzy_query = text("""
+                    SELECT 
+                        id, whale_id, open_price, open_size_usd, status, outcome
+                    FROM whale_trade_roundtrips
+                    WHERE wallet_address = :wallet_address 
+                        AND market_id = :market_id 
+                        AND status = 'OPEN'
+                    ORDER BY opened_at DESC
+                    LIMIT 1
+                """)
+                
+                with self._engine.connect() as conn:
+                    result = conn.execute(fuzzy_query, {
+                        "wallet_address": wallet_address,
+                        "market_id": market_id
+                    })
+                    row = result.fetchone()
+            
+            if not row:
                 skipped_keys.append(position_key)
                 skipped_count += 1
                 continue
             
-            roundtrip_id, whale_id, open_price, open_size_usd, status = row
+            roundtrip_id, whale_id, open_price, open_size_usd, status, open_outcome = row
             
             # Calculate P&L
             close_price = close_data['close_price']
@@ -404,8 +429,8 @@ class RoundtripBuilder:
                     fees_usd = :fees_usd,
                     net_pnl_usd = :net_pnl_usd,
                     pnl_status = :pnl_status,
-                    matching_method = 'DIRECT_SELL',
-                    matching_confidence = 'HIGH',
+                    matching_method = 'FLIP',
+                    matching_confidence = 'MEDIUM',
                     updated_at = NOW()
                 WHERE id = :id AND status = 'OPEN'
             """)
@@ -433,12 +458,6 @@ class RoundtripBuilder:
                     'net_pnl_usd': net_pnl,
                 })
                 closed_count += 1
-        
-        # Log skipped keys
-        if skipped_keys:
-            logger(f"      Warning: {len(skipped_keys)} SELL events without matching OPEN roundtrip")
-            for key in skipped_keys[:10]:  # Log first 10
-                logger(f"        - {key}")
         
         return closed_roundtrips, closed_count, skipped_count
     
