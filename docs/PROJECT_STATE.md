@@ -88,6 +88,13 @@
   task: SYS-326
   note: execution off
 
+- Таблица whale_trade_roundtrips
+  status: OK
+  updated: 2026-03-25
+  task: ARC-502-B
+  note: fuzzy matching close
+  issue: 
+
 - Таблица bankroll
   status: FROZEN
   updated: 2026-03-23
@@ -267,8 +274,8 @@
 
 - PROJECT_CHANGELOG.md
   status: OK
-  updated: 2026-03-24
-  task: 
+  updated: 2026-03-25
+  task: ARC-502-B
   note: main changelog
 
 
@@ -293,6 +300,37 @@ paper_trades_last_24h: 4
 notifications_last_24h: 0
 
 conversion_whale_to_paper_48h: 1.28%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-03-25
+
+snapshot_date: 2026-03-25
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 8159
+paper_trades_rows: 733
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 473
+paper_trades_last_24h: 3
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 0.6%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:
