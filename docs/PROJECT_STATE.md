@@ -192,6 +192,15 @@
   task: TRD-419
   note: activity-based
 
+- Tier system
+  status: UPDATED
+  updated: 2026-03-26
+  task: TRD-426
+  note: thresholds fixed (HOT: 1d, WARM: 7d)
+  hot_count: 593
+  warm_count: 860
+  cold_count: 5
+
 - whale_trades → paper_trades
   status: OK
   updated: 2026-03-23

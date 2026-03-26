@@ -2,9 +2,9 @@
 """Whale Poller - Tiered polling system for ongoing whale monitoring.
 
 Manages periodic fetching of whale trades at different frequencies based on tier:
-- HOT: every 4 hours (active in last 7 days)
-- WARM: once daily (active 7-30 days ago)
-- COLD: not polled (inactive > 30 days)
+- HOT: every 4 hours (active in last 24 hours)
+- WARM: once daily (active 1-7 days ago)
+- COLD: not polled (inactive > 7 days)
 
 Example:
     >>> import asyncio
@@ -55,9 +55,9 @@ class WhalePoller:
     """Tiered polling system for ongoing whale trade monitoring.
 
     Manages periodic fetching of whale trades at different frequencies:
-    - HOT: every 4 hours for whales active in last 7 days
-    - WARM: once daily for whales active 7-30 days ago
-    - COLD: not polled (inactive > 30 days), requires re-discovery
+    - HOT: every 4 hours for whales active in last 24 hours
+    - WARM: once daily for whales active 1-7 days ago
+    - COLD: not polled (inactive > 7 days), requires re-discovery
 
     Attributes:
         db_pool: asyncpg database connection pool
@@ -353,14 +353,14 @@ class WhalePoller:
         """Check and downgrade whale tiers based on inactivity.
 
         Downgrade logic:
-        - HOT → WARM: no new trades for 7 consecutive days
-        - WARM → COLD: no new trades for 30 consecutive days
+        - HOT → WARM: no new trades for 1 consecutive day
+        - WARM → COLD: no new trades for 7 consecutive days
 
         This should run once daily.
         """
         now = datetime.utcnow()
+        one_day_ago = now - timedelta(days=1)
         seven_days_ago = now - timedelta(days=7)
-        thirty_days_ago = now - timedelta(days=30)
 
         # Check HOT whales with no activity for 7 days → demote to WARM
         hot_to_warm_query = """
@@ -372,7 +372,7 @@ class WhalePoller:
             RETURNING id, wallet_address
         """
 
-        hot_demoted = await self.db_pool.fetch(hot_to_warm_query, seven_days_ago)
+        hot_demoted = await self.db_pool.fetch(hot_to_warm_query, one_day_ago)
 
         if hot_demoted:
             logger.info(
@@ -381,7 +381,7 @@ class WhalePoller:
                 ids=[r["id"] for r in hot_demoted],
             )
 
-        # Check WARM whales with no activity for 30 days → demote to COLD
+        # Check WARM whales with no activity for 7 days → demote to COLD
         warm_to_cold_query = """
             UPDATE whales
             SET tier = 'COLD', updated_at = NOW()
@@ -391,7 +391,7 @@ class WhalePoller:
             RETURNING id, wallet_address
         """
 
-        warm_demoted = await self.db_pool.fetch(warm_to_cold_query, thirty_days_ago)
+        warm_demoted = await self.db_pool.fetch(warm_to_cold_query, seven_days_ago)
 
         if warm_demoted:
             logger.info(
@@ -409,7 +409,7 @@ class WhalePoller:
     async def run_hot_polling(self) -> None:
         """Poll HOT whales every 4 hours.
 
-        HOT criterion: last_targeted_fetch_at >= NOW() - 7 days
+        HOT criterion: last_targeted_fetch_at >= NOW() - 1 day
         """
         logger.info("starting_hot_polling_loop")
 
@@ -449,7 +449,7 @@ class WhalePoller:
     async def run_warm_polling(self) -> None:
         """Poll WARM whales once daily.
 
-        WARM criterion: 7d < last_targeted_fetch_at <= 30d
+        WARM criterion: 1d < last_targeted_fetch_at <= 7d
         """
         logger.info("starting_warm_polling_loop")
 
@@ -521,8 +521,8 @@ class WhalePoller:
         """Check for tier downgrades once daily.
 
         Runs daily to demote inactive whales:
-        - HOT → WARM: no activity for 7 days
-        - WARM → COLD: no activity for 30 days
+        - HOT → WARM: no activity for 1 day
+        - WARM → COLD: no activity for 7 days
         """
         logger.info("starting_tier_downgrade_check_loop")
 

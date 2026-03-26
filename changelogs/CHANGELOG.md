@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-03-26 | TRD-426 | Fix: исправлены tier пороги (HOT: 1d, WARM: 7d), пересчитаны тиры (HOT: 40.7%, WARM: 59%, COLD: 0.3%) |
 | 2026-03-26 | SYS-601-FIX | Fix: устранено дублирование roundtrip jobs (main.py → container), увеличен интервал 30min → 2h, отключен broken paper_settlement сервис |
 | 2026-03-26 | ARC-502-D | Fix: обновление P&L китов через `wallet_address` вместо `whale_id` (+461 whales, +2266 roundtrips) |
 | 2026-03-26 | ARC-502-C | Roundtrip Builder: settlement через CLOB API (+2039 CLOSED, +$680K P&L) |

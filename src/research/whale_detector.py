@@ -1079,9 +1079,9 @@ class WhaleDetector:
             tier = "COLD"  # Default
             if last_seen_ts:
                 days_since_last = (time.time() - last_seen_ts) / 86400
-                if days_since_last <= 7:
+                if days_since_last <= 1:
                     tier = "HOT"
-                elif days_since_last <= 30:
+                elif days_since_last <= 7:
                     tier = "WARM"
                 # else: tier remains "COLD"
 
