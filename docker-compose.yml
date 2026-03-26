@@ -109,23 +109,24 @@ services:
     networks:
       - polymarket_network
 
-  paper_settlement:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    container_name: polymarket_paper_settlement
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/polymarket
-      - SETTLEMENT_INTERVAL=600
-    command: python src/runtime/paper_settlement_service.py
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: always
-    networks:
-      - polymarket_network
+  # SYS-601-FIX: Broken - file does not exist, logic handled in main.py job #5
+  # paper_settlement:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile
+  #   container_name: polymarket_paper_settlement
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/polymarket
+  #     - SETTLEMENT_INTERVAL=600
+  #   command: python src/runtime/paper_settlement_service.py
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: always
+  #   networks:
+  #     - polymarket_network
 
   roundtrip_builder:
     build:
@@ -139,7 +140,7 @@ services:
     command: >
       sh -c "while true; do 
         python -m src.strategy.roundtrip_builder; 
-        sleep 1800; 
+        sleep 7200; 
       done"
     depends_on:
       postgres:

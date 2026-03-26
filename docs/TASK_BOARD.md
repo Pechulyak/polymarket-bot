@@ -88,6 +88,8 @@ Description: Observation mode enabled. Execution layers suspended. Verified whal
 
 Description: Интегрирован в main.py. Проверка закрытия позиций за сегодня.
 
+| SYS-601-FIX | Fix дублирование roundtrip_builder + broken paper_settlement | IN_PROGRESS |
+
 ---
 
 ## EPIC 8 — TRADING CORRECTNESS

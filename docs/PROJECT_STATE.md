@@ -129,6 +129,18 @@
   task: SYS-326
   note: no execution
 
+- roundtrip_builder
+  status: OK
+  updated: 2026-03-26
+  task: SYS-601-FIX
+  note: interval 2h, job disabled in main.py
+
+- paper_settlement
+  status: DISABLED
+  updated: 2026-03-26
+  task: SYS-601-FIX
+  note: broken - file does not exist
+
 ---
 
 ## 4. ОСНОВНЫЕ PYTHON-ФАЙЛЫ
@@ -154,9 +166,9 @@
 
 - main.py
   status: PARTIAL
-  updated: 2026-03-23
-  task: SYS-326
-  note: execution off
+  updated: 2026-03-26
+  task: SYS-601-FIX
+  note: roundtrip jobs disabled (duplicates container)
 
 - copy_trading_engine.py
   status: FROZEN
@@ -416,3 +428,4 @@ notes:
 ## 10. НЕДАВНИЕ ИСПРАВЛЕНИЯ
 
 - ARC-502-D: Исправлен баг обновления P&L китов — UPDATE теперь использует wallet_address вместо whale_id
+- SYS-601-FIX: Устранено дублирование roundtrip jobs (main.py → roundtrip_builder container), увеличен интервал до 2h, отключен broken paper_settlement сервис
