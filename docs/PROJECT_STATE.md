@@ -135,8 +135,9 @@
 - roundtrip_builder
   status: OK
   updated: 2026-03-26
-  task: SYS-601-FIX
-  note: interval 2h, job disabled in main.py
+  task: TRD-427
+  note: Теперь запускает --settle каждые 2 часа
+  fix: 757 OPEN roundtrips теперь будут обновляться при закрытии рынков
 
 - paper_settlement
   status: DISABLED
@@ -227,6 +228,7 @@
   updated: 2026-03-26
   task: ARC-502-D
   note: Исправлен UPDATE в _update_whales_pnl — теперь использует wallet_address вместо whale_id
+  docker_fix: 2026-03-26 — исправлен баг print() в _update_whales_pnl(), пересобран Docker образ
 
 - notifications pipeline
   status: FROZEN

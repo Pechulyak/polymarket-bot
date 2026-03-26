@@ -143,6 +143,8 @@ Description: Completed (details in PROJECT_STATE)
 Description: Completed (details in PROJECT_STATE)
 | TRD-426 | Fix tier пороги — 97% HOT | DONE |
 Description: Fixed tier thresholds (HOT: 1d, WARM: 7d). Recalculated tiers in DB (HOT: 40.7%, WARM: 59%, COLD: 0.3%). whale-detector restarted and running.
+| TRD-427 | Fix: OPEN roundtrips не обновляются settlement (757 stuck) | DONE |
+Description: Fixed by adding --settle to roundtrip_builder in docker-compose.yml. Now runs --settle every 2 hours.
 
 ---
 

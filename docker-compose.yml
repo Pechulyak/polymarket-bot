@@ -140,6 +140,7 @@ services:
     command: >
       sh -c "while true; do 
         python -m src.strategy.roundtrip_builder; 
+        python -m src.strategy.roundtrip_builder --settle; 
         sleep 7200; 
       done"
     depends_on:
