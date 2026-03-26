@@ -84,9 +84,9 @@ Description: Observation mode enabled. Execution layers suspended. Verified whal
 | SYS-401 | Project cleanup (logs, temp files, unused scripts) | READY |
 | SYS-402 | Remove unused docker images and dangling volumes | TODO |
 | SYS-403 | Verify .env permissions and secret handling | TODO |
-| SYS-500 | Whale Roundtrip Reconstructor — Завершён | DONE |
+| SYS-500 | Whale Roundtrip Reconstructor | IN_PROGRESS |
 
-Description: Реализован модуль `whale_roundtrip_reconstructor.py` для реконструкции позиций китов из событийного уровня whale_trades. Создана таблица whale_trade_roundtrips с аналитической логикой open/close/flip/partial close.
+Description: Интегрирован в main.py. Проверка закрытия позиций за сегодня.
 
 ---
 
@@ -131,6 +131,8 @@ Goals:
 - Add market context - Include market_title and market_category
 - Perform historical backfill - Reconstruct positions for existing whale_trades
 - Ensure analytical correctness - Do not depend on paper_trades or trades |
+| ARC-502-B | Fuzzy matching close for short selling (+27 CLOSED) | DONE |
+Description: Fixed fuzzy matching close logic. Previously, SELL events for short positions weren't matched to OPEN roundtrips due to strict market_id + outcome matching. Added fuzzy matching: when no exact close found, fall back to matching by market_id only. Result: +27 roundtrips closed.
 | TRD-413 | Audit whale_trades ingestion completeness for tracked whales | TODO |
 Description: Whale trades ingestion incomplete (~99% loss for some whales). Root cause: global 500-trade limit + no per-wallet backfill. Audit completed, awaiting fix.
 | TRD-421 | Аудит whale_trades — Завершён | DONE |
@@ -165,6 +167,18 @@ Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | ANA-402 | Integrate Polymarket /categories endpoint | TODO |
 | ANA-403 | Whale behaviour analysis by category | TODO |
 | ANA-404 | Whale behaviour analysis by entry price (≥0.95, ≤0.05) | TODO |
+
+---
+
+## EPIC 11 — DATA LIFECYCLE
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| ARC-502-A | Roundtrip Builder — создание OPEN roundtrips из BUY событий | DONE |
+| ARC-502-B | Roundtrip Builder — закрытие позиций через SELL события | DONE |
+| ARC-502-C | Roundtrip Builder — settlement через Gamma API | DONE |
+
+Description: Implemented settlement via CLOB API. Uses GET /markets/{conditionId} to get closed market data with winner status. Tested on 4 closed markets - 23 roundtrips settled successfully. Matching method: SETTLEMENT, close_type: SETTLEMENT_WIN/SETTLEMENT_LOSS.
 
 ---
 

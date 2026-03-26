@@ -4,6 +4,8 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-03-26 | ARC-502-C | Roundtrip Builder: settlement через CLOB API (+2039 CLOSED, +$680K P&L) |
+| 2026-03-25 | ARC-502-B | Fix: fuzzy matching close для short selling (+27 CLOSED) |
 | 2026-03-22 | TRD-422 | Добавлен market_category в whale_trades, унифицирован INSERT |
 | 2026-03-22 | TRD-423 | Fix whale_trades ingestion: _database_url → database_url |
 | 2026-03-22 | ARC-501 | Миграция whales: удалены 8 legacy полей, добавлены 7 P&L полей |

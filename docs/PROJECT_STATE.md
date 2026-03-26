@@ -90,10 +90,10 @@
 
 - Таблица whale_trade_roundtrips
   status: OK
-  updated: 2026-03-25
-  task: ARC-502-B
-  note: fuzzy matching close
-  issue: 
+  updated: 2026-03-26
+  task: ARC-502-C
+  note: settlement via CLOB API working
+  issue: tested on 4 closed markets, 23 roundtrips settled
 
 - Таблица bankroll
   status: FROZEN
@@ -193,10 +193,10 @@
   note: disabled
 
 - settlement pipeline
-  status: FROZEN
-  updated: 2026-03-23
-  task: SYS-326
-  note: disabled
+  status: IN_WORK
+  updated: 2026-03-26
+  task: ARC-502-C
+  note: CLOB API settlement working, need full run for all markets
 
 - notifications pipeline
   status: FROZEN
@@ -300,6 +300,37 @@ paper_trades_last_24h: 4
 notifications_last_24h: 0
 
 conversion_whale_to_paper_48h: 1.28%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-03-26
+
+snapshot_date: 2026-03-26
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 8963
+paper_trades_rows: 736
+paper_trade_notifications_rows: 528
+trades_rows: 42
+bankroll_rows: 14
+
+whale_trades_last_24h: 767
+paper_trades_last_24h: 2
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 0.48%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:

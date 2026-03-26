@@ -7,7 +7,7 @@ This module provides roundtrip creation logic with BUY event aggregation:
 - Calculate weighted average price and total size
 - Track first purchase timestamp as opened_at
 
-Task: TRD-412 / ARC-502-A
+Task: TRD-412 / ARC-502-A, ARC-502-B, ARC-502-C
 
 Usage:
     # Normal run (skip duplicates, keep existing):
@@ -15,19 +15,31 @@ Usage:
     
     # Rebuild all OPEN positions from scratch:
     python -m src.strategy.roundtrip_builder --rebuild
+    
+    # Close positions via SELL events:
+    python -m src.strategy.roundtrip_builder --close
+    
+    # Settle positions via Gamma API (market resolution):
+    python -m src.strategy.roundtrip_builder --settle
 """
 
 import os
 import sys
 import argparse
+import asyncio
 from decimal import Decimal
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
+import aiohttp
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 logger = print
+
+# Polymarket APIs
+GAMMA_API = "https://gamma-api.polymarket.com"
+CLOB_API = "https://clob.polymarket.com"
 
 
 def get_database_url() -> str:
@@ -563,6 +575,321 @@ class RoundtripBuilder:
         
         return updated_count
     
+    def _get_outcome_index(self, outcome: str) -> Optional[int]:
+        """Map outcome to index in outcome_prices array.
+        
+        Args:
+            outcome: Outcome string (Yes/No/Up/Down/Over/Under or custom team names)
+            
+        Returns:
+            Index in outcome_prices array, or None if unknown
+        """
+        if not outcome:
+            return None
+        
+        outcome_lower = outcome.lower()
+        
+        # Standard binary outcomes
+        if outcome_lower in ('yes', 'up', 'over'):
+            return 0
+        elif outcome_lower in ('no', 'down', 'under'):
+            return 1
+        
+        # For non-standard outcomes (team names like "Lakers", "Xtreme Gaming")
+        # These will be matched by looking up in outcomes array
+        # Return None and handle in settlement logic
+        return None
+    
+    async def _get_market_resolution(self, session: aiohttp.ClientSession, market_id: str) -> Optional[Dict]:
+        """Get market resolution data from CLOB API.
+        
+        CLOB API works directly with conditionId (which is what we store in market_id).
+        
+        Args:
+            session: aiohttp client session
+            market_id: Market identifier (conditionId from whale_trades)
+            
+        Returns:
+            Dict with market resolution data or None
+        """
+        try:
+            # Use CLOB API: GET /markets/{conditionId}
+            # This returns market data including tokens with winner status
+            url = f"{CLOB_API}/markets/{market_id}"
+            
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    logger(f"Warning: market_api_error for {market_id[:20]}, status={resp.status}")
+                    return None
+                
+                market = await resp.json()
+                
+                # Extract resolution data
+                closed = market.get("closed", False)
+                resolved = market.get("resolved")
+                
+                # Get tokens array - contains outcome prices and winner status
+                tokens = market.get("tokens", [])
+                
+                # Build outcome_prices and winner mapping from tokens
+                outcome_prices = []
+                winners = []
+                outcomes = []
+                
+                for token in tokens:
+                    outcome = token.get("outcome", "")
+                    price = token.get("price", "0")
+                    winner = token.get("winner", False)
+                    
+                    outcomes.append(outcome)
+                    outcome_prices.append(float(price) if price else 0.0)
+                    winners.append(winner)
+                
+                return {
+                    "market_id": market_id,
+                    "closed": closed,
+                    "resolved": resolved,
+                    "outcome_prices": outcome_prices,
+                    "outcomes": outcomes,
+                    "winners": winners,
+                }
+                
+        except Exception as e:
+            logger(f"Error: market_resolution_error for {market_id[:20]}: {e}")
+            return None
+    
+    async def settle_roundtrips_via_gamma(self) -> Dict:
+        """Settle OPEN roundtrips via Gamma API market resolution.
+        
+        Checks each OPEN roundtrip's market_id against Gamma API.
+        If market is closed (resolved), calculates P&L based on settlement prices
+        and updates the roundtrip status.
+        
+        Returns:
+            Dict with settlement results
+        """
+        logger("=" * 60)
+        logger("ROUNDTRIP SETTLER (ARC-502-C) - Gamma API Settlement")
+        logger("=" * 60)
+        
+        # Step 1: Get all OPEN roundtrips with unique market_ids
+        logger("[1/5] Fetching OPEN roundtrips...")
+        
+        query = text("""
+            SELECT DISTINCT market_id, outcome, open_price, open_size_usd, id, wallet_address
+            FROM whale_trade_roundtrips
+            WHERE status = 'OPEN'
+        """)
+        
+        with self._engine.connect() as conn:
+            result = conn.execute(query)
+            open_roundtrips = []
+            market_ids = set()
+            for row in result:
+                open_roundtrips.append({
+                    'roundtrip_id': row[4],
+                    'wallet_address': row[5],
+                    'market_id': row[0],
+                    'outcome': row[1],
+                    'open_price': row[2],
+                    'open_size_usd': row[3],
+                })
+                market_ids.add(row[0])
+        
+        logger(f"      Found {len(open_roundtrips)} OPEN roundtrips across {len(market_ids)} markets")
+        
+        if not open_roundtrips:
+            return {
+                'checked': 0,
+                'settled': 0,
+                'closed_markets': 0,
+                'open_markets': 0,
+                'errors': 0,
+            }
+        
+        # Step 2: Fetch resolution data for each unique market
+        logger("[2/5] Fetching market resolutions from Gamma API...")
+        
+        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+        market_resolutions = {}
+        
+        try:
+            for market_id in market_ids:
+                resolution = await self._get_market_resolution(session, market_id)
+                if resolution:
+                    market_resolutions[market_id] = resolution
+                # Rate limiting: pause between requests
+                await asyncio.sleep(0.05)
+        finally:
+            await session.close()
+        
+        logger(f"      Fetched {len(market_resolutions)} market resolutions")
+        
+        # Step 3: Process each roundtrip for settlement
+        logger("[3/5] Processing settlements...")
+        
+        settled_roundtrips = []
+        closed_markets = 0
+        open_markets = 0
+        errors = 0
+        skipped_unknown_outcome = 0
+        
+        for rt in open_roundtrips:
+            market_id = rt['market_id']
+            outcome = rt['outcome']
+            open_price = rt['open_price']
+            open_size_usd = rt['open_size_usd']
+            
+            # Skip if no resolution data
+            if market_id not in market_resolutions:
+                errors += 1
+                continue
+            
+            resolution = market_resolutions[market_id]
+            
+            # Check if market is closed (CLOB returns closed=True for resolved markets)
+            if not resolution['closed']:
+                open_markets += 1
+                continue
+            
+            closed_markets += 1
+            
+            # Determine outcome index and settlement price
+            outcome_index = self._get_outcome_index(outcome)
+            
+            # If outcome_index is None (team names or custom outcomes), try to find by matching
+            if outcome_index is None:
+                # Try to find matching outcome in the tokens array
+                outcomes = resolution.get('outcomes', [])
+                matched_idx = None
+                for idx, token_outcome in enumerate(outcomes):
+                    if token_outcome.lower() == outcome.lower():
+                        matched_idx = idx
+                        break
+                
+                if matched_idx is not None:
+                    outcome_index = matched_idx
+                else:
+                    # Unknown outcome - log warning and skip
+                    logger(f"Warning: unknown_outcome_for_settlement: market={market_id[:20]}, outcome={outcome}")
+                    skipped_unknown_outcome += 1
+                    continue
+            
+            # Use winners array from CLOB API to determine if our outcome won
+            winners = resolution.get('winners', [])
+            outcome_prices = resolution.get('outcome_prices', [])
+            
+            if outcome_index >= len(winners) or outcome_index >= len(outcome_prices):
+                logger(f"Warning: invalid_outcome_index for settlement: market={market_id[:20]}, index={outcome_index}")
+                errors += 1
+                continue
+            
+            # Check if this outcome is the winner
+            is_winner = winners[outcome_index]
+            settlement_price = outcome_prices[outcome_index]
+            
+            if is_winner:
+                # Winner settles at 1.0
+                close_price = Decimal('1.0')
+                close_type = 'SETTLEMENT_WIN'
+            elif settlement_price >= 0.99:
+                # Price at 0.99+ but not winner - rare edge case, treat as loss
+                close_price = Decimal('0.0')
+                close_type = 'SETTLEMENT_LOSS'
+            else:
+                # Loser settles at 0.0
+                close_price = Decimal('0.0')
+                close_type = 'SETTLEMENT_LOSS'
+            
+            # Calculate P&L
+            # gross_pnl = (close_price - open_price) * open_size_usd
+            gross_pnl = (close_price - open_price) * open_size_usd
+            fees_usd = Decimal('0')  # No fees for settlement
+            net_pnl = gross_pnl - fees_usd
+            
+            # Update roundtrip in database
+            update_query = text("""
+                UPDATE whale_trade_roundtrips SET
+                    close_price = :close_price,
+                    close_size_usd = :close_size_usd,
+                    closed_at = NOW(),
+                    close_type = :close_type,
+                    status = 'CLOSED',
+                    gross_pnl_usd = :gross_pnl_usd,
+                    fees_usd = :fees_usd,
+                    net_pnl_usd = :net_pnl_usd,
+                    pnl_status = 'CONFIRMED',
+                    matching_method = 'SETTLEMENT',
+                    matching_confidence = 'HIGH',
+                    updated_at = NOW()
+                WHERE id = :roundtrip_id AND status = 'OPEN'
+            """)
+            
+            with self._engine.connect() as conn:
+                result = conn.execute(update_query, {
+                    'close_price': float(close_price),
+                    'close_size_usd': float(open_size_usd),
+                    'close_type': close_type,
+                    'gross_pnl_usd': float(gross_pnl),
+                    'fees_usd': float(fees_usd),
+                    'net_pnl_usd': float(net_pnl),
+                    'roundtrip_id': rt['roundtrip_id']
+                })
+                conn.commit()
+            
+            if result.rowcount > 0:
+                settled_roundtrips.append({
+                    'roundtrip_id': rt['roundtrip_id'],
+                    'wallet_address': rt['wallet_address'],
+                    'market_id': market_id,
+                    'outcome': outcome,
+                    'open_price': open_price,
+                    'open_size_usd': open_size_usd,
+                    'close_price': close_price,
+                    'close_type': close_type,
+                    'net_pnl_usd': net_pnl,
+                })
+        
+        logger(f"      Settled: {len(settled_roundtrips)}, Closed markets: {closed_markets}")
+        logger(f"      Open markets: {open_markets}, Errors: {errors}, Skipped (unknown outcome): {skipped_unknown_outcome}")
+        
+        # Step 4: Update whales P&L statistics
+        logger("[4/5] Updating whales P&L statistics...")
+        
+        whales_updated = self._update_whales_pnl(settled_roundtrips)
+        logger(f"      Whales updated: {whales_updated}")
+        
+        # Step 5: Get final statistics
+        logger("[5/5] Getting final statistics...")
+        
+        stats = self._get_statistics()
+        
+        logger("=" * 60)
+        logger("ROUNDTRIP SETTLER (ARC-502-C) - Complete")
+        logger("=" * 60)
+        logger(f"Results:")
+        logger(f"  - OPEN roundtrips checked: {len(open_roundtrips)}")
+        logger(f"  - Unique markets checked: {len(market_ids)}")
+        logger(f"  - Markets resolved (closed): {closed_markets}")
+        logger(f"  - Markets still open: {open_markets}")
+        logger(f"  - Roundtrips settled: {len(settled_roundtrips)}")
+        logger(f"  - Errors: {errors}")
+        logger(f"  - Whales updated: {whales_updated}")
+        logger(f"  - Database stats: {stats}")
+        logger("=" * 60)
+        
+        return {
+            'checked': len(open_roundtrips),
+            'unique_markets': len(market_ids),
+            'settled': len(settled_roundtrips),
+            'closed_markets': closed_markets,
+            'open_markets': open_markets,
+            'errors': errors,
+            'skipped_unknown_outcome': skipped_unknown_outcome,
+            'whales_updated': whales_updated,
+            'stats': stats
+        }
+    
     def run_close_positions(self) -> Dict:
         """Run SELL → CLOSED pipeline.
         
@@ -681,12 +1008,16 @@ def main():
                         help='Clear existing OPEN roundtrips and rebuild from scratch')
     parser.add_argument('--close', action='store_true',
                         help='Process SELL events to close OPEN roundtrips')
+    parser.add_argument('--settle', action='store_true',
+                        help='Settle OPEN roundtrips via Gamma API market resolution')
     args = parser.parse_args()
     
     database_url = get_database_url()
     builder = RoundtripBuilder(database_url=database_url)
     
-    if args.close:
+    if args.settle:
+        result = asyncio.run(builder.settle_roundtrips_via_gamma())
+    elif args.close:
         result = builder.run_close_positions()
     else:
         result = builder.run(rebuild=args.rebuild)

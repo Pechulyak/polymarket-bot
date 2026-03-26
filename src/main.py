@@ -15,6 +15,7 @@ from src.monitoring.notification_worker import NotificationWorker
 from src.research.whale_tracker import WhaleTracker
 from src.strategy.virtual_bankroll import VirtualBankroll
 from src.strategy.paper_position_settlement import PaperPositionSettlementEngine
+from src.strategy.roundtrip_builder import RoundtripBuilder
 
 logger = get_logger(__name__)
 
@@ -207,6 +208,8 @@ async def main():
     loop_count = 0
     check_interval = 5  # Check every 5 seconds (for testing)
     settlement_interval = 60  # Run settlement every 60 iterations (1 minute)
+    roundtrip_interval = 900  # Run whale roundtrip reconstruction every 900 iterations (15 minutes)
+    roundtrip_settle_interval = 300  # Run roundtrip settlement every 300 iterations (5 minutes)
 
     try:
         # Start notification worker as background task (skip in observation mode)
@@ -320,6 +323,28 @@ async def main():
                         await virtual_bankroll.load_open_positions_from_db()
                     except Exception as e:
                         logger.warning(f"Settlement cycle failed: {e}")
+
+                # Run whale roundtrip reconstruction periodically
+                if not observation_mode and loop_count % roundtrip_interval == 0:
+                    logger.info("Running whale roundtrip reconstruction...")
+                    try:
+                        from src.strategy.whale_roundtrip_reconstructor import WhaleRoundtripReconstructor
+                        reconstructor = WhaleRoundtripReconstructor(database_url=database_url)
+                        loop = asyncio.get_event_loop()
+                        loop.run_in_executor(None, lambda: asyncio.run(reconstructor.run_incremental_update()))
+                    except Exception as e:
+                        logger.warning(f"Roundtrip reconstruction failed: {e}")
+
+                # Run roundtrip settlement (settle OPEN roundtrips via CLOB API)
+                if not observation_mode and loop_count % roundtrip_settle_interval == 0:
+                    logger.info("Running roundtrip settlement...")
+                    try:
+                        builder = RoundtripBuilder(database_url=database_url)
+                        loop = asyncio.get_event_loop()
+                        loop.run_until_complete(builder.settle_roundtrips_via_gamma())
+                        logger.info("Roundtrip settlement complete")
+                    except Exception as e:
+                        logger.warning(f"Roundtrip settlement failed: {e}")
 
                 # Log bankroll stats (skip in observation mode)
                 if not observation_mode and virtual_bankroll:

@@ -4,6 +4,25 @@
 
 ---
 
+### [2026-03-24] TRD-424: roundtrip_builder не заполняет market_title и market_category
+
+- **Симптом:** При создании записей в whale_trade_roundtrips поля market_title и market_category остаются пустыми (NULL)
+- **Причина:** 
+  1. Запрос в `_fetch_and_group_buy_trades()` использовал GROUP BY с агрегатными функциями, но не извлекал market_title/market_category из конкретной записи (MIN id)
+  2. При GROUP BY PostgreSQL выбирает произвольное значение из группы, не связанное с MIN(id)
+- **Попытки решения:**
+  1. Добавление wt.market_title, wt.market_category в SELECT и GROUP BY - не помогло (произвольные значения)
+  2. Подзапрос с MIN(id) для получения полей - синтаксическая ошибка в SQLAlchemy
+  3. FIRST_VALUE() window function - не помогло (GROUP BY конфликтует)
+- **Статус:** Требует отдельного исследования
+- **Правило:** Для получения полей из "первой" записи в группе использовать DISTINCT ON (PostgreSQL) или отдельный запрос после GROUP BY
+
+---
+
+## Формат записи
+
+---
+
 ### [2026-03-17] TRD-412: Ошибка подключения к БД при выполнении reconstruction
 
 - **Симптом:** При запуске backfill скрипт подключался к SQLite (`:memory:`) вместо PostgreSQL
