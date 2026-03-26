@@ -141,7 +141,8 @@ Description: Whale trades ingestion incomplete (~99% loss for some whales). Root
 Description: Completed (details in PROJECT_STATE)
 | TRD-422 | Добавить market_category в whale_trades и унифицировать запись | DONE |
 Description: Completed (details in PROJECT_STATE)
-| TRD-426 | Fix tier пороги — 97% HOT | IN_PROGRESS |
+| TRD-426 | Fix tier пороги — 97% HOT | DONE |
+Description: Fixed tier thresholds (HOT: 1d, WARM: 7d). Recalculated tiers in DB (HOT: 40.7%, WARM: 59%, COLD: 0.3%). whale-detector restarted and running.
 
 ---
 

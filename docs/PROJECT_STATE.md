@@ -118,7 +118,10 @@
   note: running
 
 - whale_detector
-  status: FROZEN
+  status: ACTIVE
+  updated: 2026-03-26
+  task: TRD-426
+  note: tier thresholds fixed, running
   updated: 2026-03-23
   task: TRD-415
   note: stopped
@@ -146,10 +149,10 @@
 ## 4. ОСНОВНЫЕ PYTHON-ФАЙЛЫ
 
 - whale_detector.py
-  status: IN_WORK
-  updated: 2026-03-23
-  task: TRD-419
-  note: new fields
+  status: ACTIVE
+  updated: 2026-03-26
+  task: TRD-426
+  note: tier thresholds fixed
 
 - whale_tracker.py
   status: IN_WORK
