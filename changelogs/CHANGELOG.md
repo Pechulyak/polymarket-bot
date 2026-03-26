@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-03-26 | ARC-502-D | Fix: обновление P&L китов через `wallet_address` вместо `whale_id` (+461 whales, +2266 roundtrips) |
 | 2026-03-26 | ARC-502-C | Roundtrip Builder: settlement через CLOB API (+2039 CLOSED, +$680K P&L) |
 | 2026-03-25 | ARC-502-B | Fix: fuzzy matching close для short selling (+27 CLOSED) |
 | 2026-03-22 | TRD-422 | Добавлен market_category в whale_trades, унифицирован INSERT |

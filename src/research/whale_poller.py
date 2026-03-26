@@ -273,6 +273,12 @@ class WhalePoller:
         trade_time = datetime.fromtimestamp(trade.timestamp)
         side = "buy" if trade.side.upper() == "BUY" else "sell"
 
+        # Get market_category for the market
+        market_category = None
+        if trade.condition_id:
+            from src.data.storage.market_category_cache import get_market_category
+            market_category = await get_market_category(trade.condition_id)
+
         query = """
             INSERT INTO whale_trades (
                 whale_id,
@@ -284,8 +290,9 @@ class WhalePoller:
                 price,
                 outcome,
                 traded_at,
-                source
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                source,
+                market_category
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT DO NOTHING
         """
 
@@ -301,6 +308,7 @@ class WhalePoller:
             trade.outcome,
             trade_time,
             "POLLER",  # Source indicates this came from tiered polling
+            market_category,
         )
 
     async def _update_whale_after_trades(

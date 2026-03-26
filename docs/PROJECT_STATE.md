@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-03-23  
+Обновлено: 2026-03-26
 Версия: v2_clean  
 Фаза: Реструктуризация (после cleanup)
 
@@ -197,6 +197,12 @@
   updated: 2026-03-26
   task: ARC-502-C
   note: CLOB API settlement working, need full run for all markets
+
+- whales P&L pipeline
+  status: OK
+  updated: 2026-03-26
+  task: ARC-502-D
+  note: Исправлен UPDATE в _update_whales_pnl — теперь использует wallet_address вместо whale_id
 
 - notifications pipeline
   status: FROZEN
@@ -406,3 +412,7 @@ notes:
 - trades table contains only virtual test trades
 
 <!-- END AUTO-GENERATED -->
+
+## 10. НЕДАВНИЕ ИСПРАВЛЕНИЯ
+
+- ARC-502-D: Исправлен баг обновления P&L китов — UPDATE теперь использует wallet_address вместо whale_id

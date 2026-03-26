@@ -127,6 +127,27 @@ services:
     networks:
       - polymarket_network
 
+  roundtrip_builder:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: polymarket_roundtrip_builder
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/polymarket
+    command: >
+      sh -c "while true; do 
+        python -m src.strategy.roundtrip_builder; 
+        sleep 1800; 
+      done"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    networks:
+      - polymarket_network
+
 volumes:
   postgres_data:
     driver: local

@@ -1,8 +1,5 @@
 Шаблон задачи для AI агента (ORCHESTRATOR TASK PACK)
-Markdown
-Copy
-Code
-Preview
+
 # ORCHESTRATOR TASK PACK
 
 - **TASK_ID**: `[УНИКАЛЬНЫЙ_ИДЕНТИФИКАТОР]`

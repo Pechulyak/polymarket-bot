@@ -485,30 +485,31 @@ class RoundtripBuilder:
         if not closed_roundtrips:
             return 0
         
-        # Group by whale_id
+        
+        # Group by wallet_address instead of whale_id
         whale_updates = {}
         for rt in closed_roundtrips:
-            whale_id = rt['whale_id']
-            if whale_id not in whale_updates:
-                whale_updates[whale_id] = {
-                    'whale_id': whale_id,
+            wallet_address = rt['wallet_address']
+            if wallet_address not in whale_updates:
+                whale_updates[wallet_address] = {
+                    'wallet_address': wallet_address,
                     'wins': 0,
                     'losses': 0,
                     'roundtrips': 0,
                     'total_pnl': Decimal('0')
                 }
             
-            whale_updates[whale_id]['roundtrips'] += 1
-            whale_updates[whale_id]['total_pnl'] += rt['net_pnl_usd']
+            whale_updates[wallet_address]['roundtrips'] += 1
+            whale_updates[wallet_address]['total_pnl'] += rt['net_pnl_usd']
             
             if rt['net_pnl_usd'] > 0:
-                whale_updates[whale_id]['wins'] += 1
+                whale_updates[wallet_address]['wins'] += 1
             else:
-                whale_updates[whale_id]['losses'] += 1
+                whale_updates[wallet_address]['losses'] += 1
         
         # Update each whale
         updated_count = 0
-        for whale_id, data in whale_updates.items():
+        for wallet_address, data in whale_updates.items():
             # Calculate new values
             query = text("""
                 SELECT 
@@ -517,11 +518,11 @@ class RoundtripBuilder:
                     total_roundtrips, 
                     total_pnl_usd
                 FROM whales
-                WHERE id = :whale_id
+                WHERE LOWER(wallet_address) = LOWER(:wallet_address)
             """)
             
             with self._engine.connect() as conn:
-                result = conn.execute(query, {"whale_id": whale_id})
+                result = conn.execute(query, {"wallet_address": wallet_address})
                 row = result.fetchone()
             
             if not row:
@@ -555,7 +556,7 @@ class RoundtripBuilder:
                     win_rate_confirmed = :win_rate_confirmed,
                     last_pnl_updated = NOW(),
                     updated_at = NOW()
-                WHERE id = :whale_id
+                WHERE LOWER(wallet_address) = LOWER(:wallet_address)
             """)
             
             with self._engine.connect() as conn:
@@ -566,7 +567,7 @@ class RoundtripBuilder:
                     'total_pnl_usd': new_total_pnl,
                     'avg_pnl_usd': new_avg_pnl,
                     'win_rate_confirmed': new_win_rate,
-                    'whale_id': whale_id
+                    'wallet_address': wallet_address
                 })
                 conn.commit()
             
@@ -676,7 +677,7 @@ class RoundtripBuilder:
         logger("[1/5] Fetching OPEN roundtrips...")
         
         query = text("""
-            SELECT DISTINCT market_id, outcome, open_price, open_size_usd, id, wallet_address
+            SELECT DISTINCT market_id, outcome, open_price, open_size_usd, id, wallet_address, whale_id
             FROM whale_trade_roundtrips
             WHERE status = 'OPEN'
         """)
@@ -688,6 +689,7 @@ class RoundtripBuilder:
             for row in result:
                 open_roundtrips.append({
                     'roundtrip_id': row[4],
+                    'whale_id': row[6],
                     'wallet_address': row[5],
                     'market_id': row[0],
                     'outcome': row[1],
@@ -840,6 +842,7 @@ class RoundtripBuilder:
             if result.rowcount > 0:
                 settled_roundtrips.append({
                     'roundtrip_id': rt['roundtrip_id'],
+                    'whale_id': rt['whale_id'],
                     'wallet_address': rt['wallet_address'],
                     'market_id': market_id,
                     'outcome': outcome,
