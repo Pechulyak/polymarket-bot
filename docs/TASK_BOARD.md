@@ -185,7 +185,9 @@ Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | ARC-502-C | Roundtrip Builder — settlement через Gamma API | DONE |
 
 Description: Implemented settlement via CLOB API. Uses GET /markets/{conditionId} to get closed market data with winner status. Tested on 4 closed markets - 23 roundtrips settled successfully. Matching method: SETTLEMENT, close_type: SETTLEMENT_WIN/SETTLEMENT_LOSS.
-| ARC-502-D | Fix: whale_trade_roundtrips → whales P&L обновление | IN_PROGRESS |
+| ARC-502-D | Fix: whale_trade_roundtrips → whales P&L обновление | DONE |
+
+Description: Completed. Roundtrip builder now updates whales table with P&L from closed positions.
 
 ---
 
