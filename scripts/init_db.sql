@@ -201,7 +201,11 @@ CREATE TABLE IF NOT EXISTS whales (
     last_pnl_updated TIMESTAMP,
     
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    -- STRAT-701: Copy trading status
+    -- TRD-420-B: Added 'tracked' for P&L data collection
+    copy_status VARCHAR(10) DEFAULT 'none' CHECK (copy_status IN ('none', 'paper', 'live', 'tracked'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_whales_address ON whales(wallet_address);
@@ -218,7 +222,8 @@ CREATE INDEX IF NOT EXISTS idx_whales_last_active_at ON whales(last_active_at);
 CREATE INDEX IF NOT EXISTS idx_whales_last_seen_in_feed ON whales(last_seen_in_feed);
 CREATE INDEX IF NOT EXISTS idx_whales_last_targeted_fetch_at ON whales(last_targeted_fetch_at);
 
--- Whale trades history (for analysis)
+-- Whale trades history (for analysis) - ARC-503: removed is_winner, profit_usd
+-- TRD-420-B: Added CHECK constraint for source with 'TRACKED' value
 CREATE TABLE IF NOT EXISTS whale_trades (
     id SERIAL PRIMARY KEY,
     whale_id INTEGER REFERENCES whales(id),
@@ -229,11 +234,9 @@ CREATE TABLE IF NOT EXISTS whale_trades (
     size_usd DECIMAL(20, 8) NOT NULL,
     price DECIMAL(20, 8) NOT NULL,
     outcome VARCHAR(50),
-    is_winner BOOLEAN,
-    profit_usd DECIMAL(20, 8),
     traded_at TIMESTAMP NOT NULL DEFAULT NOW(),
     tx_hash VARCHAR(66),
-    source VARCHAR(32) NOT NULL DEFAULT 'BACKFILL'
+    source VARCHAR(32) NOT NULL DEFAULT 'BACKFILL' CHECK (source IN ('realtime', 'backfill', 'unknown', 'BACKFILL', 'TRIGGER_TEST', 'POLLER', 'PAPER_TRACK', 'PAPER', 'TRACKED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_whale_trades_whale ON whale_trades(whale_id, traded_at);
@@ -244,3 +247,8 @@ CREATE INDEX IF NOT EXISTS idx_whale_trades_tx_hash ON whale_trades(tx_hash) WHE
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
 VALUES (100.00, 0, 100.00, 0, 0);
+
+-- ARC-503: Remove legacy fields is_winner and profit_usd from whale_trades
+-- These fields were removed because Polymarket Data API does not provide settlement outcomes
+ALTER TABLE whale_trades DROP COLUMN IF EXISTS is_winner;
+ALTER TABLE whale_trades DROP COLUMN IF EXISTS profit_usd;

@@ -112,8 +112,6 @@ class TradeRecord:
         size_usd: Trade size in USD
         price: Execution price
         timestamp: Trade timestamp
-        is_winner: Whether trade was winning (if known)
-        pnl: Profit/loss (if known)
     """
 
     trader: str
@@ -122,8 +120,6 @@ class TradeRecord:
     size_usd: Decimal
     price: Decimal
     timestamp: float
-    is_winner: Optional[bool] = None
-    pnl: Optional[Decimal] = None
 
 
 @dataclass
@@ -413,8 +409,6 @@ class WhaleDetector:
         size_usd: Decimal,
         price: Decimal,
         timestamp: Optional[float] = None,
-        is_winner: Optional[bool] = None,
-        pnl: Optional[Decimal] = None,
     ) -> Optional[DetectedWhale]:
         """Process a trade and detect if trader is a whale.
 
@@ -425,8 +419,6 @@ class WhaleDetector:
             size_usd: Trade size in USD
             price: Execution price
             timestamp: Trade timestamp (default: now)
-            is_winner: Whether trade was winning
-            pnl: Profit/loss amount
 
         Returns:
             DetectedWhale if new whale detected, None otherwise
@@ -444,8 +436,6 @@ class WhaleDetector:
             size_usd=size_usd,
             price=price,
             timestamp=timestamp,
-            is_winner=is_winner,
-            pnl=pnl,
         )
 
         async with self._lock:
@@ -576,15 +566,10 @@ class WhaleDetector:
             whale.total_volume = sum(t.size_usd for t in all_trades)
             whale.avg_trade_size = whale.total_volume / Decimal(len(all_trades))
 
-        winners = [t for t in all_trades if t.is_winner is True]
-        losers = [t for t in all_trades if t.is_winner is False]
-
-        whale.win_count = len(winners)
-        whale.loss_count = len(losers)
-
-        total_known = whale.win_count + whale.loss_count
-        if total_known > 0:
-            whale.win_rate = Decimal(whale.win_count) / Decimal(total_known)
+        # win_count/loss_count/win_rate REMOVED (ARC-503) - API does not provide is_winner
+        # These fields are now deprecated and always 0
+        whale.win_count = 0
+        whale.loss_count = 0
 
         self._evaluate_quality(whale)
 
@@ -1312,11 +1297,35 @@ class WhaleDetector:
         qualification_interval = 3600  # 1 hour
         last_qualification_refresh = time.time()
         
+        # TRD-420: Paper whale fetch interval (every 30 seconds)
+        paper_whale_interval = 30  # seconds
+        last_paper_whale_fetch = 0  # fetch immediately on start
+        
+        # TRD-420-B: Tracked whale fetch interval (every 5 minutes)
+        tracked_whale_interval = 300  # 5 minutes
+        last_tracked_whale_fetch = 0  # fetch immediately on start
+        
         while self._running:
             try:
                 await self._fetch_polymarket_whales()
                 
                 current_time = time.time()
+                
+                # TRD-420: Fetch paper whale trades every 30 seconds
+                if current_time - last_paper_whale_fetch >= paper_whale_interval:
+                    try:
+                        await self._fetch_paper_whale_trades()
+                    except Exception as e:
+                        logger.error("paper_whale_fetch_error", error=str(e))
+                    last_paper_whale_fetch = current_time
+                
+                # TRD-420-B: Fetch tracked whale trades every 5 minutes
+                if current_time - last_tracked_whale_fetch >= tracked_whale_interval:
+                    try:
+                        await self._fetch_tracked_whale_trades()
+                    except Exception as e:
+                        logger.error("tracked_whale_fetch_error", error=str(e))
+                    last_tracked_whale_fetch = current_time
                 
                 # Stage 2: Periodic ranking update every hour
                 if current_time - last_ranking_update >= ranking_interval:
@@ -1557,6 +1566,241 @@ class WhaleDetector:
 
         except Exception as e:
             logger.error("polymarket_fetch_failed", error=str(e))
+
+    async def _fetch_paper_whale_trades(self) -> None:
+        """Fetch recent trades for whales with copy_status='paper'.
+
+        Targeted per-wallet fetch to ensure paper-trade pipeline
+        receives all trades from tracked whales.
+        Uses existing save_trade_to_db with tx_hash dedup.
+
+        Runs every 30 seconds as part of _polymarket_poll_loop.
+        """
+        await self._ensure_database()
+        if not self._Session:
+            logger.warning("paper_whale_fetch_no_session")
+            return
+
+        if not self.polymarket_client:
+            logger.warning("paper_whale_fetch_no_client")
+            return
+
+        session = self._Session()
+        try:
+            # Step 1: Get whales with copy_status='paper'
+            query = text("""
+                SELECT wallet_address FROM whales
+                WHERE copy_status = 'paper'
+            """)
+            result = session.execute(query)
+            paper_whales = [row[0] for row in result]
+
+            if not paper_whales:
+                logger.debug("paper_whale_fetch_no_paper_whales")
+                session.close()
+                return
+
+            logger.info(
+                "paper_whale_fetch_cycle_start",
+                paper_whales_count=len(paper_whales),
+            )
+            session.close()
+
+            # Step 2: Fetch trades for each paper whale
+            new_trades_count = 0
+            duplicates_count = 0
+
+            for address in paper_whales:
+                try:
+                    # Rate limit: 0.3s between requests
+                    await asyncio.sleep(0.3)
+
+                    # Fetch recent trades for this whale
+                    trades = await self.polymarket_client.fetch_trader_trades(
+                        address, limit=50
+                    )
+
+                    for trade in trades:
+                        try:
+                            # Map API fields to save_trade_to_db parameters:
+                            # - API size = number of shares (tokens), NOT USD
+                            # - size_usd = size * price
+                            size_shares = Decimal(str(trade.size))
+                            trade_price = Decimal(str(trade.price))
+                            size_usd = size_shares * trade_price
+
+                            # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
+                            # Use outcomeIndex for reliable binary mapping
+                            outcome_index = None
+                            if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
+                                outcome_index = trade.outcome_index
+
+                            normalized_outcome = normalize_outcome(
+                                outcome=trade.outcome,
+                                outcome_index=outcome_index,
+                            )
+
+                            # Save trade to db with dedup by tx_hash
+                            saved = await self.save_trade_to_db(
+                                trader=trade.trader.lower(),
+                                market_id=trade.condition_id,
+                                side="buy" if trade.side.upper() == "BUY" else "sell",
+                                size_usd=size_usd,
+                                price=trade_price,
+                                timestamp=float(trade.timestamp),
+                                tx_hash=trade.tx_hash,
+                                market_title=trade.market_title,
+                                source="PAPER_TRACK",  # Distinguish from BACKFILL/REALTIME
+                                outcome=normalized_outcome,
+                            )
+
+                            if saved:
+                                new_trades_count += 1
+                            else:
+                                duplicates_count += 1
+
+                        except Exception as e:
+                            logger.warning(
+                                "paper_whale_trade_save_error",
+                                error=str(e),
+                                trader=trade.trader[:10] if trade.trader else "unknown",
+                            )
+                            continue
+
+                except Exception as e:
+                    logger.warning(
+                        "paper_whale_fetch_error",
+                        address=address[:10],
+                        error=str(e),
+                    )
+                    continue
+
+            logger.info(
+                "paper_whale_fetch_cycle_complete",
+                paper_whales_count=len(paper_whales),
+                new_trades=new_trades_count,
+                duplicates=duplicates_count,
+            )
+
+        except Exception as e:
+            logger.error("paper_whale_fetch_failed", error=str(e))
+
+    async def _fetch_tracked_whale_trades(self) -> None:
+        """Fetch recent trades for whales with copy_status='tracked'.
+
+        Targeted per-wallet fetch to collect data for P&L analysis.
+        Does NOT create paper_trades (trigger only fires for copy_status='paper').
+
+        Runs every 5 minutes as part of _polymarket_poll_loop.
+        """
+        await self._ensure_database()
+        if not self._Session:
+            logger.warning("tracked_whale_fetch_no_session")
+            return
+
+        if not self.polymarket_client:
+            logger.warning("tracked_whale_fetch_no_client")
+            return
+
+        session = self._Session()
+        try:
+            # Step 1: Get whales with copy_status='tracked'
+            query = text("""
+                SELECT wallet_address FROM whales
+                WHERE copy_status = 'tracked'
+            """)
+            result = session.execute(query)
+            tracked_whales = [row[0] for row in result]
+
+            if not tracked_whales:
+                logger.debug("tracked_whale_fetch_no_tracked_whales")
+                session.close()
+                return
+
+            logger.info(
+                "tracked_whale_fetch_cycle_start",
+                tracked_whales_count=len(tracked_whales),
+            )
+            session.close()
+
+            # Step 2: Fetch trades for each tracked whale
+            new_trades_count = 0
+            duplicates_count = 0
+
+            for address in tracked_whales:
+                try:
+                    # Rate limit: 0.3s between requests
+                    await asyncio.sleep(0.3)
+
+                    # Fetch recent trades for this whale
+                    trades = await self.polymarket_client.fetch_trader_trades(
+                        address, limit=50
+                    )
+
+                    for trade in trades:
+                        try:
+                            # Map API fields to save_trade_to_db parameters:
+                            # - API size = number of shares (tokens), NOT USD
+                            # - size_usd = size * price
+                            size_shares = Decimal(str(trade.size))
+                            trade_price = Decimal(str(trade.price))
+                            size_usd = size_shares * trade_price
+
+                            # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
+                            # Use outcomeIndex for reliable binary mapping
+                            outcome_index = None
+                            if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
+                                outcome_index = trade.outcome_index
+
+                            normalized_outcome = normalize_outcome(
+                                outcome=trade.outcome,
+                                outcome_index=outcome_index,
+                            )
+
+                            # Save trade to db with dedup by tx_hash
+                            saved = await self.save_trade_to_db(
+                                trader=trade.trader.lower(),
+                                market_id=trade.condition_id,
+                                side="buy" if trade.side.upper() == "BUY" else "sell",
+                                size_usd=size_usd,
+                                price=trade_price,
+                                timestamp=float(trade.timestamp),
+                                tx_hash=trade.tx_hash,
+                                market_title=trade.market_title,
+                                source="TRACKED",  # Distinguish from BACKFILL/PAPER_TRACK
+                                outcome=normalized_outcome,
+                            )
+
+                            if saved:
+                                new_trades_count += 1
+                            else:
+                                duplicates_count += 1
+
+                        except Exception as e:
+                            logger.warning(
+                                "tracked_whale_trade_save_error",
+                                error=str(e),
+                                trader=trade.trader[:10] if trade.trader else "unknown",
+                            )
+                            continue
+
+                except Exception as e:
+                    logger.warning(
+                        "tracked_whale_fetch_error",
+                        address=address[:10],
+                        error=str(e),
+                    )
+                    continue
+
+            logger.info(
+                "tracked_whale_fetch_cycle_complete",
+                tracked_whales_count=len(tracked_whales),
+                new_trades=new_trades_count,
+                duplicates=duplicates_count,
+            )
+
+        except Exception as e:
+            logger.error("tracked_whale_fetch_failed", error=str(e))
 
     async def fetch_and_process_polymarket(self) -> List[DetectedWhale]:
         """Manually fetch and process whales from Polymarket Data API.

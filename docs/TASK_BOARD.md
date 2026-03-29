@@ -62,6 +62,9 @@ Description: Observation mode enabled. Execution layers suspended. Verified whal
 
 | ID | Задача | Статус |
 |----|--------|--------|
+| STRAT-701 | Запуск paper-trade pipeline для отобранных китов | READY |
+| Type: STAGING | Priority: HIGH | |
+| Selected: 0x32ed... (WR 81.8%, +$6,599, 11 roundtrips) | 0xd48a... (WR 87.5%, +$1,726, 8 roundtrips) | |
 | SYS-325 | Paper Trade Quality Audit (High Price Entries) | READY |
 
 ---
@@ -146,6 +149,11 @@ Description: Completed (details in PROJECT_STATE)
 Description: Fixed tier thresholds (HOT: 1d, WARM: 7d). Recalculated tiers in DB (HOT: 40.7%, WARM: 59%, COLD: 0.3%). whale-detector restarted and running.
 | TRD-427 | Fix: OPEN roundtrips не обновляются settlement (757 stuck) | DONE |
 Description: Fixed by adding --settle to roundtrip_builder in docker-compose.yml. Now runs --settle every 2 hours.
+| TRD-420-A | Per-wallet polling для copy_status='paper' китов | DONE |
+Description: Targeted fetch trades для китов с copy_status='paper' каждые 30 сек. Работает: 148 whale_trades + 84 paper_trades за 5 минут.
+Разблокирует STRAT-701 paper-trade pipeline.
+| TRD-420-B | Per-wallet polling для copy_status='tracked' китов (5 мин) | IN_PROGRESS |
+Description: Targeted fetch trades для tracked китов. Только сбор данных в whale_trades, без paper_trades.
 
 ---
 
@@ -201,4 +209,5 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 
 ---
 
-*Обновлено: 2026-03-29*
+*Обновлено: 2026-03-29*  
+*STRAT-701 добавлен: 2026-03-29*
