@@ -44,6 +44,7 @@ class TradeWithAddress:
         timestamp: Trade timestamp
         market_title: Market question/title
         outcome: Outcome name (Yes/No)
+        outcome_index: Outcome index (0 = Yes/Up/Over/First, 1 = No/Down/Under/Second)
         name: Trader's name from Polymarket profile
     """
 
@@ -58,6 +59,7 @@ class TradeWithAddress:
     timestamp: int
     market_title: str
     outcome: str
+    outcome_index: Optional[int] = None
     name: str = ""
 
 
@@ -230,6 +232,7 @@ class PolymarketDataClient:
                     timestamp=int(item.get("timestamp", 0)),
                     market_title=item.get("title", ""),
                     outcome=item.get("outcome", ""),
+                    outcome_index=item.get("outcomeIndex"),
                     name=item.get("name", ""),
                 )
                 trades.append(trade)

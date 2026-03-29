@@ -64,7 +64,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-polymarket}
       - REDIS_URL=redis://redis:6379/0
-      - OBSERVATION_MODE=true
+      - OBSERVATION_MODE=false
     volumes:
       - ./logs:/app/logs
     depends_on:

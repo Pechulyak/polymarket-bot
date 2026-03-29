@@ -248,7 +248,6 @@ async def main():
                 size_usd=Decimal("100"),
                 price=Decimal("0.55"),
                 timestamp=now - (i * 100),
-                is_winner=i < 4,
             )
         print("   Added 6 test trades for demo")
 

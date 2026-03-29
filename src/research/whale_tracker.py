@@ -696,8 +696,6 @@ class WhaleTracker:
         side: str,
         size_usd: Decimal,
         price: Decimal,
-        is_winner: Optional[bool] = None,
-        profit_usd: Optional[Decimal] = None,
         market_title: Optional[str] = None,
         source: str = "BACKFILL",
         outcome: Optional[str] = None,
@@ -710,8 +708,6 @@ class WhaleTracker:
             side: Trade side ("buy" or "sell")
             size_usd: Trade size in USD
             price: Execution price
-            is_winner: Whether trade was winning
-            profit_usd: Profit in USD
             market_title: Market question/title from Polymarket API
             source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
             outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No

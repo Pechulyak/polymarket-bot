@@ -1,6 +1,6 @@
 # Daily Data Audit Snapshot
 
-**Generated:** 2026-03-26 08:00:01
+**Generated:** 2026-03-28 08:00:02
 
 ---
 
@@ -9,8 +9,8 @@
 | Table | Row Count | Rows 24h | Rows 48h | First Row | Last Row |
 |-------|-----------|----------|----------|-----------|----------|
 | whales | 0 | N/A | N/A | N/A | N/A |
-| whale_trades | 8963 | 767 | 1241 | 2026-03-22 10:28:37 | 2026-03-26 07:55:26 |
-| paper_trades | 736 | 2 | 6 | 2026-03-04 23:59:51 | 2026-03-26 04:45:10 |
+| whale_trades | 10741 | 939 | 1683 | 2026-03-22 10:28:37 | 2026-03-28 07:55:43 |
+| paper_trades | 912 | 94 | 172 | 2026-03-04 23:59:51 | 2026-03-28 07:55:43 |
 | paper_trade_notifications | 528 | 0 | 0 | 2026-03-05 18:08:25 | 2026-03-17 17:56:37 |
 | trades | 42 | N/A | N/A | 2026-03-15 17:56:44 | 2026-03-17 18:47:22 |
 | bankroll | 14 | 0 | 0 | 2026-03-17 15:59:51 | 2026-03-17 18:47:56 |
@@ -29,16 +29,16 @@
 
 ### whale_trades
 
-- Unique whales: 324
-- Unique whales (24h): 129
+- Unique whales: 564
+- Unique whales (24h): 214
 - NULL price: 0
 - NULL size: 0
-- Latest trade: 2026-03-26 07:55:26
+- Latest trade: 2026-03-28 07:55:43
 
 ### paper_trades
 
-- Unique whales: 459
-- Unique whales (24h): 2
+- Unique whales: 576
+- Unique whales (24h): 94
 - NULL market_title: 87
 - NULL price: 0
 - NULL size: 0
@@ -67,7 +67,7 @@
 
 ## Cross-Table Consistency
 
-- whale_trades → paper_trades conversion (48h): 0.48%
+- whale_trades → paper_trades conversion (48h): 10.22%
 - paper_trades → notifications coverage (48h): 0.0%
 - Stale tables (>24h no new rows): paper_trade_notifications, trades, bankroll
 - Stale tables (>48h no new rows): paper_trade_notifications, trades, bankroll

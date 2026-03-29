@@ -276,7 +276,11 @@ class WhaleDetector:
         # TRD-420 Bootstrap: Fetch initial history for existing whales
         # This assigns tier to 38 existing whales that have initial_history_fetched = NULL
         if self.polymarket_client:
-            await self._bootstrap_existing_whales()
+            try:
+                await self._bootstrap_existing_whales()
+            except Exception as e:
+                logger.error("bootstrap_failed_non_fatal", error=str(e))
+                logger.info("continuing_without_bootstrap")
 
         if self.polymarket_client:
             await self.start_polymarket_polling()
@@ -381,25 +385,32 @@ class WhaleDetector:
             
             if not addresses:
                 logger.info("bootstrap_no_whales_needed")
-                session.close()
                 return
                 
             logger.info("bootstrap_starting", whales_count=len(addresses))
-            session.close()
             
             # Fetch history for each whale (non-blocking, sequential)
             for address in addresses:
                 try:
-                    await self._fetch_initial_history(address)
+                    await asyncio.wait_for(
+                        self._fetch_initial_history(address),
+                        timeout=30.0
+                    )
                     # Small delay to avoid rate limiting
                     await asyncio.sleep(0.5)
+                except asyncio.TimeoutError:
+                    logger.warning("bootstrap_whale_timeout", address=address[:10])
+                    continue
                 except Exception as e:
                     logger.error("bootstrap_whale_failed", address=address[:10], error=str(e))
+                    continue
             
             logger.info("bootstrap_complete", whales_processed=len(addresses))
             
         except Exception as e:
             logger.error("bootstrap_failed", error=str(e))
+        finally:
+            session.close()
 
     async def process_trade(
         self,

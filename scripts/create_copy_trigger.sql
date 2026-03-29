@@ -20,30 +20,37 @@ BEGIN
     -- Get source from whale_trades (default to 'unknown' if not set)
     v_source := COALESCE(NEW.source, 'unknown');
 
-    -- Check if whale is in top 50:
-    -- Gate 1: Whale has recent trades in whale_trades (last 24h)
-    -- Gate 2: Whale passes activity filter (has trades_last_7_days > 0)
+    -- STRAT-701: Check if whale has copy_status = 'paper'
+    -- Simple filter: only copy trades from whales marked for paper trading
     IF v_whale_address IS NOT NULL THEN
         SELECT EXISTS (
-            SELECT 1 FROM (
-                SELECT wallet_address 
-                FROM whales 
-                WHERE (
-                    -- Gate 1: Whale has recent trades in whale_trades (last 24h)
-                    id IN (
-                        SELECT DISTINCT whale_id 
-                        FROM whale_trades 
-                        WHERE whale_id IS NOT NULL 
-                          AND traded_at >= NOW() - INTERVAL '24 hours'
-                    )
-                    -- Gate 2: Whale passes activity filter (has trades_last_7_days > 0)
-                    AND COALESCE(trades_last_7_days, 0) > 0
-                )
-                ORDER BY total_volume_usd DESC 
-                LIMIT 50
-            ) top_whales
-            WHERE wallet_address = v_whale_address
+            SELECT 1 FROM whales 
+            WHERE wallet_address = v_whale_address 
+              AND copy_status = 'paper'
         ) INTO v_is_top_whale;
+        
+        -- STRAT-701: replaced by copy_status filter. If need to revert, uncomment below:
+        -- Old logic: Top 50 whales with recent activity
+        -- SELECT EXISTS (
+        --     SELECT 1 FROM (
+        --         SELECT wallet_address 
+        --         FROM whales 
+        --         WHERE (
+        --             -- Gate 1: Whale has recent trades in whale_trades (last 24h)
+        --             id IN (
+        --                 SELECT DISTINCT whale_id 
+        --                 FROM whale_trades 
+        --                 WHERE whale_id IS NOT NULL 
+        --                   AND traded_at >= NOW() - INTERVAL '24 hours'
+        --             )
+        --             -- Gate 2: Whale passes activity filter (has trades_last_7_days > 0)
+        --             AND COALESCE(trades_last_7_days, 0) > 0
+        --         )
+        --         ORDER BY total_volume_usd DESC 
+        --         LIMIT 50
+        --     ) top_whales
+        --     WHERE wallet_address = v_whale_address
+        -- ) INTO v_is_top_whale;
     END IF;
 
     IF v_is_top_whale AND v_whale_address IS NOT NULL THEN

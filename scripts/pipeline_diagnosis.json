@@ -1,0 +1,63 @@
+{
+  "diagnosis_timestamp": "2026-03-29T16:17:11.057209",
+  "whales_analyzed": [
+    {
+      "address": "0x32ed517a571c01b6e9adecf61ba81ca48ff2f960",
+      "short_address": "0x32ed517a...",
+      "api_trades_7d": 0,
+      "last_in_api": null,
+      "api_error": null,
+      "db_whale_trades": 12,
+      "last_in_db": "2026-03-29",
+      "orphan_trades": 1,
+      "whale_id": 82426,
+      "copy_status": "paper",
+      "paper_trades": 0,
+      "last_paper_trade": "None",
+      "diagnosis": "A",
+      "diagnosis_label": "No activity in Polymarket API"
+    },
+    {
+      "address": "0xa9e8faf20424f3efbf12abaea0e7069d7546c443",
+      "short_address": "0xa9e8faf2...",
+      "api_trades_7d": 0,
+      "last_in_api": null,
+      "api_error": null,
+      "db_whale_trades": 36,
+      "last_in_db": "2026-03-29",
+      "orphan_trades": 0,
+      "whale_id": 75993,
+      "copy_status": "paper",
+      "paper_trades": 1,
+      "last_paper_trade": "2026-03-29",
+      "diagnosis": "A",
+      "diagnosis_label": "No activity in Polymarket API"
+    },
+    {
+      "address": "0xd48a81db62f742c4e42d86dfc23a7ee345366e90",
+      "short_address": "0xd48a81db...",
+      "api_trades_7d": 0,
+      "last_in_api": null,
+      "api_error": null,
+      "db_whale_trades": 9,
+      "last_in_db": "2026-03-28",
+      "orphan_trades": 1,
+      "whale_id": 79363,
+      "copy_status": "paper",
+      "paper_trades": 0,
+      "last_paper_trade": "None",
+      "diagnosis": "A",
+      "diagnosis_label": "No activity in Polymarket API"
+    }
+  ],
+  "diagnosis": "A",
+  "details": {
+    "a_no_api_activity": [
+      "0x32ed517a571c01b6e9adecf61ba81ca48ff2f960",
+      "0xa9e8faf20424f3efbf12abaea0e7069d7546c443",
+      "0xd48a81db62f742c4e42d86dfc23a7ee345366e90"
+    ],
+    "b_ingestion_gap": [],
+    "c_trigger_issue": []
+  }
+}

@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-03-26
+Обновлено: 2026-03-29
 Версия: v2_clean  
 Фаза: Реструктуризация (после cleanup)
 
@@ -58,7 +58,10 @@
 
 - Telegram
   API - ok
-  Уведомления -FROZEN  
+  Уведомления - OK  
+  updated: 2026-03-29
+  task: STRAT-701
+  note: unfrozen  
 ---
 
 ## 2. БАЗА ДАННЫХ
@@ -70,23 +73,22 @@
   note: activity schema
 
 - Таблица whale_trades
-  status: IN_WORK
-  updated: 2026-03-23
-  task: TRD-420
-  note: staging redesign
-  issue: ingestion incomplete
+  status: OK
+  updated: 2026-03-27
+  task: ARC-503
+  note: legacy fields removed (is_winner, profit_usd)
 
 - Таблица paper_trades
   status: OK
-  updated: 2026-03-23
-  task: TRD-406
-  note: trigger stable
+  updated: 2026-03-29
+  task: STRAT-701
+  note: unfrozen, filtered by copy_status='paper'
 
 - Таблица trades
-  status: FROZEN
-  updated: 2026-03-23
-  task: SYS-326
-  note: execution off
+  status: OK
+  updated: 2026-03-29
+  task: STRAT-701
+  note: unfrozen
 
 - Таблица whale_trade_roundtrips
   status: OK
@@ -96,10 +98,10 @@
   issue: tested on 4 closed markets, 23 roundtrips settled
 
 - Таблица bankroll
-  status: FROZEN
-  updated: 2026-03-23
-  task: SYS-326
-  note: disabled
+  status: OK
+  updated: 2026-03-29
+  task: STRAT-701
+  note: reset to $100, unfrozen
 
 ---
 
@@ -137,7 +139,6 @@
   updated: 2026-03-26
   task: TRD-427
   note: Теперь запускает --settle каждые 2 часа
-  fix: 757 OPEN roundtrips теперь будут обновляться при закрытии рынков
 
 - paper_settlement
   status: DISABLED
@@ -207,15 +208,15 @@
 
 - whale_trades → paper_trades
   status: OK
-  updated: 2026-03-23
-  task: TRD-406
-  note: trigger active
+  updated: 2026-03-29
+  task: STRAT-701
+  note: filter by copy_status='paper'
 
 - paper_trades → trades
-  status: FROZEN
-  updated: 2026-03-23
-  task: SYS-326
-  note: disabled
+  status: OK
+  updated: 2026-03-29
+  task: STRAT-701
+  note: unfrozen
 
 - settlement pipeline
   status: IN_WORK
@@ -227,14 +228,34 @@
   status: OK
   updated: 2026-03-26
   task: ARC-502-D
-  note: Исправлен UPDATE в _update_whales_pnl — теперь использует wallet_address вместо whale_id
-  docker_fix: 2026-03-26 — исправлен баг print() в _update_whales_pnl(), пересобран Docker образ
 
 - notifications pipeline
-  status: FROZEN
-  updated: 2026-03-23
-  task: SYS-326
-  note: disabled
+  status: OK
+  updated: 2026-03-29
+  task: STRAT-701
+  note: unfrozen
+
+---
+
+## WHALE COPY SELECTION
+
+- P&L Gate
+  status: ACTIVE
+  updated: 2026-03-29
+  task: STRAT-701
+  note: min 5 roundtrips, WR ≥60%, PnL >$0, tier HOT/WARM
+
+- Kelly Sizing
+  status: ACTIVE
+  updated: 2026-03-29
+  task: STRAT-701
+  note: fraction 0.25, max_position 5%
+
+- Selected Whales
+  status: PAPER
+  updated: 2026-03-29
+  task: STRAT-701
+  note: 0x32ed (WR 81.8%, +$6599), 0xd48a (WR 87.5%, +$1726), 0xa9e8 (WR 100%, +$2464, penny_win)
 
 ---
 
@@ -314,24 +335,24 @@
   ## 9. DAILY DATA SNAPSHOT
 
 <!-- AUTO-GENERATED: This section is updated by scripts/run_data_check.py -->
-### 2026-03-23
+### 2026-03-27
 
-snapshot_date: 2026-03-23
+snapshot_date: 2026-03-27
 database: polymarket
 schema: public
 
 whales_rows: 0
-whale_trades_rows: 7648
-paper_trades_rows: 730
+whale_trades_rows: 9760
+paper_trades_rows: 812
 paper_trade_notifications_rows: 528
 trades_rows: 42
 bankroll_rows: 14
 
-whale_trades_last_24h: 35
-paper_trades_last_24h: 4
+whale_trades_last_24h: 742
+paper_trades_last_24h: 76
 notifications_last_24h: 0
 
-conversion_whale_to_paper_48h: 1.28%
+conversion_whale_to_paper_48h: 5.12%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:
@@ -345,24 +366,24 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
-### 2026-03-26
+### 2026-03-29
 
-snapshot_date: 2026-03-26
+snapshot_date: 2026-03-29
 database: polymarket
 schema: public
 
 whales_rows: 0
-whale_trades_rows: 8963
-paper_trades_rows: 736
+whale_trades_rows: 11942
+paper_trades_rows: 992
 paper_trade_notifications_rows: 528
 trades_rows: 42
 bankroll_rows: 14
 
-whale_trades_last_24h: 767
-paper_trades_last_24h: 2
+whale_trades_last_24h: 1164
+paper_trades_last_24h: 80
 notifications_last_24h: 0
 
-conversion_whale_to_paper_48h: 0.48%
+conversion_whale_to_paper_48h: 8.27%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:
@@ -376,24 +397,24 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
-### 2026-03-25
+### 2026-03-28
 
-snapshot_date: 2026-03-25
+snapshot_date: 2026-03-28
 database: polymarket
 schema: public
 
 whales_rows: 0
-whale_trades_rows: 8159
-paper_trades_rows: 733
+whale_trades_rows: 10741
+paper_trades_rows: 912
 paper_trade_notifications_rows: 528
 trades_rows: 42
 bankroll_rows: 14
 
-whale_trades_last_24h: 473
-paper_trades_last_24h: 3
+whale_trades_last_24h: 939
+paper_trades_last_24h: 94
 notifications_last_24h: 0
 
-conversion_whale_to_paper_48h: 0.6%
+conversion_whale_to_paper_48h: 10.22%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:
@@ -407,39 +428,7 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
-### 2026-03-24
 
-snapshot_date: 2026-03-24
-database: polymarket
-schema: public
 
-whales_rows: 0
-whale_trades_rows: 7648
-paper_trades_rows: 730
-paper_trade_notifications_rows: 528
-trades_rows: 42
-bankroll_rows: 14
 
-whale_trades_last_24h: 11
-paper_trades_last_24h: 0
-notifications_last_24h: 0
 
-conversion_whale_to_paper_48h: 1.28%
-conversion_paper_to_notifications_48h: 0.0%
-
-stale_tables_24h:
-- paper_trades
-- paper_trade_notifications
-- trades
-- bankroll
-
-notes:
-- bankroll contains only test data
-- trades table contains only virtual test trades
-
-<!-- END AUTO-GENERATED -->
-
-## 10. НЕДАВНИЕ ИСПРАВЛЕНИЯ
-
-- ARC-502-D: Исправлен баг обновления P&L китов — UPDATE теперь использует wallet_address вместо whale_id
-- SYS-601-FIX: Устранено дублирование roundtrip jobs (main.py → roundtrip_builder container), увеличен интервал до 2h, отключен broken paper_settlement сервис

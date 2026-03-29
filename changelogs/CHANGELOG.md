@@ -4,6 +4,8 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-03-29 | STRAT-701 | Whale copy selection: добавлен copy_status column, trigger фильтрует по 'paper', pipeline unfrozen, bankroll reset to $100 |
+| 2026-03-27 | ARC-503 | Remove legacy fields is_winner and profit_usd from whale_trades (код + БД) |
 | 2026-03-26 | TRD-427b | Fix: Исправлен баг TypeError в _update_whales_pnl() — print() аргумент был строкой вместо списка, пересобран Docker образ |
 | 2026-03-26 | TRD-427 | Fix: roundtrip_builder теперь запускает --settle автоматически каждые 2 часа (757 OPEN roundtrips теперь будут обновляться при закрытии рынков) |
 | 2026-03-26 | TRD-426 | Fix: исправлены tier пороги (HOT: 1d, WARM: 7d), пересчитаны тиры (HOT: 40.7%, WARM: 59%, COLD: 0.3%) |
