@@ -89,6 +89,7 @@ Description: Observation mode enabled. Execution layers suspended. Verified whal
 Description: Интегрирован в main.py. Проверка закрытия позиций за сегодня.
 
 | SYS-601-FIX | Fix дублирование roundtrip_builder + broken paper_settlement | IN_PROGRESS |
+| DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | DONE |
 
 ---
 
@@ -158,6 +159,7 @@ Description: Fixed by adding --settle to roundtrip_builder in docker-compose.yml
 | TRD-417 | Audit API response structure across market types before whales schema redesign | TODO |
 | TRD-418 | Transform whales table schema to approved activity-based structure | DONE |
 | TRD-419 | Migrate whales logic from legacy fields to new activity-based fields | DONE |
+| ARC-503 | Remove legacy fields is_winner and profit_usd from whale_trades | DONE |
 | TRD-420 | Рефакторинг whale discovery: initial history aggregation + tiered polling | IN_PROGRESS |
 Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | DATA-404 | Reset virtual bankroll for fresh paper trading cycle | DONE |
@@ -199,4 +201,4 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 
 ---
 
-*Обновлено: 2026-03-23*
+*Обновлено: 2026-03-29*
