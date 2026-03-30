@@ -1232,7 +1232,7 @@ class WhaleDetector:
 
         async with async_session_maker() as session:
             try:
-                await save_whale_trade(
+                saved = await save_whale_trade(
                     session=session,
                     wallet_address=trader_lower,
                     market_id=market_id,
@@ -1246,14 +1246,15 @@ class WhaleDetector:
                     source=source,
                     traded_at=trade_traded_at,
                 )
-                logger.info(
-                    "whale_trade_saved",
-                    wallet_address=trader_lower[:10],
-                    market_id=market_id[:20] if market_id else "unknown",
-                    side=side,
-                    size_usd=str(size_usd),
-                )
-                return True
+                if saved:
+                    logger.info(
+                        "whale_trade_saved",
+                        wallet_address=trader_lower[:10],
+                        market_id=market_id[:20] if market_id else "unknown",
+                        side=side,
+                        size_usd=str(size_usd),
+                    )
+                return saved
             except Exception as e:
                 # Check if it's a duplicate (deduplication in save_whale_trade)
                 if "duplicate" in str(e).lower() or "unique" in str(e).lower():

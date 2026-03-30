@@ -182,7 +182,7 @@ async def save_whale_trade(
         
         # Use raw SQL insert for reliability
         from sqlalchemy import text
-        await session.execute(
+        result = await session.execute(
             text("""
                 INSERT INTO whale_trades (
                     whale_id, wallet_address, market_id, market_title,
@@ -212,16 +212,20 @@ async def save_whale_trade(
         
         await session.commit()
         
-        logger.info(
-            "whale_trade_saved",
-            wallet=wallet_address[:10] if wallet_address else None,
-            side=normalized_side,
-            size_usd=float(size_usd),
-            price=float(price),
-            market_id=market_id[:20],
-            category=market_category,
-        )
-        return True
+        # Check rowcount - True if inserted, False if no row was inserted
+        inserted = result.rowcount > 0
+        
+        if inserted:
+            logger.info(
+                "whale_trade_saved",
+                wallet=wallet_address[:10] if wallet_address else None,
+                side=normalized_side,
+                size_usd=float(size_usd),
+                price=float(price),
+                market_id=market_id[:20],
+                category=market_category,
+            )
+        return inserted
         
     except Exception as e:
         logger.error(
