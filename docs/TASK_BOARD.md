@@ -123,9 +123,9 @@ Goals:
 | TRD-405 | Verify Kelly sizing logic | TODO |
 | TRD-406 | Fix zero-size paper trades on open path | TODO |
 | TRD-407 | Investigate execution gap (paper_trades vs trades) | TODO |
+| TRD-408 | Add YES/NO outcome attribution for whale trades | DONE |
+Description: Completed (details in PROJECT_STATE) |
 | TRD-409 | Fix settlement integration with VirtualBankroll | DONE |
-Description: Completed (details in PROJECT_STATE)
-| TRD-410 | Add YES/NO outcome attribution for whale trades | DONE |
 Description: Completed (details in PROJECT_STATE)
 | TRD-411 | Audit whale exit handling and buy/sell event recording across pipeline | DONE |
 Description: Completed (details in PROJECT_STATE)
