@@ -236,6 +236,8 @@ class WhaleDetector:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._polymarket_task: Optional[asyncio.Task] = None
+        self._paper_poll_task: Optional[asyncio.Task] = None  # BUG-502: Paper polling
+        self._tracked_poll_task: Optional[asyncio.Task] = None  # BUG-502: Tracked polling
         self._engine = None
         self._Session = None
         self._lock = asyncio.Lock()
@@ -285,8 +287,11 @@ class WhaleDetector:
         if self.polymarket_client:
             await self.start_polymarket_polling()
 
-        # TRD-420 v2: Independent copy polling loop
-        self._copy_poll_task = asyncio.create_task(self._copy_poll_loop())
+        # TRD-420 v2: Independent copy polling loops - SEPARATED (BUG-502)
+        # Paper: every 30 sec (critical path)
+        # Tracked: every 5 min (non-critical)
+        self._paper_poll_task = asyncio.create_task(self._paper_poll_loop())
+        self._tracked_poll_task = asyncio.create_task(self._tracked_poll_loop())
 
         logger.info("whale_detector_started")
 
@@ -296,7 +301,24 @@ class WhaleDetector:
 
         await self.stop_polymarket_polling()
 
-        # TRD-420 v2: Cancel independent copy polling loop
+        # TRD-420 v2: Cancel both independent polling loops (BUG-502)
+        if hasattr(self, '_paper_poll_task') and self._paper_poll_task:
+            self._paper_poll_task.cancel()
+            try:
+                await self._paper_poll_task
+            except asyncio.CancelledError:
+                pass
+            self._paper_poll_task = None
+
+        if hasattr(self, '_tracked_poll_task') and self._tracked_poll_task:
+            self._tracked_poll_task.cancel()
+            try:
+                await self._tracked_poll_task
+            except asyncio.CancelledError:
+                pass
+            self._tracked_poll_task = None
+
+        # Legacy: also cancel old combined loop if exists (for graceful upgrade)
         if hasattr(self, '_copy_poll_task') and self._copy_poll_task:
             self._copy_poll_task.cancel()
             try:
@@ -1361,12 +1383,12 @@ class WhaleDetector:
                 logger.error("polymarket_poll_error", error=str(e))
                 await asyncio.sleep(60)
 
-    async def _copy_poll_loop(self) -> None:
-        """TRD-420 v2: Independent loop for paper/tracked whale polling.
-        Runs separately from _polymarket_poll_loop() to ensure it never
-        gets blocked by main loop issues.
+    async def _paper_poll_loop(self) -> None:
+        """BUG-502: Paper whale polling — every 30 sec. Critical path.
+        Runs independently from tracked whale polling to prevent
+        tracked fetch from blocking paper fetch.
         """
-        logger.info("copy_poll_loop_started")
+        logger.info("paper_poll_loop_started")
         while self._running:
             try:
                 await asyncio.wait_for(
@@ -1377,9 +1399,16 @@ class WhaleDetector:
                 logger.error("paper_fetch_timeout", timeout_sec=120)
             except Exception as e:
                 logger.error("paper_fetch_error", error=str(e))
-            
             await asyncio.sleep(30)
-            
+        logger.info("paper_poll_loop_stopped")
+
+    async def _tracked_poll_loop(self) -> None:
+        """BUG-502: Tracked whale polling — every 5 min. Non-critical.
+        Runs independently from paper whale polling to prevent
+        blocking the critical paper fetch path.
+        """
+        logger.info("tracked_poll_loop_started")
+        while self._running:
             try:
                 await asyncio.wait_for(
                     self._fetch_tracked_whale_trades(),
@@ -1389,9 +1418,8 @@ class WhaleDetector:
                 logger.error("tracked_fetch_timeout", timeout_sec=300)
             except Exception as e:
                 logger.error("tracked_fetch_error", error=str(e))
-            
-            await asyncio.sleep(270)  # 30 + 270 = 300 sec (5 min) until next cycle
-        logger.info("copy_poll_loop_stopped")
+            await asyncio.sleep(300)
+        logger.info("tracked_poll_loop_stopped")
 
     async def _fetch_polymarket_whales(self) -> None:
         """Fetch whales from Polymarket Data API and update database."""
@@ -1642,68 +1670,19 @@ class WhaleDetector:
             duplicates_count = 0
 
             for address in paper_whales:
+                # BUG-502: Per-whale timeout to prevent one slow whale from blocking others
                 try:
-                    # Rate limit: 0.3s between requests
-                    await asyncio.sleep(0.3)
-
-                    # Fetch recent trades for this whale
-                    trades = await self.polymarket_client.fetch_trader_trades(
-                        address, limit=50
+                    new, dupes = await asyncio.wait_for(
+                        self._fetch_single_paper_whale(address),
+                        timeout=30  # Max 30 sec per whale
                     )
-
-                    for trade in trades:
-                        try:
-                            # Map API fields to save_trade_to_db parameters:
-                            # - API size = number of shares (tokens), NOT USD
-                            # - size_usd = size * price
-                            size_shares = Decimal(str(trade.size))
-                            trade_price = Decimal(str(trade.price))
-                            size_usd = size_shares * trade_price
-
-                            # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
-                            # Use outcomeIndex for reliable binary mapping
-                            outcome_index = None
-                            if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
-                                outcome_index = trade.outcome_index
-
-                            normalized_outcome = normalize_outcome(
-                                outcome=trade.outcome,
-                                outcome_index=outcome_index,
-                            )
-
-                            # Save trade to db with dedup by tx_hash
-                            saved = await self.save_trade_to_db(
-                                trader=trade.trader.lower(),
-                                market_id=trade.condition_id,
-                                side="buy" if trade.side.upper() == "BUY" else "sell",
-                                size_usd=size_usd,
-                                price=trade_price,
-                                timestamp=float(trade.timestamp),
-                                tx_hash=trade.tx_hash,
-                                market_title=trade.market_title,
-                                source="PAPER_TRACK",  # Distinguish from BACKFILL/REALTIME
-                                outcome=normalized_outcome,
-                            )
-
-                            if saved:
-                                new_trades_count += 1
-                            else:
-                                duplicates_count += 1
-
-                        except Exception as e:
-                            logger.warning(
-                                "paper_whale_trade_save_error",
-                                error=str(e),
-                                trader=trade.trader[:10] if trade.trader else "unknown",
-                            )
-                            continue
-
+                    new_trades_count += new
+                    duplicates_count += dupes
+                except asyncio.TimeoutError:
+                    logger.warning("paper_whale_timeout", address=address[:10], timeout_sec=30)
+                    continue
                 except Exception as e:
-                    logger.warning(
-                        "paper_whale_fetch_error",
-                        address=address[:10],
-                        error=str(e),
-                    )
+                    logger.warning("paper_whale_error", address=address[:10], error=str(e))
                     continue
 
             logger.info(
@@ -1715,6 +1694,72 @@ class WhaleDetector:
 
         except Exception as e:
             logger.error("paper_whale_fetch_failed", error=str(e))
+
+    async def _fetch_single_paper_whale(self, address: str) -> tuple[int, int]:
+        """BUG-502: Fetch trades for a single paper whale. Used with per-whale timeout.
+        
+        Returns:
+            Tuple of (new_trades_count, duplicates_count)
+        """
+        # Rate limit: 0.3s between requests
+        await asyncio.sleep(0.3)
+
+        # Fetch recent trades for this whale
+        trades = await self.polymarket_client.fetch_trader_trades(
+            address, limit=50
+        )
+
+        new_trades = 0
+        duplicates = 0
+
+        for trade in trades:
+            try:
+                # Map API fields to save_trade_to_db parameters:
+                # - API size = number of shares (tokens), NOT USD
+                # - size_usd = size * price
+                size_shares = Decimal(str(trade.size))
+                trade_price = Decimal(str(trade.price))
+                size_usd = size_shares * trade_price
+
+                # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
+                # Use outcomeIndex for reliable binary mapping
+                outcome_index = None
+                if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
+                    outcome_index = trade.outcome_index
+
+                normalized_outcome = normalize_outcome(
+                    outcome=trade.outcome,
+                    outcome_index=outcome_index,
+                )
+
+                # Save trade to db with dedup by tx_hash
+                saved = await self.save_trade_to_db(
+                    trader=trade.trader.lower(),
+                    market_id=trade.condition_id,
+                    side="buy" if trade.side.upper() == "BUY" else "sell",
+                    size_usd=size_usd,
+                    price=trade_price,
+                    timestamp=float(trade.timestamp),
+                    tx_hash=trade.tx_hash,
+                    market_title=trade.market_title,
+                    source="PAPER_TRACK",  # Distinguish from BACKFILL/REALTIME
+                    outcome=normalized_outcome,
+                )
+
+                if saved:
+                    new_trades += 1
+                else:
+                    duplicates += 1
+
+            except Exception as e:
+                logger.warning(
+                    "paper_whale_trade_save_error",
+                    error=str(e),
+                    trader=trade.trader[:10] if trade.trader else "unknown",
+                )
+                continue
+
+        return (new_trades, duplicates)
 
     async def _fetch_tracked_whale_trades(self) -> None:
         """Fetch recent trades for whales with copy_status='tracked'.
@@ -1759,68 +1804,19 @@ class WhaleDetector:
             duplicates_count = 0
 
             for address in tracked_whales:
+                # BUG-502: Per-whale timeout to prevent one slow whale from blocking others
                 try:
-                    # Rate limit: 0.3s between requests
-                    await asyncio.sleep(0.3)
-
-                    # Fetch recent trades for this whale
-                    trades = await self.polymarket_client.fetch_trader_trades(
-                        address, limit=50
+                    new, dupes = await asyncio.wait_for(
+                        self._fetch_single_tracked_whale(address),
+                        timeout=60  # Max 60 sec per whale (tracked is non-critical)
                     )
-
-                    for trade in trades:
-                        try:
-                            # Map API fields to save_trade_to_db parameters:
-                            # - API size = number of shares (tokens), NOT USD
-                            # - size_usd = size * price
-                            size_shares = Decimal(str(trade.size))
-                            trade_price = Decimal(str(trade.price))
-                            size_usd = size_shares * trade_price
-
-                            # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
-                            # Use outcomeIndex for reliable binary mapping
-                            outcome_index = None
-                            if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
-                                outcome_index = trade.outcome_index
-
-                            normalized_outcome = normalize_outcome(
-                                outcome=trade.outcome,
-                                outcome_index=outcome_index,
-                            )
-
-                            # Save trade to db with dedup by tx_hash
-                            saved = await self.save_trade_to_db(
-                                trader=trade.trader.lower(),
-                                market_id=trade.condition_id,
-                                side="buy" if trade.side.upper() == "BUY" else "sell",
-                                size_usd=size_usd,
-                                price=trade_price,
-                                timestamp=float(trade.timestamp),
-                                tx_hash=trade.tx_hash,
-                                market_title=trade.market_title,
-                                source="TRACKED",  # Distinguish from BACKFILL/PAPER_TRACK
-                                outcome=normalized_outcome,
-                            )
-
-                            if saved:
-                                new_trades_count += 1
-                            else:
-                                duplicates_count += 1
-
-                        except Exception as e:
-                            logger.warning(
-                                "tracked_whale_trade_save_error",
-                                error=str(e),
-                                trader=trade.trader[:10] if trade.trader else "unknown",
-                            )
-                            continue
-
+                    new_trades_count += new
+                    duplicates_count += dupes
+                except asyncio.TimeoutError:
+                    logger.warning("tracked_whale_timeout", address=address[:10], timeout_sec=60)
+                    continue
                 except Exception as e:
-                    logger.warning(
-                        "tracked_whale_fetch_error",
-                        address=address[:10],
-                        error=str(e),
-                    )
+                    logger.warning("tracked_whale_error", address=address[:10], error=str(e))
                     continue
 
             logger.info(
@@ -1832,6 +1828,72 @@ class WhaleDetector:
 
         except Exception as e:
             logger.error("tracked_whale_fetch_failed", error=str(e))
+
+    async def _fetch_single_tracked_whale(self, address: str) -> tuple[int, int]:
+        """BUG-502: Fetch trades for a single tracked whale. Used with per-whale timeout.
+        
+        Returns:
+            Tuple of (new_trades_count, duplicates_count)
+        """
+        # Rate limit: 0.3s between requests
+        await asyncio.sleep(0.3)
+
+        # Fetch recent trades for this whale
+        trades = await self.polymarket_client.fetch_trader_trades(
+            address, limit=50
+        )
+
+        new_trades = 0
+        duplicates = 0
+
+        for trade in trades:
+            try:
+                # Map API fields to save_trade_to_db parameters:
+                # - API size = number of shares (tokens), NOT USD
+                # - size_usd = size * price
+                size_shares = Decimal(str(trade.size))
+                trade_price = Decimal(str(trade.price))
+                size_usd = size_shares * trade_price
+
+                # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
+                # Use outcomeIndex for reliable binary mapping
+                outcome_index = None
+                if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
+                    outcome_index = trade.outcome_index
+
+                normalized_outcome = normalize_outcome(
+                    outcome=trade.outcome,
+                    outcome_index=outcome_index,
+                )
+
+                # Save trade to db with dedup by tx_hash
+                saved = await self.save_trade_to_db(
+                    trader=trade.trader.lower(),
+                    market_id=trade.condition_id,
+                    side="buy" if trade.side.upper() == "BUY" else "sell",
+                    size_usd=size_usd,
+                    price=trade_price,
+                    timestamp=float(trade.timestamp),
+                    tx_hash=trade.tx_hash,
+                    market_title=trade.market_title,
+                    source="TRACKED",  # Distinguish from BACKFILL/PAPER_TRACK
+                    outcome=normalized_outcome,
+                )
+
+                if saved:
+                    new_trades += 1
+                else:
+                    duplicates += 1
+
+            except Exception as e:
+                logger.warning(
+                    "tracked_whale_trade_save_error",
+                    error=str(e),
+                    trader=trade.trader[:10] if trade.trader else "unknown",
+                )
+                continue
+
+        return (new_trades, duplicates)
 
     async def fetch_and_process_polymarket(self) -> List[DetectedWhale]:
         """Manually fetch and process whales from Polymarket Data API.
