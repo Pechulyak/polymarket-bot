@@ -54,6 +54,8 @@
 | SYS-301 | Docker Orchestration & Deployment | TODO |
 | SYS-302 | Monitoring & Alerting System | TODO |
 | SYS-326 | Safely suspend execution/downstream layers after paper_trades | DONE |
+| BUG-501 | Fix timeout hang в HTTP calls (client.py) | DONE |
+| BUG-502 | Separate paper/tracked polling loops, per-whale timeout | IN_PROGRESS |
 Description: Observation mode enabled. Execution layers suspended. Verified whale_trades → paper_trades pipeline works independently.
 
 ---
