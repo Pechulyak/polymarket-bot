@@ -519,8 +519,8 @@ class VirtualBankroll:
             return
         
         try:
-            # Get market category (no session needed - uses caching)
-            market_category = await get_market_category(market_id)
+            # TRD-408: market_category removed from hot path - filled by background task
+            market_category = None
             
             # Use unified save_whale_trade - derives whale_id from wallet_address automatically
             await save_whale_trade(

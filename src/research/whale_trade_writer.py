@@ -108,6 +108,7 @@ async def save_whale_trade(
     tx_hash: Optional[str] = None,
     source: str = "REALTIME",
     whale_id: Optional[int] = None,
+    traded_at: Optional[datetime] = None,
 ) -> bool:
     """
     Единственный метод записи в whale_trades.
@@ -202,7 +203,7 @@ async def save_whale_trade(
                 "size_usd": float(size_usd),
                 "price": float(price),
                 "outcome": normalized_outcome,
-                "traded_at": datetime.utcnow(),
+                "traded_at": traded_at if traded_at else datetime.utcnow(),
                 "tx_hash": tx_hash,
                 "source": source,
                 "market_category": market_category,

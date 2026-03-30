@@ -737,8 +737,8 @@ class WhaleTracker:
         finally:
             session.close()
 
-        # Get market category
-        market_category = await get_market_category(market_id)
+        # TRD-408: market_category removed from hot path - filled by background task
+        market_category = None
 
         # Ensure async engine exists for unified method
         # TRD-423: Fixed attribute name (was _database_url)

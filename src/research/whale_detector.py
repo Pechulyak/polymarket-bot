@@ -1215,8 +1215,11 @@ class WhaleDetector:
             async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self.database_url else self.database_url.replace("postgresql://", "postgresql+asyncpg://")
             self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
 
-        # Get market category
-        market_category = await get_market_category(market_id)
+        # TRD-408: market_category removed from hot path - filled by background task
+        market_category = None
+        
+        # TRD-408: Convert timestamp (float) to datetime for traded_at
+        trade_traded_at = datetime.utcfromtimestamp(timestamp) if timestamp else None
 
         # Create async session
         from sqlalchemy.ext.asyncio import AsyncSession
@@ -1241,6 +1244,7 @@ class WhaleDetector:
                     market_category=market_category,
                     tx_hash=tx_hash,
                     source=source,
+                    traded_at=trade_traded_at,
                 )
                 logger.info(
                     "whale_trade_saved",
