@@ -252,3 +252,37 @@ VALUES (100.00, 0, 100.00, 0, 0);
 -- These fields were removed because Polymarket Data API does not provide settlement outcomes
 ALTER TABLE whale_trades DROP COLUMN IF EXISTS is_winner;
 ALTER TABLE whale_trades DROP COLUMN IF EXISTS profit_usd;
+
+-- BUG-505: paper_trades table with tx_hash for deduplication
+-- Created by trigger_copy_whale_trade from whale_trades
+CREATE TABLE IF NOT EXISTS paper_trades (
+    id SERIAL PRIMARY KEY,
+    trade_id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
+    whale_address VARCHAR(66) NOT NULL,
+    market_id VARCHAR(255) NOT NULL,
+    market_title TEXT,
+    side VARCHAR(10) NOT NULL CHECK (side IN ('buy', 'sell')),
+    outcome VARCHAR(50),
+    price DECIMAL(20, 8) NOT NULL,
+    size DECIMAL(20, 8) NOT NULL,  -- Calculated shares (size_usd / price)
+    size_usd DECIMAL(20, 8) NOT NULL,
+    kelly_fraction DECIMAL(10, 8) NOT NULL DEFAULT 0.25,
+    kelly_size DECIMAL(20, 8) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'settled')),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    settled_at TIMESTAMP,
+    source VARCHAR(20) DEFAULT 'unknown' CHECK (source IN ('REALTIME', 'BACKFILL', 'TRIGGER_TEST', 'unknown', 'PAPER')),
+    
+    -- BUG-505: tx_hash for transaction-level deduplication
+    tx_hash VARCHAR(70)
+);
+
+-- Indexes for paper_trades
+CREATE INDEX IF NOT EXISTS idx_paper_trades_whale ON paper_trades(whale_address, created_at);
+CREATE INDEX IF NOT EXISTS idx_paper_trades_market ON paper_trades(market_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_paper_trades_status ON paper_trades(status);
+
+-- BUG-505: Partial unique index to prevent duplicate tx_hash entries
+-- Only enforces uniqueness for non-null tx_hash values
+CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_trades_tx_hash_unique 
+ON paper_trades(tx_hash) WHERE tx_hash IS NOT NULL;

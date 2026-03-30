@@ -1,6 +1,7 @@
 -- Function to copy whale trades to paper_trades table
 -- FIX: Include whales with recent trades (last 24h) OR qualified whales
--- ADDED: market_title column
+-- ADDED: market_title column, tx_hash column for dedup
+-- BUG-505: Added tx_hash for reliable deduplication
 CREATE OR REPLACE FUNCTION copy_whale_trade_to_paper()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -28,29 +29,17 @@ BEGIN
             WHERE wallet_address = v_whale_address 
               AND copy_status = 'paper'
         ) INTO v_is_top_whale;
-        
-        -- STRAT-701: replaced by copy_status filter. If need to revert, uncomment below:
-        -- Old logic: Top 50 whales with recent activity
-        -- SELECT EXISTS (
-        --     SELECT 1 FROM (
-        --         SELECT wallet_address 
-        --         FROM whales 
-        --         WHERE (
-        --             -- Gate 1: Whale has recent trades in whale_trades (last 24h)
-        --             id IN (
-        --                 SELECT DISTINCT whale_id 
-        --                 FROM whale_trades 
-        --                 WHERE whale_id IS NOT NULL 
-        --                   AND traded_at >= NOW() - INTERVAL '24 hours'
-        --             )
-        --             -- Gate 2: Whale passes activity filter (has trades_last_7_days > 0)
-        --             AND COALESCE(trades_last_7_days, 0) > 0
-        --         )
-        --         ORDER BY total_volume_usd DESC 
-        --         LIMIT 50
-        --     ) top_whales
-        --     WHERE wallet_address = v_whale_address
-        -- ) INTO v_is_top_whale;
+    END IF;
+
+    -- BUG-505: Hard dedup by tx_hash - skip if tx_hash already exists in paper_trades
+    IF v_is_top_whale AND v_whale_address IS NOT NULL THEN
+        IF NEW.tx_hash IS NOT NULL AND EXISTS (
+            SELECT 1 FROM paper_trades 
+            WHERE tx_hash = NEW.tx_hash
+        ) THEN
+            -- Skip duplicate by tx_hash
+            RETURN NEW;
+        END IF;
     END IF;
 
     IF v_is_top_whale AND v_whale_address IS NOT NULL THEN
@@ -76,7 +65,7 @@ BEGIN
             v_kelly_size := v_max_position;
         END IF;
 
-        -- Insert into paper_trades with market_title, source and outcome
+        -- Insert into paper_trades with market_title, source, outcome and tx_hash
         INSERT INTO paper_trades (
             whale_address,
             market_id,
@@ -89,7 +78,8 @@ BEGIN
             kelly_fraction,
             kelly_size,
             created_at,
-            source
+            source,
+            tx_hash
         ) VALUES (
             v_whale_address,
             NEW.market_id,
@@ -102,7 +92,8 @@ BEGIN
             v_kelly_fraction,
             v_kelly_size,
             NEW.traded_at,
-            v_source
+            v_source,
+            NEW.tx_hash
         );
     END IF;
 
