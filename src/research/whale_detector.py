@@ -33,6 +33,7 @@ from sqlalchemy.orm import sessionmaker
 
 from src.data.storage.market_category_cache import get_market_category
 from src.data.storage.market_title_cache import get_market_title
+from src.data.storage.category_backfill import backfill_market_categories
 from src.research.polymarket_data_client import (
     PolymarketDataClient,
 )
@@ -238,6 +239,7 @@ class WhaleDetector:
         self._polymarket_task: Optional[asyncio.Task] = None
         self._paper_poll_task: Optional[asyncio.Task] = None  # BUG-502: Paper polling
         self._tracked_poll_task: Optional[asyncio.Task] = None  # BUG-502: Tracked polling
+        self._category_backfill_task: Optional[asyncio.Task] = None  # Category backfill
         self._engine = None
         self._Session = None
         self._lock = asyncio.Lock()
@@ -293,6 +295,10 @@ class WhaleDetector:
         self._paper_poll_task = asyncio.create_task(self._paper_poll_loop())
         self._tracked_poll_task = asyncio.create_task(self._tracked_poll_loop())
 
+        # Category backfill — every 12 hours
+        if self.database_url:
+            self._category_backfill_task = asyncio.create_task(self._category_backfill_loop())
+
         logger.info("whale_detector_started")
 
     async def stop(self) -> None:
@@ -317,6 +323,15 @@ class WhaleDetector:
             except asyncio.CancelledError:
                 pass
             self._tracked_poll_task = None
+
+        # Cancel category backfill task
+        if hasattr(self, '_category_backfill_task') and self._category_backfill_task:
+            self._category_backfill_task.cancel()
+            try:
+                await self._category_backfill_task
+            except asyncio.CancelledError:
+                pass
+            self._category_backfill_task = None
 
         # Legacy: also cancel old combined loop if exists (for graceful upgrade)
         if hasattr(self, '_copy_poll_task') and self._copy_poll_task:
@@ -349,6 +364,16 @@ class WhaleDetector:
                 break
             except Exception as e:
                 logger.error("cleanup_loop_error", error=str(e))
+
+    async def _category_backfill_loop(self) -> None:
+        """Background category backfill — every 12 hours."""
+        while self._running:
+            try:
+                await backfill_market_categories(self.database_url, batch_size=100)
+                logger.info("category_backfill_complete")
+            except Exception as e:
+                logger.error("category_backfill_error", error=str(e))
+            await asyncio.sleep(43200)  # 12 hours
 
     async def _cleanup_old_trades(self) -> None:
         """Remove trades older than detection window."""
