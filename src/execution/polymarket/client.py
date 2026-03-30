@@ -117,7 +117,9 @@ class PolymarketClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=30)
+            )
         return self._session
 
     async def close(self) -> None:
@@ -199,6 +201,7 @@ class PolymarketClient:
                     url=url,
                     params=params,
                     headers=request_headers,
+                    timeout=aiohttp.ClientTimeout(total=30),
                 ) as resp:
                     if resp.status == 200:
                         return await resp.json()

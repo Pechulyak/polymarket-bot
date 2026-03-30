@@ -285,6 +285,9 @@ class WhaleDetector:
         if self.polymarket_client:
             await self.start_polymarket_polling()
 
+        # TRD-420 v2: Independent copy polling loop
+        self._copy_poll_task = asyncio.create_task(self._copy_poll_loop())
+
         logger.info("whale_detector_started")
 
     async def stop(self) -> None:
@@ -292,6 +295,15 @@ class WhaleDetector:
         self._running = False
 
         await self.stop_polymarket_polling()
+
+        # TRD-420 v2: Cancel independent copy polling loop
+        if hasattr(self, '_copy_poll_task') and self._copy_poll_task:
+            self._copy_poll_task.cancel()
+            try:
+                await self._copy_poll_task
+            except asyncio.CancelledError:
+                pass
+            self._copy_poll_task = None
 
         if self._task:
             self._task.cancel()
@@ -1308,35 +1320,11 @@ class WhaleDetector:
         qualification_interval = 3600  # 1 hour
         last_qualification_refresh = time.time()
         
-        # TRD-420: Paper whale fetch interval (every 30 seconds)
-        paper_whale_interval = 30  # seconds
-        last_paper_whale_fetch = 0  # fetch immediately on start
-        
-        # TRD-420-B: Tracked whale fetch interval (every 5 minutes)
-        tracked_whale_interval = 300  # 5 minutes
-        last_tracked_whale_fetch = 0  # fetch immediately on start
-        
         while self._running:
             try:
                 await self._fetch_polymarket_whales()
                 
                 current_time = time.time()
-                
-                # TRD-420: Fetch paper whale trades every 30 seconds
-                if current_time - last_paper_whale_fetch >= paper_whale_interval:
-                    try:
-                        await self._fetch_paper_whale_trades()
-                    except Exception as e:
-                        logger.error("paper_whale_fetch_error", error=str(e))
-                    last_paper_whale_fetch = current_time
-                
-                # TRD-420-B: Fetch tracked whale trades every 5 minutes
-                if current_time - last_tracked_whale_fetch >= tracked_whale_interval:
-                    try:
-                        await self._fetch_tracked_whale_trades()
-                    except Exception as e:
-                        logger.error("tracked_whale_fetch_error", error=str(e))
-                    last_tracked_whale_fetch = current_time
                 
                 # Stage 2: Periodic ranking update every hour
                 if current_time - last_ranking_update >= ranking_interval:
@@ -1372,6 +1360,38 @@ class WhaleDetector:
             except Exception as e:
                 logger.error("polymarket_poll_error", error=str(e))
                 await asyncio.sleep(60)
+
+    async def _copy_poll_loop(self) -> None:
+        """TRD-420 v2: Independent loop for paper/tracked whale polling.
+        Runs separately from _polymarket_poll_loop() to ensure it never
+        gets blocked by main loop issues.
+        """
+        logger.info("copy_poll_loop_started")
+        while self._running:
+            try:
+                await asyncio.wait_for(
+                    self._fetch_paper_whale_trades(),
+                    timeout=120
+                )
+            except asyncio.TimeoutError:
+                logger.error("paper_fetch_timeout", timeout_sec=120)
+            except Exception as e:
+                logger.error("paper_fetch_error", error=str(e))
+            
+            await asyncio.sleep(30)
+            
+            try:
+                await asyncio.wait_for(
+                    self._fetch_tracked_whale_trades(),
+                    timeout=300
+                )
+            except asyncio.TimeoutError:
+                logger.error("tracked_fetch_timeout", timeout_sec=300)
+            except Exception as e:
+                logger.error("tracked_fetch_error", error=str(e))
+            
+            await asyncio.sleep(270)  # 30 + 270 = 300 sec (5 min) until next cycle
+        logger.info("copy_poll_loop_stopped")
 
     async def _fetch_polymarket_whales(self) -> None:
         """Fetch whales from Polymarket Data API and update database."""
