@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-03-30
+
+### Fixed
+- **TRD-408**: traded_at now uses API timestamp instead of DB insert time. Removed get_market_category() HTTP call from hot path in whale_detector.py, whale_tracker.py, virtual_bankroll.py. Commits: cefb92a, dbe310f.
+- **BUG-502**: Verified real-time whale trade ingestion. Paper poll (30s) and tracked poll (5min) loops working independently. Confirmed on 0x2652dd (paper) and 0x32ed (paper).
+- **BUG-504**: Fixed false new_trades=50 log. save_whale_trade() now returns bool based on INSERT rowcount. Duplicates correctly counted.
+
+### Changed
+- 0x2652dd (WR 100%, +$2917) moved from tracked → paper copy_status.
+- Paper whales count: 2 (0x32ed + 0x2652dd).
+
+---
+
 ## 2026-03
 
 | Дата | TASK_ID | Описание |

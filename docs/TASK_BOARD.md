@@ -55,8 +55,8 @@
 | SYS-302 | Monitoring & Alerting System | TODO |
 | SYS-326 | Safely suspend execution/downstream layers after paper_trades | DONE |
 | BUG-501 | Fix timeout hang в HTTP calls (client.py) | DONE |
-| BUG-502 | Separate paper/tracked polling loops, per-whale timeout | IN_PROGRESS |
-Description: Observation mode enabled. Execution layers suspended. Verified whale_trades → paper_trades pipeline works independently.
+| BUG-502 | Separate paper/tracked polling loops, per-whale timeout | DONE |
+Description: Verified real-time ingestion on both paper and tracked whales. Paper poll (30s) and tracked poll (5min) working independently.
 
 ---
 
@@ -123,8 +123,8 @@ Goals:
 | TRD-405 | Verify Kelly sizing logic | TODO |
 | TRD-406 | Fix zero-size paper trades on open path | TODO |
 | TRD-407 | Investigate execution gap (paper_trades vs trades) | TODO |
-| TRD-408 | Add YES/NO outcome attribution for whale trades | DONE |
-Description: Completed (details in PROJECT_STATE) |
+| TRD-408 | Fix traded_at to use API timestamp instead of NOW() | DONE |
+Description: Removed get_market_category HTTP call from hot path in whale_detector.py, whale_tracker.py, virtual_bankroll.py. Commits: cefb92a, dbe310f. |
 | TRD-409 | Fix settlement integration with VirtualBankroll | DONE |
 Description: Completed (details in PROJECT_STATE)
 | TRD-411 | Audit whale exit handling and buy/sell event recording across pipeline | DONE |
@@ -145,6 +145,8 @@ Description: Fixed fuzzy matching close logic. Previously, SELL events for short
 Description: Whale trades ingestion incomplete (~99% loss for some whales). Root cause: global 500-trade limit + no per-wallet backfill. Audit completed, awaiting fix.
 | TRD-421 | Аудит whale_trades — Завершён | DONE |
 Description: Completed (details in PROJECT_STATE)
+| BUG-504 | Fix false new_trades counter in whale_detector logs | DONE |
+Description: save_whale_trade now returns bool based on rowcount (ON CONFLICT DO NOTHING). Fixed new_trades showing 50 when only new inserts counted.
 | TRD-422 | Добавить market_category в whale_trades и унифицировать запись | DONE |
 Description: Completed (details in PROJECT_STATE)
 | TRD-426 | Fix tier пороги — 97% HOT | DONE |
@@ -211,5 +213,5 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 
 ---
 
-*Обновлено: 2026-03-29*  
-*STRAT-701 добавлен: 2026-03-29*
+*Обновлено: 2026-03-30*  
+*TRD-408, BUG-502, BUG-504 добавлены: 2026-03-30*

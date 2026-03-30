@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-03-29
+Обновлено: 2026-03-30
 Версия: v2_clean  
 Фаза: Реструктуризация (после cleanup)
 
@@ -121,12 +121,9 @@
 
 - whale_detector
   status: ACTIVE
-  updated: 2026-03-26
-  task: TRD-426
-  note: tier thresholds fixed, running
-  updated: 2026-03-23
-  task: TRD-415
-  note: stopped
+  updated: 2026-03-30
+  task: BUG-504
+  note: paper(2)+tracked polling, duplicate detection fixed
 
 - bot (main)
   status: PARTIAL
@@ -208,9 +205,9 @@
 
 - whale_trades → paper_trades
   status: OK
-  updated: 2026-03-29
-  task: STRAT-701
-  note: filter by copy_status='paper'
+  updated: 2026-03-30
+  task: BUG-502
+  note: real-time verified, 2 paper whales
 
 - paper_trades → trades
   status: OK
@@ -253,9 +250,9 @@
 
 - Selected Whales
   status: PAPER
-  updated: 2026-03-29
-  task: STRAT-701
-  note: 0x32ed (WR 81.8%, +$6599), 0xd48a (WR 87.5%, +$1726), 0xa9e8 (WR 100%, +$2464, penny_win)
+  updated: 2026-03-30
+  task: BUG-502
+  note: 0x32ed (WR 81.8%, +$6599), 0x2652dd (WR 100%, +$2917), 0xd48a (WR 87.5%, +$1726)
 
 ---
 
@@ -359,6 +356,36 @@ stale_tables_24h:
 - paper_trade_notifications
 - trades
 - bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-03-30
+
+snapshot_date: 2026-03-30
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 13894
+paper_trades_rows: 140
+paper_trade_notifications_rows: 0
+trades_rows: 0
+bankroll_rows: 1
+
+whale_trades_last_24h: 1369
+paper_trades_last_24h: 140
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 5.29%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
 
 notes:
 - bankroll contains only test data
