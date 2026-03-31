@@ -1063,14 +1063,8 @@ class VirtualBankroll:
                 allocated=str(self.allocated),
                 available=str(self.available),
             )
-            
-            # Save bankroll state after loading positions
-            if loaded > 0:
-                await self._save_bankroll_history(
-                    balance=self.balance,
-                    trade_id=None,
-                    action="load_positions_from_db"
-                )
+            # NOTE: Don't save bankroll history here - reconcile_from_trades() 
+            # will be called after this and will save the correct state
             
             return loaded
         except Exception as e:
@@ -1121,3 +1115,96 @@ class VirtualBankroll:
         return ((self.balance - self.initial_balance) / self.initial_balance) * Decimal(
             "100"
         )
+
+    async def reconcile_from_trades(self) -> bool:
+        """Reconcile bankroll state from trades table (source of truth).
+
+        Recalculates allocated/available based on actual open trades.
+        Accounts for PnL from closed trades since last reconciliation.
+
+        Returns:
+            True if reconciliation changed state, False if already consistent.
+        """
+        await self._ensure_database()
+
+        if not self._Session:
+            logger.warning("reconcile_no_session")
+            return False
+
+        session = self._Session()
+        try:
+            # 1. Calculate actual allocated from open trades
+            query_open = text("""
+                SELECT COALESCE(SUM(size * open_price), 0) as total_allocated,
+                       COUNT(*) as open_count
+                FROM trades
+                WHERE exchange = 'VIRTUAL' AND status = 'open'
+            """)
+            result_open = session.execute(query_open).fetchone()
+            actual_allocated = Decimal(str(result_open[0]))
+            open_count = int(result_open[1])
+
+            # 2. Calculate total PnL from closed trades
+            query_closed = text("""
+                SELECT COALESCE(SUM(net_pnl), 0) as total_pnl,
+                       COUNT(*) as closed_count,
+                       COUNT(CASE WHEN net_pnl > 0 THEN 1 END) as win_count,
+                       COUNT(CASE WHEN net_pnl <= 0 THEN 1 END) as loss_count
+                FROM trades
+                WHERE exchange = 'VIRTUAL' AND status = 'closed'
+            """)
+            result_closed = session.execute(query_closed).fetchone()
+            total_pnl = Decimal(str(result_closed[0]))
+            closed_count = int(result_closed[1])
+            win_count = int(result_closed[2])
+            loss_count = int(result_closed[3])
+
+            # 3. Recalculate bankroll
+            old_allocated = self.allocated
+            old_available = self.available
+            old_balance = self.balance
+
+            self.balance = self.initial_balance + total_pnl
+            self.allocated = actual_allocated
+            self.available = self.balance - self.allocated
+            self._total_trades = closed_count
+            self._winning_trades = win_count
+            self._losing_trades = loss_count
+            self._total_pnl = total_pnl
+
+            changed = (
+                old_allocated != self.allocated or
+                old_available != self.available or
+                old_balance != self.balance
+            )
+
+            if changed:
+                await self._save_bankroll_history(
+                    balance=self.balance,
+                    trade_id=None,
+                    action="reconciliation"
+                )
+                logger.info(
+                    "bankroll_reconciled",
+                    old_balance=str(old_balance),
+                    new_balance=str(self.balance),
+                    old_allocated=str(old_allocated),
+                    new_allocated=str(self.allocated),
+                    old_available=str(old_available),
+                    new_available=str(self.available),
+                    total_pnl=str(total_pnl),
+                    open_trades=open_count,
+                    closed_trades=closed_count,
+                    win_count=win_count,
+                    loss_count=loss_count,
+                )
+            else:
+                logger.debug("bankroll_already_consistent")
+
+            return changed
+
+        except Exception as e:
+            logger.error("bankroll_reconcile_error", error=str(e))
+            return False
+        finally:
+            session.close()

@@ -39,7 +39,7 @@ logger = structlog.get_logger(__name__)
 
 
 # Polymarket API endpoints
-GAMMA_API = "https://gamma-api.polymarket.com"
+CLOB_API = "https://clob.polymarket.com"
 
 
 @dataclass
@@ -306,56 +306,17 @@ class PaperPositionSettlementEngine:
         Returns:
             True if settlement successful, False otherwise
         """
-        # First, try to use VirtualBankroll if available
+        # BUG-604: VirtualBankroll update moved to main.py reconciliation
+        # Settlement engine only updates trades table directly
         if self.virtual_bankroll is not None:
-            try:
-                # Check if there's an open position in VirtualBankroll
-                open_positions = self.virtual_bankroll.get_open_positions()
-                if market_id in open_positions:
-                    # Use VirtualBankroll to close position - this handles:
-                    # - Capital release (allocated -= entry_value, available += exit_value)
-                    # - Win/loss counters update
-                    # - Bankroll history
-                    logger.info(
-                        "settling_via_virtual_bankroll",
-                        trade_id=trade_id,
-                        market_id=market_id[:20],
-                    )
-                    # Call close_virtual_position - it handles all the logic
-                    # including capital release, PnL calculation, win/loss counters
-                    asyncio.get_event_loop().run_until_complete(
-                        self.virtual_bankroll.close_virtual_position(
-                            market_id=market_id,
-                            close_price=close_price,
-                            fees=commission,
-                            gas=gas_cost,
-                        )
-                    )
-                    logger.info(
-                        "position_settled_via_virtual_bankroll",
-                        trade_id=trade_id,
-                        market_id=market_id[:20],
-                        side=side,
-                        entry_price=str(entry_price),
-                        close_price=str(close_price),
-                    )
-                    return True
-            except ValueError as e:
-                # No open position in VirtualBankroll - fall through to direct DB update
-                logger.debug(
-                    "no_virtual_position_for_market",
-                    market_id=market_id[:20],
-                    error=str(e),
-                )
-            except Exception as e:
-                logger.error(
-                    "virtual_bankroll_settlement_error",
-                    trade_id=trade_id,
-                    error=str(e),
-                )
-                # Fall back to direct DB update
+            logger.debug(
+                "settlement_bankroll_skip",
+                trade_id=trade_id,
+                market_id=market_id[:20],
+                note="bankroll reconciliation handled by main.py"
+            )
 
-        # Fallback: Direct database update (for legacy positions or errors)
+        # Direct database update (for legacy positions or errors)
         session = self._Session()
         try:
             # Calculate PnL
@@ -391,56 +352,6 @@ class PaperPositionSettlementEngine:
                 },
             )
             session.commit()
-
-            # Update bankroll if VirtualBankroll is available
-            if self.virtual_bankroll is not None:
-                try:
-                    # Get current bankroll stats from DB and update
-                    entry_value = size * entry_price
-                    exit_value = size * close_price
-
-                    # Release allocated capital
-                    self.virtual_bankroll.allocated -= entry_value
-                    self.virtual_bankroll.available += exit_value
-
-                    # Update balance with PnL
-                    self.virtual_bankroll.balance += net_pnl
-
-                    # Update win/loss counters
-                    if net_pnl > 0:
-                        self.virtual_bankroll._winning_trades += 1
-                        self.virtual_bankroll._consecutive_losses = 0
-                    else:
-                        self.virtual_bankroll._losing_trades += 1
-                        self.virtual_bankroll._consecutive_losses += 1
-                        self.virtual_bankroll._max_consecutive_losses = max(
-                            self.virtual_bankroll._max_consecutive_losses,
-                            self.virtual_bankroll._consecutive_losses
-                        )
-
-                    self.virtual_bankroll._total_pnl += net_pnl
-                    self.virtual_bankroll._total_trades += 1
-
-                    # Save bankroll history
-                    asyncio.get_event_loop().run_until_complete(
-                        self.virtual_bankroll._save_bankroll_history(
-                            balance=self.virtual_bankroll.balance,
-                            trade_id=trade_id,
-                            action="settlement_fallback"
-                        )
-                    )
-                    logger.info(
-                        "bankroll_updated_from_fallback",
-                        trade_id=trade_id,
-                        net_pnl=str(net_pnl),
-                        new_balance=str(self.virtual_bankroll.balance),
-                    )
-                except Exception as e:
-                    logger.error(
-                        "bankroll_fallback_update_error",
-                        trade_id=trade_id,
-                        error=str(e),
-                    )
 
             logger.info(
                 "position_settled_direct_db",

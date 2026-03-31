@@ -202,6 +202,9 @@ async def main():
         await virtual_bankroll.load_open_positions_from_db()
         logger.info(f"Loaded {len(virtual_bankroll.get_open_positions())} open positions from database")
 
+        # BUG-604: Reconcile bankroll on startup (fix stale data from previous session)
+        await virtual_bankroll.reconcile_from_trades()
+
     # Trading loop - fetch whale trades periodically
     loop_count = 0
     check_interval = 5  # Check every 5 seconds (for testing)
@@ -312,12 +315,16 @@ async def main():
                     logger.info("Running settlement cycle...")
                     try:
                         settlement_result = await settlement_engine.settle_resolved_paper_positions()
+                        settled_count = settlement_result.get('settled', 0)
                         logger.info(
                             f"Settlement complete: checked={settlement_result.get('checked', 0)}, "
-                            f"settled={settlement_result.get('settled', 0)}, "
+                            f"settled={settled_count}, "
                             f"resolved={settlement_result.get('resolved', 0)}, "
                             f"failed={settlement_result.get('failed', 0)}"
                         )
+                        # BUG-604: Always reconcile bankroll from trades after settlement cycle
+                        # (not just when settled_count > 0, because markets may have resolved since last check)
+                        await virtual_bankroll.reconcile_from_trades()
                         # Reload open positions after settlement
                         await virtual_bankroll.load_open_positions_from_db()
                     except Exception as e:
