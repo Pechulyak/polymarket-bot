@@ -137,16 +137,19 @@ async def main():
     """Main trading loop with whale copy trading."""
     parser = argparse.ArgumentParser(description="Polymarket Trading Bot")
     parser.add_argument("--mode", choices=["paper", "live"], default="paper")
-    parser.add_argument("--bankroll", type=float, default=100.0)
+    parser.add_argument("--bankroll", type=float, default=100.0, help="DEPRECATED: Use INITIAL_BANKROLL env var instead")
     parser.add_argument("--observation-mode", action="store_true", default=False)
     args = parser.parse_args()
+
+    # BUG-602: Read initial bankroll from environment (not from args to avoid reset on restart)
+    initial_bankroll = Decimal(os.getenv("INITIAL_BANKROLL", "1000"))
 
     # Whale Observation Mode: suspend execution/downstream layers
     # Active: whales, whale_trades, paper_trades
     # Suspended: trades, VirtualBankroll execution, settlement, notifications
     observation_mode = args.observation_mode or os.getenv("OBSERVATION_MODE", "").lower() == "true"
 
-    logger.info(f"Starting bot in {args.mode} mode with ${args.bankroll} bankroll")
+    logger.info(f"Starting bot in {args.mode} mode with INITIAL_BANKROLL=${initial_bankroll}")
     if observation_mode:
         logger.info("WHALE OBSERVATION MODE ENABLED - execution layers suspended")
 
@@ -185,13 +188,21 @@ async def main():
     settlement_engine = None
     if not observation_mode:
         virtual_bankroll = VirtualBankroll(
-            initial_balance=Decimal(str(args.bankroll)),
+            initial_balance=initial_bankroll,
             database_url=database_url
         )
         virtual_bankroll.set_database(database_url)
-        # Reset bankroll state to ensure clean start (avoid stale memory counters)
-        await virtual_bankroll.reset(new_balance=Decimal(str(args.bankroll)))
-        logger.info(f"Virtual bankroll initialized: ${args.bankroll}")
+
+        # BUG-602: Restore bankroll from DB instead of reset on restart
+        bankroll_loaded = await virtual_bankroll.load_state_from_db()
+        if bankroll_loaded:
+            logger.info(
+                f"Bankroll restored from DB: balance=${virtual_bankroll.balance}, "
+                f"available=${virtual_bankroll.available}, allocated=${virtual_bankroll.allocated}"
+            )
+        else:
+            logger.info(f"No bankroll state in DB, initializing with INITIAL_BANKROLL=${initial_bankroll}")
+            await virtual_bankroll.reset(new_balance=initial_bankroll)
 
         # Initialize Paper Position Settlement Engine
         settlement_engine = PaperPositionSettlementEngine(

@@ -937,6 +937,64 @@ class VirtualBankroll:
             ),
         }
 
+    async def load_state_from_db(self) -> bool:
+        """Load bankroll state from database (for post-restart recovery).
+
+        Loads the latest bankroll state from the bankroll table, including
+        balance, allocated capital, and trade statistics.
+
+        Returns:
+            True if state was successfully loaded from DB, False otherwise
+        """
+        await self._ensure_database()
+
+        if not self._Session:
+            logger.warning("load_state_from_db_no_session")
+            return False
+
+        session = self._Session()
+        try:
+            # Get latest bankroll state
+            query = text("""
+                SELECT 
+                    total_capital, allocated, available,
+                    total_trades, win_count, loss_count
+                FROM bankroll
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """)
+            result = session.execute(query)
+            row = result.fetchone()
+
+            if row is None:
+                logger.info("load_state_from_db_no_data", message="No bankroll history found")
+                return False
+
+            # Restore state from DB
+            self.balance = Decimal(str(row[0]))
+            self.allocated = Decimal(str(row[1]))
+            self.available = Decimal(str(row[2]))
+            self._total_trades = int(row[3]) if row[3] else 0
+            self._winning_trades = int(row[4]) if row[4] else 0
+            self._losing_trades = int(row[5]) if row[5] else 0
+
+            logger.info(
+                "load_state_from_db_success",
+                balance=str(self.balance),
+                allocated=str(self.allocated),
+                available=str(self.available),
+                total_trades=self._total_trades,
+                win_count=self._winning_trades,
+                loss_count=self._losing_trades,
+            )
+            return True
+
+        except Exception as e:
+            logger.error("load_state_from_db_error", error=str(e))
+            return False
+        finally:
+            session.close()
+
     async def load_open_positions_from_db(self) -> int:
         """Load open positions from database into memory.
 

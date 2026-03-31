@@ -58,13 +58,14 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     container_name: polymarket_bot
-    command: python src/main.py --bankroll 100 --mode paper
+    command: python src/main.py --mode paper
     env_file:
       - .env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-polymarket}
       - REDIS_URL=redis://redis:6379/0
       - OBSERVATION_MODE=false
+      - INITIAL_BANKROLL=1000
     volumes:
       - ./logs:/app/logs
     depends_on:

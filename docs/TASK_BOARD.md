@@ -158,6 +158,9 @@ Description: Targeted fetch trades для китов с copy_status='paper' ка
 Разблокирует STRAT-701 paper-trade pipeline.
 | TRD-420-B | Per-wallet polling для copy_status='tracked' китов (5 мин) | IN_PROGRESS |
 Description: Targeted fetch trades для tracked китов. Только сбор данных в whale_trades, без paper_trades.
+| TRD-430 | Аудит paper trading pipeline: trades → settlement → bankroll | IN_PROGRESS |
+Description: Аудит paper trading pipeline: trades → settlement → bankroll
+Type: ANALYSIS | EPIC: 8 — Trading Correctness |
 
 ---
 
@@ -213,5 +216,5 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 
 ---
 
-*Обновлено: 2026-03-30*  
-*TRD-408, BUG-502, BUG-504 добавлены: 2026-03-30*
+*Обновлено: 2026-03-31*  
+*TRD-430 добавлена: 2026-03-31*
