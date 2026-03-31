@@ -515,7 +515,11 @@ class VirtualBankroll:
         # Use unified save_whale_trade method
         await self._ensure_database()
         
-        if not self._async_session_maker or not whale_address:
+        if not self._async_session_maker:
+            logger.debug("async_session_not_ready_skipping_whale_trade")
+            return
+        
+        if not whale_address:
             return
         
         try:

@@ -24,17 +24,14 @@ logger = get_logger(__name__)
 _processed_trade_ids: Set[str] = set()
 
 
-def _check_trade_exists(database_url: str, market_id: str, whale_address: str, size: Decimal, price: Decimal) -> bool:
-    """Check if a similar trade already exists in the trades table.
+def _check_trade_exists(database_url: str, opportunity_id: str) -> bool:
+    """Check if a trade already exists in trades by opportunity_id.
     
-    Uses market_id + whale_source + size + price as composite key to detect duplicates.
+    Uses opportunity_id for exact match - each paper_trade converts to exactly one trade.
     
     Args:
         database_url: PostgreSQL connection URL
-        market_id: Market identifier
-        whale_address: Source whale wallet address
-        size: Trade size in USD
-        price: Execution price
+        opportunity_id: The opportunity_id to check
     
     Returns:
         True if trade already exists, False otherwise
@@ -43,21 +40,13 @@ def _check_trade_exists(database_url: str, market_id: str, whale_address: str, s
     Session = sessionmaker(bind=engine)
     session = Session()
     try:
-        # Check for existing trade with same market, whale source, size, and price
+        # Check for existing trade by opportunity_id
         query = text("""
             SELECT COUNT(*) FROM trades 
-            WHERE market_id = :market_id 
-              AND whale_source = :whale_source
-              AND size = :size 
-              AND open_price = :price
+            WHERE opportunity_id = :opportunity_id
               AND exchange = 'VIRTUAL'
         """)
-        result = session.execute(query, {
-            "market_id": market_id,
-            "whale_source": whale_address,
-            "size": float(size),
-            "price": float(price),
-        })
+        result = session.execute(query, {"opportunity_id": opportunity_id})
         count = result.scalar()
         return count > 0
     except Exception as e:
@@ -103,9 +92,7 @@ def _get_pending_paper_trades(database_url: str, limit: int = 10) -> list:
             WHERE pt.created_at > NOW() - INTERVAL '15 minutes'
               AND NOT EXISTS (
                 SELECT 1 FROM trades t 
-                WHERE t.market_id = pt.market_id 
-                  AND t.whale_source = pt.whale_address
-                  AND t.side = pt.side
+                WHERE t.opportunity_id = pt.id::text
                   AND t.exchange = 'VIRTUAL'
             )
             ORDER BY pt.created_at DESC
@@ -279,19 +266,19 @@ async def main():
 
                             # Execute paper trade via VirtualBankroll
                             try:
-                                # DEDUPLICATION CHECK - skip if trade already exists
-                                if _check_trade_exists(database_url, trade['market_id'], whale_addr, trade_size, Decimal(str(trade['price']))):
+                                # DEDUPLICATION CHECK - skip if trade already exists (by opportunity_id)
+                                opp_id = str(trade['paper_trade_id'])
+                                if _check_trade_exists(database_url, opp_id):
                                     logger.info(
-                                        f"  Skipping duplicate trade: {trade['market_id'][:16]}... "
-                                        f"${trade_size:.2f} @ {trade['price']}"
+                                        f"  Skipping duplicate trade: opportunity_id={opp_id}"
                                     )
                                     continue
 
                                 fees = trade_size * Decimal("0.002")
                                 gas = Decimal("1.50")
 
-                                # Generate opportunity_id from paper_trade_id
-                                opportunity_id = f"paper_{trade['paper_trade_id']}"
+                                # BUG-603: opportunity_id = paper_trades.id (без префикса, для точной дедупликации)
+                                opportunity_id = str(trade['paper_trade_id'])
 
                                 # Get market title from cache
                                 from src.data.storage.market_title_cache import get_market_title

@@ -145,6 +145,8 @@ Description: Fixed fuzzy matching close logic. Previously, SELL events for short
 Description: Whale trades ingestion incomplete (~99% loss for some whales). Root cause: global 500-trade limit + no per-wallet backfill. Audit completed, awaiting fix.
 | TRD-421 | Аудит whale_trades — Завершён | DONE |
 Description: Completed (details in PROJECT_STATE)
+| BUG-603 | Fix dedup filter paper_trades→trades + bankroll reset $1000 | DONE |
+Description: Дедупликация по market_id+whale+side блокировала новые trades. Переход на opportunity_id = paper_{id}. Bankroll reset to $1000.
 | BUG-504 | Fix false new_trades counter in whale_detector logs | DONE |
 Description: save_whale_trade now returns bool based on rowcount (ON CONFLICT DO NOTHING). Fixed new_trades showing 50 when only new inserts counted.
 | TRD-422 | Добавить market_category в whale_trades и унифицировать запись | DONE |
