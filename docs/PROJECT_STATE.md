@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-03-30
+Обновлено: 2026-03-31
 Версия: v2_clean  
 Фаза: Реструктуризация (после cleanup)
 
@@ -216,10 +216,10 @@
   note: unfrozen
 
 - settlement pipeline
-  status: IN_WORK
-  updated: 2026-03-26
-  task: ARC-502-C
-  note: CLOB API settlement working, need full run for all markets
+  status: OK
+  updated: 2026-03-31
+  task: BUG-601-FIX
+  note: CLOB API, 459 trades closed
 
 - whales P&L pipeline
   status: OK
@@ -332,37 +332,6 @@
   ## 9. DAILY DATA SNAPSHOT
 
 <!-- AUTO-GENERATED: This section is updated by scripts/run_data_check.py -->
-### 2026-03-27
-
-snapshot_date: 2026-03-27
-database: polymarket
-schema: public
-
-whales_rows: 0
-whale_trades_rows: 9760
-paper_trades_rows: 812
-paper_trade_notifications_rows: 528
-trades_rows: 42
-bankroll_rows: 14
-
-whale_trades_last_24h: 742
-paper_trades_last_24h: 76
-notifications_last_24h: 0
-
-conversion_whale_to_paper_48h: 5.12%
-conversion_paper_to_notifications_48h: 0.0%
-
-stale_tables_24h:
-- paper_trade_notifications
-- trades
-- bankroll
-
-notes:
-- bankroll contains only test data
-- trades table contains only virtual test trades
-
-<!-- END AUTO-GENERATED -->
-
 ### 2026-03-31
 
 snapshot_date: 2026-03-31
@@ -391,6 +360,47 @@ notes:
 - trades table contains only virtual test trades
 
 <!-- END AUTO-GENERATED -->
+
+### 2026-04-01
+
+snapshot_date: 2026-04-01
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 30349
+paper_trades_rows: 5219
+paper_trade_notifications_rows: 0
+trades_rows: 1160
+bankroll_rows: 13
+
+whale_trades_last_24h: 8130
+paper_trades_last_24h: 3777
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 34.21%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+---
+
+### Current State (2026-03-31)
+
+trades: 944
+closed: 459
+open: 485
+balance: $909.19
+pnl: -$90.80
+
+---
 
 ### 2026-03-30
 
@@ -422,67 +432,7 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
-### 2026-03-29
 
-snapshot_date: 2026-03-29
-database: polymarket
-schema: public
-
-whales_rows: 0
-whale_trades_rows: 11942
-paper_trades_rows: 992
-paper_trade_notifications_rows: 528
-trades_rows: 42
-bankroll_rows: 14
-
-whale_trades_last_24h: 1164
-paper_trades_last_24h: 80
-notifications_last_24h: 0
-
-conversion_whale_to_paper_48h: 8.27%
-conversion_paper_to_notifications_48h: 0.0%
-
-stale_tables_24h:
-- paper_trade_notifications
-- trades
-- bankroll
-
-notes:
-- bankroll contains only test data
-- trades table contains only virtual test trades
-
-<!-- END AUTO-GENERATED -->
-
-### 2026-03-28
-
-snapshot_date: 2026-03-28
-database: polymarket
-schema: public
-
-whales_rows: 0
-whale_trades_rows: 10741
-paper_trades_rows: 912
-paper_trade_notifications_rows: 528
-trades_rows: 42
-bankroll_rows: 14
-
-whale_trades_last_24h: 939
-paper_trades_last_24h: 94
-notifications_last_24h: 0
-
-conversion_whale_to_paper_48h: 10.22%
-conversion_paper_to_notifications_48h: 0.0%
-
-stale_tables_24h:
-- paper_trade_notifications
-- trades
-- bankroll
-
-notes:
-- bankroll contains only test data
-- trades table contains only virtual test trades
-
-<!-- END AUTO-GENERATED -->
 
 
 

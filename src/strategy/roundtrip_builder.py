@@ -220,8 +220,6 @@ class RoundtripBuilder:
                 # Matching metadata
                 'matching_method': None,
                 'matching_confidence': None,
-                # Paper trade - not linked
-                'paper_trade_id': None,
             }
             
             roundtrips.append(roundtrip)
@@ -250,7 +248,6 @@ class RoundtripBuilder:
                 close_type, status,
                 gross_pnl_usd, fees_usd, net_pnl_usd, pnl_status,
                 matching_method, matching_confidence,
-                paper_trade_id,
                 created_at, updated_at
             ) VALUES (
                 :id, :whale_id, :wallet_address, :position_key,
@@ -260,7 +257,6 @@ class RoundtripBuilder:
                 :close_type, :status,
                 :gross_pnl_usd, :fees_usd, :net_pnl_usd, :pnl_status,
                 :matching_method, :matching_confidence,
-                :paper_trade_id,
                 NOW(), NOW()
             )
             ON CONFLICT (position_key) DO NOTHING
@@ -995,6 +991,14 @@ class RoundtripBuilder:
         logger(f"  - NEW roundtrips created: {created}")
         logger(f"  - Database stats: {stats}")
         logger("=" * 60)
+        
+        # Write heartbeat file for healthcheck
+        try:
+            from datetime import datetime
+            with open("/tmp/heartbeat", "w") as f:
+                f.write(datetime.now().isoformat())
+        except Exception:
+            pass  # Non-critical
         
         return {
             'buy_groups': len(grouped_trades),

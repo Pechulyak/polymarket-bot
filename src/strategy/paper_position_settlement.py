@@ -155,11 +155,10 @@ class PaperPositionSettlementEngine:
         try:
             session = await self._get_session()
 
-            # Use Gamma API markets endpoint
-            url = f"{GAMMA_API}/markets"
-            params = {"id": market_id}
+            # Use CLOB API to get market details (includes closed status)
+            url = f"{CLOB_API}/markets/{market_id}"
 
-            async with session.get(url, params=params) as resp:
+            async with session.get(url) as resp:
                 if resp.status != 200:
                     logger.warning(
                         "market_api_error",
@@ -182,15 +181,22 @@ class PaperPositionSettlementEngine:
                 closed = market.get("closed", False)
                 end_date = market.get("endDate") or market.get("end_date")
 
-                # Get outcome prices - this is the settlement price
+                # Get settlement price from tokens array
+                # CLOB API uses tokens[].price with winner flag instead of outcomePrices
                 outcome_prices = []
-                if "outcomePrices" in market:
+                tokens = market.get("tokens", [])
+                for token in tokens:
+                    if token.get("winner", False):
+                        # Winner has price 1 (or actual price) - this is settlement price
+                        outcome_prices = [float(token.get("price", 1))]
+                        break
+                
+                # Fallback: try outcomePrices field (for Gamma API compatibility)
+                if not outcome_prices and "outcomePrices" in market:
                     try:
-                        # outcomePrices is like ["0.65", "0.35"]
                         prices = market["outcomePrices"]
                         if isinstance(prices, str):
                             import json
-
                             prices = json.loads(prices)
                         outcome_prices = [float(p) for p in prices]
                     except (json.JSONDecodeError, ValueError, TypeError) as e:
@@ -200,16 +206,21 @@ class PaperPositionSettlementEngine:
                             error=str(e),
                         )
 
-                # Determine winner
+                # Determine winner from tokens (CLOB API) or outcomes (Gamma API)
                 winner = None
-                if closed and outcome_prices:
-                    # Find the outcome with highest probability
+                tokens = market.get("tokens", [])
+                if closed and tokens:
+                    # Use tokens to find winner
+                    for token in tokens:
+                        if token.get("winner", False):
+                            winner = token.get("outcome")
+                            break
+                elif closed and outcome_prices:
+                    # Fallback: use outcome prices (Gamma API format)
                     max_idx = outcome_prices.index(max(outcome_prices))
-                    # Get outcomes list
                     outcomes = market.get("outcomes", ["Yes", "No"])
                     if isinstance(outcomes, str):
                         import json
-
                         outcomes = json.loads(outcomes)
                     if max_idx < len(outcomes):
                         winner = outcomes[max_idx]

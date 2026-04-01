@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-03-31 — Pipeline End-to-End Fix
+
+- **BUG-602**: Bankroll restore from DB on restart (no more $100 hardcode reset)
+- **BUG-603**: Dedup filter switched to opportunity_id (paper_trades.id)
+- **BUG-601-FIX**: Settlement switched from Gamma API to CLOB API (459 trades closed)
+- **BUG-604**: Bankroll reconciliation from trades table (source of truth)
+- **TRD-430**: Pipeline audit completed (timezone hypothesis rejected)
+
+Commit: `docs: DOC-602 close BUG-601/602/603/604, TRD-430 — pipeline e2e fixed`
+
+---
+
 ## 2026-03-30
 
 ### Fixed

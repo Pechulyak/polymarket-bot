@@ -144,9 +144,6 @@ class WhaleRoundtrip:
     matching_method: Optional[str] = None
     matching_confidence: Optional[str] = None
     
-    # Paper trade link
-    paper_trade_id: Optional[uuid.UUID] = None
-    
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -438,7 +435,6 @@ class WhaleRoundtripReconstructor:
                 close_type, status,
                 gross_pnl_usd, fees_usd, net_pnl_usd, pnl_status,
                 matching_method, matching_confidence,
-                paper_trade_id,
                 created_at, updated_at
             ) VALUES (
                 :id, :whale_id, :wallet_address, :position_key,
@@ -448,7 +444,6 @@ class WhaleRoundtripReconstructor:
                 :close_type, :status,
                 :gross_pnl_usd, :fees_usd, :net_pnl_usd, :pnl_status,
                 :matching_method, :matching_confidence,
-                :paper_trade_id,
                 :created_at, :updated_at
             )
             ON CONFLICT (position_key) DO UPDATE SET
@@ -496,7 +491,6 @@ class WhaleRoundtripReconstructor:
                     'pnl_status': rt.pnl_status,
                     'matching_method': rt.matching_method,
                     'matching_confidence': rt.matching_confidence,
-                    'paper_trade_id': rt.paper_trade_id,
                     'created_at': rt.created_at,
                     'updated_at': rt.updated_at,
                 })

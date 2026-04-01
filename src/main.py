@@ -4,6 +4,7 @@
 import asyncio
 import argparse
 import os
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Set
 
@@ -364,6 +365,13 @@ async def main():
                 )
             
             await asyncio.sleep(1)
+
+            # Write heartbeat file for healthcheck
+            try:
+                with open("/tmp/heartbeat", "w") as f:
+                    f.write(datetime.now().isoformat())
+            except Exception:
+                pass  # Non-critical, don't fail the loop
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")

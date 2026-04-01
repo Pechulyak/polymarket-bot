@@ -1,6 +1,6 @@
 # Daily Data Audit Snapshot
 
-**Generated:** 2026-03-30 08:00:02
+**Generated:** 2026-04-01 08:00:03
 
 ---
 
@@ -9,11 +9,11 @@
 | Table | Row Count | Rows 24h | Rows 48h | First Row | Last Row |
 |-------|-----------|----------|----------|-----------|----------|
 | whales | 0 | N/A | N/A | N/A | N/A |
-| whale_trades | 13894 | 1369 | 2645 | 2026-03-22 10:28:37 | 2026-03-29 19:32:47 |
-| paper_trades | 140 | 140 | 140 | 2026-03-29 16:16:18 | 2026-03-29 19:29:48 |
+| whale_trades | 30349 | 8130 | 14845 | 2026-03-22 10:28:37 | 2026-04-01 07:56:17 |
+| paper_trades | 5219 | 3777 | 5079 | 2026-03-29 16:16:18 | 2026-04-01 05:41:25 |
 | paper_trade_notifications | 0 | 0 | 0 | N/A | N/A |
-| trades | 0 | N/A | N/A | N/A | N/A |
-| bankroll | 1 | 1 | 1 | 2026-03-29 20:55:06 | 2026-03-29 20:55:06 |
+| trades | 1160 | N/A | N/A | 2026-03-30 18:15:27 | 2026-04-01 01:50:16 |
+| bankroll | 13 | 13 | 13 | 2026-03-31 19:40:48 | 2026-03-31 20:22:45 |
 
 ---
 
@@ -29,16 +29,16 @@
 
 ### whale_trades
 
-- Unique whales: 839
-- Unique whales (24h): 177
+- Unique whales: 1022
+- Unique whales (24h): 227
 - NULL price: 0
 - NULL size: 0
-- Latest trade: 2026-03-29 19:32:47
+- Latest trade: 2026-04-01 07:56:17
 
 ### paper_trades
 
-- Unique whales: 3
-- Unique whales (24h): 3
+- Unique whales: 4
+- Unique whales (24h): 2
 - NULL market_title: 0
 - NULL price: 0
 - NULL size: 0
@@ -52,25 +52,25 @@
 
 ### trades
 
-- VIRTUAL rows: 0
-- Open trades: 0
-- Closed trades: 0
+- VIRTUAL rows: 1160
+- Open trades: 701
+- Closed trades: 459
 
 ### bankroll
 
-- Rows 24h: 1
-- Rows 48h: 1
-- Earliest: 2026-03-29 20:55:06
-- Latest: 2026-03-29 20:55:06
+- Rows 24h: 13
+- Rows 48h: 13
+- Earliest: 2026-03-31 19:40:48
+- Latest: 2026-03-31 20:22:45
 
 ---
 
 ## Cross-Table Consistency
 
-- whale_trades → paper_trades conversion (48h): 5.29%
+- whale_trades → paper_trades conversion (48h): 34.21%
 - paper_trades → notifications coverage (48h): 0.0%
-- Stale tables (>24h no new rows): paper_trade_notifications, trades
-- Stale tables (>48h no new rows): paper_trade_notifications, trades
+- Stale tables (>24h no new rows): paper_trade_notifications
+- Stale tables (>48h no new rows): paper_trade_notifications
 
 ---
 

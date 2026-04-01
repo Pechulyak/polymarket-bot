@@ -9,6 +9,7 @@ import asyncio
 import os
 import sys
 import time
+from datetime import datetime
 from decimal import Decimal
 from typing import List
 
@@ -306,6 +307,13 @@ async def main():
             # Ingestion metrics
             if trades_stats:
                 print(f"   INGEST: whale_trades={trades_stats.get('total_count', '?')}, last_seen={trades_stats.get('last_seen', 'none')}, unique_traders={trades_stats.get('unique_traders', '?')}")
+            
+            # Write heartbeat file for healthcheck
+            try:
+                with open("/tmp/heartbeat", "w") as f:
+                    f.write(datetime.now().isoformat())
+            except Exception:
+                pass  # Non-critical
             
             if quality:
                 print("   🐋 Quality Whales:")
