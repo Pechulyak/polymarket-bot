@@ -24,6 +24,8 @@
 | W-002 | Whale Tracking Database | TODO |
 | W-003 | Strategy Metrics Engine | TODO |
 | W-004 | Copy Trading Engine Integration | TODO |
+| WHALE-701 | Whale Classification & Exclusion | DONE |
+| BUG-607 | Fix whale re-discovery overwriting excluded status | DONE |
 
 ---
 
@@ -160,12 +162,11 @@ Description: Targeted fetch trades для китов с copy_status='paper' ка
 Разблокирует STRAT-701 paper-trade pipeline.
 | TRD-420-B | Per-wallet polling для copy_status='tracked' китов (5 мин) | IN_PROGRESS |
 Description: Targeted fetch trades для tracked китов. Только сбор данных в whale_trades, без paper_trades.
-| TRD-430 | Аудит paper trading pipeline: trades → settlement → bankroll | IN_PROGRESS |
-Description: Аудит paper trading pipeline: trades → settlement → bankroll
-Type: ANALYSIS | EPIC: 8 — Trading Correctness |
+| TRD-430 | Аудит paper trading pipeline: trades → settlement → bankroll | DONE |
+Description: Аудит завершён. Timezone hypothesis rejected — pipeline работает корректно. Результат: 459 trades закрыты через CLOB API, bankroll восстанавливается из БД, дедупликация по opportunity_id.
 | BUG-601 | Diagnose settlement failure — 0 closed trades with resolved markets | DONE |
 | BUG-601-FIX | Switch settlement engine from Gamma API to CLOB API | DONE |
-Description: Settlement использовал Gamma API (422 error). Переключение на CLOB API `/markets/{market_id}` для корректного получения resolution data. Результат: 343 trades закрыты. |
+Description: Settlement использовал Gamma API (422 error). Переключение на CLOB API `/markets/{market_id}` для корректного получения resolution data. Результат: 459 trades закрыты. |
 | BUG-604 | Bankroll reconciliation after settlement + fix event loop | DONE |
 Description: Settlement не обновляет VirtualBankroll (event loop conflict). Добавить reconciliation из trades table. Реализовано: reconcile_from_trades() в virtual_bankroll.py, вызывается при старте и после каждого settlement цикла. Удалён дублирующий _save_bankroll_history из load_open_positions_from_db(). Результат: bankroll консистентный - $909.19 (initial $1000 - $90.80 P&L), 485 open, 459 closed, 50.3% win rate.
 

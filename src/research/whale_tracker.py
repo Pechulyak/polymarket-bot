@@ -571,6 +571,7 @@ class WhaleTracker:
         session = self._Session()
         try:
             # ARC-501: Removed total_profit_usd from INSERT
+            # BUG-607: Add WHERE to prevent overwriting excluded whales
             query = text("""
                 INSERT INTO whales (
                     wallet_address, total_trades,
@@ -585,6 +586,7 @@ class WhaleTracker:
                     last_active_at = EXCLUDED.last_active_at,
                     risk_score = EXCLUDED.risk_score,
                     updated_at = NOW()
+                WHERE whales.copy_status != 'excluded'
             """)
             session.execute(
                 query,

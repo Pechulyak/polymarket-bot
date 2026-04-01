@@ -203,9 +203,15 @@ CREATE TABLE IF NOT EXISTS whales (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
-    -- STRAT-701: Copy trading status
-    -- TRD-420-B: Added 'tracked' for P&L data collection
-    copy_status VARCHAR(10) DEFAULT 'none' CHECK (copy_status IN ('none', 'paper', 'live', 'tracked'))
+    -- STRAT-701: Copy trading status with whale classification
+    -- WHALE-701: Added 'excluded' for excluded whales
+    copy_status VARCHAR(10) DEFAULT 'none' CHECK (copy_status IN ('none', 'paper', 'live', 'tracked', 'excluded')),
+    
+    -- WHALE-701: Whale classification fields
+    whale_category VARCHAR(20),
+    whale_comment TEXT,
+    reviewed_at TIMESTAMP,
+    exclusion_reason VARCHAR(50)
 );
 
 CREATE INDEX IF NOT EXISTS idx_whales_address ON whales(wallet_address);
@@ -286,3 +292,18 @@ CREATE INDEX IF NOT EXISTS idx_paper_trades_status ON paper_trades(status);
 -- Only enforces uniqueness for non-null tx_hash values
 CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_trades_tx_hash_unique 
 ON paper_trades(tx_hash) WHERE tx_hash IS NOT NULL;
+
+-- =============================================================================
+-- WHALE-701: Migration for whale classification fields
+-- =============================================================================
+
+-- Add classification fields to whales table
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS whale_category VARCHAR(20);
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS whale_comment TEXT;
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS exclusion_reason VARCHAR(50);
+
+-- Expand copy_status CHECK constraint to include 'excluded'
+ALTER TABLE whales DROP CONSTRAINT IF EXISTS whales_copy_status_check;
+ALTER TABLE whales ADD CONSTRAINT whales_copy_status_check 
+    CHECK (copy_status IN ('none', 'paper', 'live', 'tracked', 'excluded'));

@@ -998,6 +998,7 @@ class WhaleDetector:
             # qualification_status replaces status
             # days_active_7d replaces days_active (for 7-day window logic)
             # ARC-501: Removed deprecated columns (total_profit_usd, qualification_path, status, days_active)
+            # BUG-607: Add WHERE to prevent overwriting excluded whales
             query = text("""
                 INSERT INTO whales (
                     wallet_address, total_trades,
@@ -1025,6 +1026,7 @@ class WhaleDetector:
                     last_active_at = NOW(),
                     updated_at = NOW(),
                     notes = EXCLUDED.notes
+                WHERE whales.copy_status != 'excluded'
             """)
             session.execute(
                 query,
