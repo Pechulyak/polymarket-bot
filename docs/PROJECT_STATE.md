@@ -154,11 +154,16 @@
   note: записи через WhaleTradesRepo
 
 - whale_tracker.py
-  status: IN_WORK
-  updated: 2026-03-23
-  task: TRD-413
-  note: ingestion redesign
-  issue: api limit 500
+  status: OK
+  updated: 2026-04-02
+  task: PHASE1-003
+  note: save_whale_trade через WhaleTradesRepo
+
+- whale_trade_writer.py
+  status: DEPRECATED
+  updated: 2026-04-02
+  task: PHASE1-003
+  note: заменён WhaleTradesRepo, используется только virtual_bankroll
 
 - virtual_bankroll.py
   status: FROZEN

@@ -115,6 +115,27 @@ save_trade_to_db() использовал async engine + save_whale_trade() на
 
 ---
 
+### PHASE1-003: whale_tracker → WhaleTradesRepo
+
+**Дата:** 2026-04-02  
+
+**Описание:**  
+Переключение whale_tracker.save_whale_trade() на WhaleTradesRepo.
+
+**До:**  
+save_whale_trade() использовал async engine + save_whale_trade() из whale_trade_writer.
+
+**После:**  
+Делегирует в WhaleTradesRepo: валидация (side, size, price), дедупликация, счётчики.
+
+**Влияние:**  
+whale_tracker.py — изменения в import, __init__, set_database, _ensure_database, save_whale_trade. Старый код закомментирован (rollback-ready).
+
+**Зависимости / риски:**  
+whale_trade_writer.py → DEPRECATED, используется только в virtual_bankroll (Фаза 2+).
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:

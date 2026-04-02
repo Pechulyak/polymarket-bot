@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.data.storage.market_category_cache import get_market_category
+from src.db.whale_trades_repo import WhaleTradesRepo
 from src.research.whale_trade_writer import save_whale_trade
 
 logger = structlog.get_logger(__name__)
@@ -209,6 +210,7 @@ class WhaleTracker:
         self._Session = None
         self._session = None
         self._http_session: Optional[aiohttp.ClientSession] = None
+        self._whale_trades_repo: Optional[WhaleTradesRepo] = None
 
     def set_database(self, database_url: str) -> None:
         """Set database URL and initialize connection.
@@ -219,6 +221,7 @@ class WhaleTracker:
         self.database_url = database_url
         self._engine = create_engine(database_url)
         self._Session = sessionmaker(bind=self._engine)
+        self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
         logger.info("whale_tracker_database_configured", url=_mask_database_url(database_url))
 
     async def _ensure_database(self) -> None:
@@ -230,6 +233,9 @@ class WhaleTracker:
         if not self._engine:
             self._engine = create_engine(self.database_url)
             self._Session = sessionmaker(bind=self._engine)
+        
+        if not self._whale_trades_repo and self._Session:
+            self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
 
     async def _ensure_http_session(self) -> aiohttp.ClientSession:
         """Ensure HTTP session is available."""
@@ -702,30 +708,28 @@ class WhaleTracker:
         source: str = "BACKFILL",
         outcome: Optional[str] = None,
     ) -> bool:
-        """Save a whale trade to database using unified save_whale_trade method.
-
-        Args:
-            whale_id: Whale database ID
-            market_id: Market identifier
-            side: Trade side ("buy" or "sell")
-            size_usd: Trade size in USD
-            price: Execution price
-            market_title: Market question/title from Polymarket API
-            source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
-            outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
-
+        """Save a whale trade to database via WhaleTradesRepo.
+        
+        Delegates to WhaleTradesRepo. The repo handles whale_id lookup
+        internally from wallet_address, but this method still accepts
+        whale_id for backward compatibility and resolves wallet_address.
+        
         Returns:
             True if saved successfully, False if duplicate or error
         """
         await self._ensure_database()
-
-        # First get wallet_address from whale_id
+        
+        if not self._whale_trades_repo:
+            logger.warning("save_whale_trade_no_repo")
+            return False
+        
         if not self._Session:
             return False
-
+        
+        # Resolve wallet_address from whale_id
+        # (repo works with wallet_address, not whale_id)
         session = self._Session()
         try:
-            # Get wallet_address from whale_id
             query = text("SELECT wallet_address FROM whales WHERE id = :whale_id")
             result = session.execute(query, {"whale_id": whale_id})
             row = result.fetchone()
@@ -738,52 +742,132 @@ class WhaleTracker:
             return False
         finally:
             session.close()
+        
+        try:
+            result = self._whale_trades_repo.save_trade(
+                wallet_address=wallet_address,
+                market_id=market_id,
+                side=side,
+                size_usd=size_usd,
+                price=price,
+                outcome=outcome,
+                market_title=market_title,
+                market_category=None,  # TRD-408: filled by background task
+                tx_hash=None,  # Backfill trades have no tx_hash
+                source=source,
+            )
+            logger.info(
+                "whale_trade_saved",
+                wallet_address=wallet_address[:10],
+                market_id=market_id[:20] if market_id else "unknown",
+                side=side,
+                size_usd=str(size_usd),
+            )
+            return result == "saved"
+        except Exception as e:
+            logger.error(
+                "save_trade_via_repo_failed",
+                error=str(e),
+                whale_id=whale_id,
+                market_id=market_id,
+            )
+            return False
 
-        # TRD-408: market_category removed from hot path - filled by background task
-        market_category = None
-
-        # Ensure async engine exists for unified method
-        # TRD-423: Fixed attribute name (was _database_url)
-        if not hasattr(self, '_async_engine') or self._async_engine is None:
-            async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self.database_url else self.database_url.replace("postgresql://", "postgresql+asyncpg://")
-            self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
-
-        # Create async session
-        from sqlalchemy.orm import sessionmaker
-        async_session_maker = sessionmaker(
-            self._async_engine, class_=AsyncSession, expire_on_commit=False
-        )
-
-        async with async_session_maker() as async_session:
-            try:
-                await save_whale_trade(
-                    session=async_session,
-                    wallet_address=wallet_address,
-                    market_id=market_id,
-                    side=side,
-                    size_usd=size_usd,
-                    price=price,
-                    outcome=outcome,
-                    market_title=market_title,
-                    market_category=market_category,
-                    tx_hash=None,  # No tx_hash for backfill trades
-                    source=source,
-                )
-                logger.info(
-                    "whale_trade_saved",
-                    wallet_address=wallet_address[:10],
-                    market_id=market_id[:20] if market_id else "unknown",
-                    side=side,
-                    size_usd=str(size_usd),
-                )
-                return True
-            except Exception as e:
-                # Check if it's a duplicate (deduplication in save_whale_trade)
-                if "duplicate" in str(e).lower() or "unique" in str(e).lower():
-                    logger.debug("trade_duplicate_skip", whale_id=whale_id, market_id=market_id[:20])
-                    return False
-                logger.error("whale_trade_save_failed", error=str(e), whale_id=whale_id)
-                return False
+    # === DEPRECATED: async save_whale_trade replaced by WhaleTradesRepo (PHASE1-003) ===
+    # === Uncomment for rollback ===
+    # async def save_whale_trade_OLD(
+    #     self,
+    #     whale_id: int,
+    #     market_id: str,
+    #     side: str,
+    #     size_usd: Decimal,
+    #     price: Decimal,
+    #     market_title: Optional[str] = None,
+    #     source: str = "BACKFILL",
+    #     outcome: Optional[str] = None,
+    # ) -> bool:
+    #     """Save a whale trade to database using unified save_whale_trade method.
+    #
+    #     Args:
+    #         whale_id: Whale database ID
+    #         market_id: Market identifier
+    #         side: Trade side ("buy" or "sell")
+    #         size_usd: Trade size in USD
+    #         price: Execution price
+    #         market_title: Market question/title from Polymarket API
+    #         source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
+    #         outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
+    #
+    #     Returns:
+    #         True if saved successfully, False if duplicate or error
+    #     """
+    #     await self._ensure_database()
+    #
+    #     # First get wallet_address from whale_id
+    #     if not self._Session:
+    #         return False
+    #
+    #     session = self._Session()
+    #     try:
+    #         # Get wallet_address from whale_id
+    #         query = text("SELECT wallet_address FROM whales WHERE id = :whale_id")
+    #         result = session.execute(query, {"whale_id": whale_id})
+    #         row = result.fetchone()
+    #         if not row:
+    #             logger.warning("whale_not_found_for_trade", whale_id=whale_id)
+    #             return False
+    #         wallet_address = row[0]
+    #     except Exception as e:
+    #         logger.error("whale_lookup_failed", error=str(e), whale_id=whale_id)
+    #         return False
+    #     finally:
+    #         session.close()
+    #
+    #     # TRD-408: market_category removed from hot path - filled by background task
+    #     market_category = None
+    #
+    #     # Ensure async engine exists for unified method
+    #     # TRD-423: Fixed attribute name (was _database_url)
+    #     if not hasattr(self, '_async_engine') or self._async_engine is None:
+    #         async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self.database_url else self.database_url.replace("postgresql://", "postgresql+asyncpg://")
+    #         self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
+    #
+    #     # Create async session
+    #     from sqlalchemy.orm import sessionmaker
+    #     async_session_maker = sessionmaker(
+    #         self._async_engine, class_=AsyncSession, expire_on_commit=False
+    #     )
+    #
+    #     async with async_session_maker() as async_session:
+    #         try:
+    #             await save_whale_trade(
+    #                 session=async_session,
+    #                 wallet_address=wallet_address,
+    #                 market_id=market_id,
+    #                 side=side,
+    #                 size_usd=size_usd,
+    #                 price=price,
+    #                 outcome=outcome,
+    #                 market_title=market_title,
+    #                 market_category=market_category,
+    #                 tx_hash=None,  # No tx_hash for backfill trades
+    #                 source=source,
+    #             )
+    #             logger.info(
+    #                 "whale_trade_saved",
+    #                 wallet_address=wallet_address[:10],
+    #                 market_id=market_id[:20] if market_id else "unknown",
+    #                 side=side,
+    #                 size_usd=str(size_usd),
+    #             )
+    #             return True
+    #         except Exception as e:
+    #             # Check if it's a duplicate (deduplication in save_whale_trade)
+    #             if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+    #                 logger.debug("trade_duplicate_skip", whale_id=whale_id, market_id=market_id[:20])
+    #                 return False
+    #             logger.error("whale_trade_save_failed", error=str(e), whale_id=whale_id)
+    #             return False
 
     async def get_whale_id(self, wallet_address: str) -> Optional[int]:
         """Get whale database ID by wallet address.
