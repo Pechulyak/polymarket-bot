@@ -21,7 +21,7 @@
 | ID | Задача | Статус |
 |----|--------|--------|
 | PHASE1-001 | WhaleTradesRepo — единая точка записи whale_trades | DONE |
-| PHASE1-002 | Переключение whale_detector.py на repo | TODO |
+| PHASE1-002 | Переключение whale_detector.py на repo | DONE |
 | PHASE1-003 | Переключение whale_tracker.py на repo | TODO |
 | PHASE1-004 | Pipeline Monitor + Telegram алерты | TODO |
 | PHASE1-005 | Финальная верификация Фазы 1 (24ч) | TODO |

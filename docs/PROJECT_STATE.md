@@ -149,9 +149,9 @@
 
 - whale_detector.py
   status: ACTIVE
-  updated: 2026-03-26
-  task: TRD-426
-  note: tier thresholds fixed
+  updated: 2026-04-02
+  task: PHASE1-002
+  note: записи через WhaleTradesRepo
 
 - whale_tracker.py
   status: IN_WORK

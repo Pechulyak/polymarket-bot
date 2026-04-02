@@ -97,6 +97,24 @@ WhaleTradesRepo обеспечивает统一的 валидацию (side, size
 
 ---
 
+### PHASE1-002: whale_detector → WhaleTradesRepo
+
+**Дата:** 2026-04-02  
+
+**Описание:**  
+Переключение whale_detector.save_trade_to_db() на WhaleTradesRepo.
+
+**До:**  
+save_trade_to_db() использовал async engine + save_whale_trade() напрямую.
+
+**После:**  
+Делегирует в WhaleTradesRepo: валидация (side, size, price), дедупликация, счётчики.
+
+**Влияние:**  
+ whale_detector.py — изменения в import, __init__, set_database, _ensure_database, save_trade_to_db, _paper_poll_loop. Логирование repo stats каждые 30 сек.
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:

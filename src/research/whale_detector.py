@@ -39,6 +39,7 @@ from src.research.polymarket_data_client import (
 )
 from src.research.whale_trade_writer import save_whale_trade
 from src.research.whale_tracker import calculate_risk_score
+from src.db.whale_trades_repo import WhaleTradesRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -243,6 +244,7 @@ class WhaleDetector:
         self._engine = None
         self._Session = None
         self._lock = asyncio.Lock()
+        self._whale_trades_repo: Optional[WhaleTradesRepo] = None
 
         logger.info(
             "whale_detector_initialized",
@@ -256,7 +258,9 @@ class WhaleDetector:
         self.database_url = database_url
         self._engine = create_engine(database_url)
         self._Session = sessionmaker(bind=self._engine)
+        self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
         logger.info("whale_detector_database_configured")
+        logger.info("whale_trades_repo_initialized")
 
     async def _ensure_database(self) -> None:
         """Ensure database connection is available."""
@@ -265,6 +269,8 @@ class WhaleDetector:
         if not self._engine:
             self._engine = create_engine(self.database_url)
             self._Session = sessionmaker(bind=self._engine)
+        if not self._whale_trades_repo:
+            self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
 
     async def start(self) -> None:
         """Start the whale detector."""
@@ -1199,96 +1205,60 @@ class WhaleDetector:
         source: str = "BACKFILL",
         outcome: Optional[str] = None,
     ) -> bool:
-        """Save trade to whale_trades table.
-
-        Uses wallet_address as primary identifier (whale_id is optional).
-        Implements idempotent upsert using tx_hash to prevent duplicates.
-
-        Args:
-            trader: Trader wallet address
-            market_id: Market identifier
-            side: Trade side
-            size_usd: Trade size in USD
-            price: Execution price
-            timestamp: Trade timestamp
-            tx_hash: Transaction hash for deduplication
-            market_title: Market question/title from Polymarket API
-            source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
-            outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
-
-        Returns:
-            True if trade was saved, False if it was a duplicate.
-        """
-        """Save trade to whale_trades table using unified save_whale_trade method.
-
-        Args:
-            trader: Trader wallet address
-            market_id: Market identifier
-            side: Trade side
-            size_usd: Trade size in USD
-            price: Execution price
-            timestamp: Trade timestamp
-            tx_hash: Transaction hash for deduplication
-            market_title: Market question/title from Polymarket API
-            source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
-            outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
-
-        Returns:
-            True if trade was saved, False if it was a duplicate.
-        """
-        # Ensure async engine exists
-        if not hasattr(self, '_async_engine') or self._async_engine is None:
-            from sqlalchemy.ext.asyncio import create_async_engine
-            async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://") if "postgresql+" in self.database_url else self.database_url.replace("postgresql://", "postgresql+asyncpg://")
-            self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
-
-        # TRD-408: market_category removed from hot path - filled by background task
-        market_category = None
+        """Save trade to whale_trades table via WhaleTradesRepo.
         
-        # TRD-408: Convert timestamp (float) to datetime for traded_at
-        trade_traded_at = datetime.utcfromtimestamp(timestamp) if timestamp else None
+        Delegates to WhaleTradesRepo for validation, deduplication, and insert.
+        Maintains original interface (returns bool) for backward compatibility.
+        
+        Args:
+            trader: Trader wallet address
+            market_id: Market identifier
+            side: Trade side
+            size_usd: Trade size in USD
+            price: Execution price
+            timestamp: Trade timestamp
+            tx_hash: Transaction hash for deduplication
+            market_title: Market question/title from Polymarket API
+            source: Data source (REALTIME, BACKFILL, TRIGGER_TEST)
+            outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
 
-        # Create async session
-        from sqlalchemy.ext.asyncio import AsyncSession
-        from sqlalchemy.orm import sessionmaker
-        async_session_maker = sessionmaker(
-            self._async_engine, class_=AsyncSession, expire_on_commit=False
-        )
-
-        trader_lower = trader.lower()
-
-        async with async_session_maker() as session:
-            try:
-                saved = await save_whale_trade(
-                    session=session,
-                    wallet_address=trader_lower,
-                    market_id=market_id,
-                    side=side,
-                    size_usd=size_usd,
-                    price=price,
-                    outcome=outcome,
-                    market_title=market_title,
-                    market_category=market_category,
-                    tx_hash=tx_hash,
-                    source=source,
-                    traded_at=trade_traded_at,
-                )
-                if saved:
-                    logger.info(
-                        "whale_trade_saved",
-                        wallet_address=trader_lower[:10],
-                        market_id=market_id[:20] if market_id else "unknown",
-                        side=side,
-                        size_usd=str(size_usd),
-                    )
-                return saved
-            except Exception as e:
-                # Check if it's a duplicate (deduplication in save_whale_trade)
-                if "duplicate" in str(e).lower() or "unique" in str(e).lower():
-                    logger.debug("trade_duplicate_skip", tx_hash=tx_hash[:16] if tx_hash else None)
-                    return False
-                logger.warning("trade_save_error", error=str(e), trader=trader_lower[:10] if trader_lower else "unknown")
-                return False
+        Returns:
+            True if trade was saved, False if duplicate or rejected.
+        """
+        # Ensure repo is ready
+        await self._ensure_database()
+        if not self._whale_trades_repo:
+            logger.warning("save_trade_no_repo")
+            return False
+        
+        # Convert timestamp to datetime
+        traded_at = None
+        if timestamp:
+            traded_at = datetime.fromtimestamp(timestamp)
+        
+        try:
+            result = self._whale_trades_repo.save_trade(
+                wallet_address=trader,
+                market_id=market_id,
+                side=side,
+                size_usd=size_usd,
+                price=price,
+                outcome=outcome,
+                market_title=market_title,
+                market_category=None,  # TRD-408: filled by background task
+                tx_hash=tx_hash,
+                source=source,
+                traded_at=traded_at,
+            )
+            return result == "saved"
+        except Exception as e:
+            logger.error(
+                "save_trade_via_repo_failed",
+                error=str(e),
+                trader=trader[:10] if trader else "unknown",
+                market_id=market_id,
+            )
+            return False
 
     def get_detected_whales(self) -> List[DetectedWhale]:
         """Get all detected whales.
@@ -1427,6 +1397,10 @@ class WhaleDetector:
                     self._fetch_paper_whale_trades(),
                     timeout=120
                 )
+                # Log repo stats every paper poll cycle
+                if self._whale_trades_repo:
+                    repo_stats = self._whale_trades_repo.get_stats()
+                    logger.info("whale_trades_repo_stats", **repo_stats)
             except asyncio.TimeoutError:
                 logger.error("paper_fetch_timeout", timeout_sec=120)
             except Exception as e:
