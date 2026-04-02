@@ -249,6 +249,12 @@
   task: STRAT-701
   note: unfrozen
 
+- pipeline_monitor
+  status: ACTIVE
+  updated: 2026-04-02
+  task: PHASE1-004
+  note: cron */30, Telegram alerts every 30min
+
 ---
 
 ## WHALE COPY SELECTION

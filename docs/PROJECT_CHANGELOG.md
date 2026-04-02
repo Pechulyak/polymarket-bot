@@ -136,6 +136,24 @@ whale_trade_writer.py → DEPRECATED, используется только в v
 
 ---
 
+### PHASE1-004: Pipeline Monitor
+
+**Дата:** 2026-04-02  
+
+**Описание:**  
+7 проверок здоровья pipeline + Telegram алерты.
+
+**До:**  
+Отсутствовала централизованная система мониторинга pipeline.
+
+**После:**  
+scripts/pipeline_monitor.py — 7 проверок: whale_trades, paper_trades, roundtrips, containers, data quality. Telegram: WARNING/CRITICAL каждые 30 мин, OK раз в 6ч.
+
+**Влияние:**  
+Таблица pipeline_health_log для истории. Cron: */30 * * * *.
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:
