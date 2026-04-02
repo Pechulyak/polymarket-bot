@@ -178,6 +178,18 @@
   task: SYS-326
   note: disabled
 
+- whale_trade_writer.py
+  status: DEPRECATED
+  updated: 2026-04-02
+  task: PHASE1-001
+  note: replaced by whale_trades_repo.py
+
+- whale_trades_repo.py
+  status: OK
+  updated: 2026-04-02
+  task: PHASE1-001
+  note: единая точка записи whale_trades
+
 ---
 
 ## 5. PIPELINE
@@ -350,6 +362,35 @@ paper_trades_last_24h: 1302
 notifications_last_24h: 0
 
 conversion_whale_to_paper_48h: 17.42%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-04-02
+
+snapshot_date: 2026-04-02
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 19856
+paper_trades_rows: 1379
+paper_trade_notifications_rows: 0
+trades_rows: 1618
+bankroll_rows: 101
+
+whale_trades_last_24h: 1649
+paper_trades_last_24h: 395
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 26.62%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:

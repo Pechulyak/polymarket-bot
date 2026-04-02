@@ -79,6 +79,24 @@
 
 ---
 
+### PHASE1-001 — WhaleTradesRepo
+
+**Дата:** 2026-04-02  
+
+**Описание:**  
+Создание единой точки записи whale_trades с валидацией и счётчиками.
+
+**До:**  
+Разные модули (whale_detector, whale_tracker) писали в БД напрямую, без централизованной валидации.
+
+**После:**  
+WhaleTradesRepo обеспечивает统一的 валидацию (side, size, price), дедупликацию по tx_hash, счётчики saved/rejected/duplicates.
+
+**Влияние:**  
+Новые модули: src/db/whale_trades_repo.py, src/db/__init__.py. Тесты: tests/test_whale_trades_repo.py (7/7 passed).
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:
