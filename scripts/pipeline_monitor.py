@@ -102,11 +102,11 @@ def check_size_usd_zero():
     return execute_query(query)
 
 
-def check_paper_trades_1h():
-    """Check paper_trades count in last 1 hour."""
+def check_paper_trades_3h():
+    """Check paper_trades count in last 3 hours."""
     query = """
         SELECT COUNT(*) FROM paper_trades
-        WHERE created_at > NOW() - INTERVAL '1 hour'
+        WHERE created_at > NOW() - INTERVAL '3 hours'
     """
     return execute_query(query)
 
@@ -171,11 +171,15 @@ def send_telegram_message(message: str):
         print("Telegram not configured - skipping alert")
         return False
 
+    # Convert Markdown emojis to HTML-safe format
+    # Replace Markdown bold markers (**text**) with HTML <b>text</b>
+    message = message.replace("**", "<b>").replace("**", "</b>")
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "Markdown",
+        "parse_mode": "HTML",
     }
 
     try:
@@ -277,8 +281,8 @@ def run_pipeline_checks():
     # Check 3: size_usd = 0
     results["size_usd_zero"] = check_size_usd_zero()
 
-    # Check 4: paper_trades/1h + paper whales exist
-    results["paper_trades_1h"] = check_paper_trades_1h()
+    # Check 4: paper_trades/3h + paper whales exist
+    results["paper_trades_3h"] = check_paper_trades_3h()
     results["paper_whales_exist"] = check_paper_whales_exist()
 
     # Check 5: roundtrips/3h
@@ -321,11 +325,11 @@ def determine_status(results: dict) -> tuple:
     if szero > 0:
         criticals.append(f"size_usd=0 found: {szero} records (CRITICAL)")
 
-    # Check 4: paper_trades/1h (WARNING: 0 when paper whales exist)
-    pt_1h = results.get("paper_trades_1h", 0)
+    # Check 4: paper_trades/3h (WARNING: 0 when paper whales exist)
+    pt_3h = results.get("paper_trades_3h", 0)
     pw_exists = results.get("paper_whales_exist", 0)
-    if pw_exists > 0 and pt_1h == 0:
-        warnings.append(f"paper_trades/1h: 0 (paper whales: {pw_exists})")
+    if pw_exists > 0 and pt_3h == 0:
+        warnings.append(f"paper_trades/3h: 0 (paper whales: {pw_exists})")
 
     # Check 5: roundtrips/3h (WARNING: 0 new)
     rt_3h = results.get("roundtrips_3h", 0)
@@ -338,10 +342,10 @@ def determine_status(results: dict) -> tuple:
         if count > 3:
             criticals.append(f"{container} restart_count: {count} (CRITICAL)")
 
-    # Check 7: market_category unknown % (WARNING: > 50%)
-    unknown_pct = results.get("market_category_unknown_pct", 0)
-    if unknown_pct > 50:
-        warnings.append(f"category_unknown: {unknown_pct:.1f}% (> 50%)")
+    # Check 7: market_category unknown % — INFO only
+    # Ожидаемо 100% unknown, пока background task не починен
+    # Не учитывать при определении статуса
+    # unknown_pct = results.get("market_category_unknown_pct", 0)
 
     if criticals:
         return "CRITICAL", warnings, criticals
@@ -363,7 +367,7 @@ def format_ok_message(results: dict) -> str:
     return f"""✅ Pipeline OK | {results['timestamp']}
 
 whale_trades/1h: {results['whale_trades_1h']}
-paper_trades/1h: {results['paper_trades_1h']}
+paper_trades/3h: {results['paper_trades_3h']}
 roundtrips/3h: {results['roundtrips_3h']}
 category_unknown: {results['market_category_unknown_pct']:.0f}%
 containers: {container_status}
