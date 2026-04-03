@@ -39,7 +39,7 @@ from src.data.storage.market_title_cache import get_market_title
 from src.data.storage.market_category_cache import get_market_category
 from src.config.settings import settings
 from src.research.polymarket_data_client import PolymarketDataClient
-from src.research.whale_trade_writer import save_whale_trade
+from src.db.whale_trades_repo import WhaleTradesRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -139,6 +139,7 @@ class RealTimeWhaleMonitor:
         self._task: Optional[asyncio.Task] = None
         self._engine = None
         self._Session = None
+        self._whale_trades_repo: Optional[WhaleTradesRepo] = None
         self._delays: List[float] = []
         self._lock = asyncio.Lock()
 
@@ -155,6 +156,7 @@ class RealTimeWhaleMonitor:
         self.database_url = database_url
         self._engine = create_engine(database_url)
         self._Session = sessionmaker(bind=self._engine)
+        self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
         logger.info("whale_monitor_database_configured")
 
     async def _init_whale_poller(self) -> None:
@@ -221,6 +223,7 @@ class RealTimeWhaleMonitor:
             db_pool=self._db_pool,
             polymarket_client=self._polymarket_client,
             whale_tracker=whale_tracker,
+            database_url=self.database_url,
             config=self.config,
         )
         logger.info("whale_poller_initialized")
@@ -242,6 +245,7 @@ class RealTimeWhaleMonitor:
         if not self._engine:
             self._engine = create_engine(self.database_url)
             self._Session = sessionmaker(bind=self._engine)
+            self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
 
     async def start(self, token_ids: Optional[List[str]] = None) -> None:
         """Start monitoring whale trades.
@@ -493,45 +497,40 @@ class RealTimeWhaleMonitor:
         )
 
     async def _save_whale_signal_to_db(self, signal: WhaleTradeSignal, market_title: Optional[str] = None, outcome: Optional[str] = None) -> None:
-        """Save whale signal to database using unified save_whale_trade method.
+        """Save whale signal to database using WhaleTradesRepo.
 
         Args:
             signal: The whale trade signal
             market_title: Market question/title from Polymarket API (optional)
             outcome: Trade outcome (Yes/No). If API returns Up/Down, convert using: outcomeIndex 0 = Yes, 1 = No
         """
-        # Ensure async engine exists
-        if not hasattr(self, '_async_engine') or self._async_engine is None:
-            from sqlalchemy.ext.asyncio import create_async_engine
-            # Convert postgresql+psycopg2:// to postgresql+asyncpg://
-            async_db_url = self.database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
-            self._async_engine = create_async_engine(async_db_url, pool_pre_ping=True)
+        # Ensure repo exists
+        if self._whale_trades_repo is None:
+            if not self.database_url:
+                logger.warning("whale_signal_save_skipped_no_db")
+                return
+            self._engine = create_engine(self.database_url)
+            self._Session = sessionmaker(bind=self._engine)
+            self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
 
-        # Get market category
+        # Get market category (async call)
         market_category = await get_market_category(signal.market_id)
 
-        # Create async session
-        from sqlalchemy.ext.asyncio import AsyncSession
-        async_session_maker = sessionmaker(
-            self._async_engine, class_=AsyncSession, expire_on_commit=False
-        )
-
-        async with async_session_maker() as session:
-            try:
-                await save_whale_trade(
-                    session=session,
-                    wallet_address=signal.trader_address,
-                    market_id=signal.market_id,
-                    side=signal.side,
-                    size_usd=signal.size_usd,
-                    price=signal.price,
-                    outcome=outcome,
-                    market_title=market_title,
-                    market_category=market_category,
-                    source="REALTIME",
-                )
-            except Exception as e:
-                logger.debug("whale_signal_save_failed", error=str(e))
+        # Call synchronous save_trade method
+        try:
+            self._whale_trades_repo.save_trade(
+                wallet_address=signal.trader_address,
+                market_id=signal.market_id,
+                side=signal.side,
+                size_usd=signal.size_usd,
+                price=signal.price,
+                outcome=outcome,
+                market_title=market_title,
+                market_category=market_category,
+                source="REALTIME",
+            )
+        except Exception as e:
+            logger.debug("whale_signal_save_failed", error=str(e))
 
     def _get_stats(self) -> Dict[str, Any]:
         """Get monitoring statistics."""

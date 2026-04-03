@@ -22,11 +22,16 @@ Example:
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import List, Optional
 
 import asyncpg
 import structlog
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
+from src.config.settings import settings
+from src.db.whale_trades_repo import WhaleTradesRepo
 from src.research.polymarket_data_client import PolymarketDataClient, TradeWithAddress
 from src.research.whale_tracker import WhaleTracker
 
@@ -71,6 +76,7 @@ class WhalePoller:
         db_pool: asyncpg.Pool,
         polymarket_client: PolymarketDataClient,
         whale_tracker: WhaleTracker,
+        database_url: Optional[str] = None,
         config: Optional[dict] = None,
     ):
         """Initialize WhalePoller.
@@ -79,12 +85,19 @@ class WhalePoller:
             db_pool: asyncpg database connection pool
             polymarket_client: PolymarketDataClient instance
             whale_tracker: WhaleTracker instance for saving trades
+            database_url: PostgreSQL connection URL (для WhaleTradesRepo)
             config: Optional config overrides
         """
         self.db_pool = db_pool
         self.client = polymarket_client
         self.whale_tracker = whale_tracker
         self.config = config or {}
+
+        # Database URL для WhaleTradesRepo
+        self.database_url = database_url or settings.database_url
+        engine = create_engine(self.database_url)
+        self._Session = sessionmaker(bind=engine)
+        self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
 
         # Allow configurable intervals for testing
         self.hot_poll_interval = self.config.get(
@@ -261,15 +274,13 @@ class WhalePoller:
     async def _save_whale_trade(
         self, whale_id: int, trade: TradeWithAddress
     ) -> None:
-        """Save a single whale trade to database.
-
-        Uses asyncpg directly to avoid blocking.
+        """Save a single whale trade to database using WhaleTradesRepo.
 
         Args:
             whale_id: Whale database ID
             trade: TradeWithAddress to save
         """
-        # Parse timestamp
+        # Parse timestamp — ОБЯЗАТЕЛЬНО передаём в repo
         trade_time = datetime.fromtimestamp(trade.timestamp)
         side = "buy" if trade.side.upper() == "BUY" else "sell"
 
@@ -279,36 +290,24 @@ class WhalePoller:
             from src.data.storage.market_category_cache import get_market_category
             market_category = await get_market_category(trade.condition_id)
 
-        query = """
-            INSERT INTO whale_trades (
-                whale_id,
-                wallet_address,
-                market_id,
-                market_title,
-                side,
-                size_usd,
-                price,
-                outcome,
-                traded_at,
-                source,
-                market_category
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT DO NOTHING
-        """
-
-        await self.db_pool.execute(
-            query,
-            whale_id,
-            trade.trader,
-            trade.condition_id,
-            trade.market_title,
-            side,
-            float(trade.size_usd),
-            float(trade.price),
-            trade.outcome,
-            trade_time,
-            "POLLER",  # Source indicates this came from tiered polling
-            market_category,
+        # Используем WhaleTradesRepo.save_trade()
+        result = self._whale_trades_repo.save_trade(
+            wallet_address=trade.trader,
+            market_id=trade.condition_id,
+            side=side,
+            size_usd=Decimal(str(trade.size_usd)),
+            price=Decimal(str(trade.price)),
+            outcome=trade.outcome,
+            market_title=trade.market_title,
+            market_category=market_category,  # передаём как есть, не обнуляем
+            source="POLLER",
+            traded_at=trade_time,  # ОБЯЗАТЕЛЬНО — реальное время сделки
+        )
+        logger.debug(
+            "whale_trade_save_result",
+            wallet=trade.trader[:10] if trade.trader else None,
+            market_id=trade.condition_id[:20] if trade.condition_id else None,
+            result=result,
         )
 
     async def _update_whale_after_trades(
@@ -569,12 +568,14 @@ class WhalePoller:
 
 async def create_whale_poller(
     db_pool: asyncpg.Pool,
+    database_url: Optional[str] = None,
     config: Optional[dict] = None,
 ) -> WhalePoller:
     """Factory function to create WhalePoller with dependencies.
 
     Args:
         db_pool: asyncpg database connection pool
+        database_url: PostgreSQL connection URL (для WhaleTradesRepo)
         config: Optional config overrides
 
     Returns:
@@ -593,5 +594,6 @@ async def create_whale_poller(
         db_pool=db_pool,
         polymarket_client=client,
         whale_tracker=whale_tracker,
+        database_url=database_url,
         config=config,
     )
