@@ -24,7 +24,31 @@
 | PHASE1-002 | Переключение whale_detector.py на repo | DONE |
 | PHASE1-003 | Переключение whale_tracker.py на repo | DONE |
 | PHASE1-004 | Pipeline Monitor + Telegram алерты | DONE |
-| PHASE1-005 | Финальная верификация Фазы 1 (24ч) | IN_PROGRESS |
+| PHASE1-005 | Финальная верификация Фазы 1 (24ч) | DONE |
+
+---
+
+## PHASE 2 — PIPELINE REFACTORING
+
+### PHASE 2A — Unified Writer (whale_trades)
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| PHASE2A-001 | Аудит: найти все пути записи в whale_trades | DONE |
+| PHASE2A-002 | Переключение virtual_bankroll.py на WhaleTradesRepo | DONE |
+| PHASE2A-003 | Переключение whale_poller.py на WhaleTradesRepo | DONE |
+| PHASE2A-004 | Deprecation whale_trade_writer.py + очистка мёртвых импортов | DONE |
+| PHASE2A-005 | Аудит и удаление deprecated whale_trade_writer | IN_PROGRESS |
+
+### PHASE 2B — Unified Writer (paper_trades)
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| PHASE2B-001 | Аудит: найти все пути записи в paper_trades | TODO |
+| PHASE2B-002 | Создание PaperTradesRepo (единая точка записи) | TODO |
+| PHASE2B-003 | Переключение модулей на PaperTradesRepo | TODO |
+| PHASE2B-004 | Создание DB trigger: whale_trades → paper_trades | TODO |
+| PHASE2B-005 | Удаление ручного копирования | TODO |
 
 ---
 

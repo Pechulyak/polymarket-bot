@@ -154,6 +154,31 @@ scripts/pipeline_monitor.py — 7 проверок: whale_trades, paper_trades, 
 
 ---
 
+### PHASE1-005 — Финальная верификация Фазы 1
+
+**Дата:** 2026-04-03
+
+**Описание:**  
+24-часовое наблюдение pipeline: WhaleTradesRepo + whale_detector + whale_tracker + Pipeline Monitor.
+
+**До:**  
+Не было подтверждения стабильной работы pipeline в течение длительного времени.
+
+**После:**  
+- 1,339 whale_trades за 24ч через repo
+- rejected=0, zero_size=0
+- Pipeline monitor: 56 проверок, 4 OK, 52 WARNING (только category до backfill)
+- Все 5 контейнеров healthy, 0 restarts
+- smoke_test PASS
+
+**Влияние:**  
+Фаза 1 завершена, готовность к Фазе 2.
+
+**Зависимости / риски (опционально):**  
+3 пути записи whale_trades вне repo (Фаза 2): virtual_bankroll, whale_poller, real_time_whale_monitor
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:
