@@ -384,6 +384,35 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
+### 2026-04-03
+
+snapshot_date: 2026-04-03
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 21378
+paper_trades_rows: 1732
+paper_trade_notifications_rows: 0
+trades_rows: 1971
+bankroll_rows: 151
+
+whale_trades_last_24h: 1313
+paper_trades_last_24h: 353
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 24.93%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
 ### 2026-04-02
 
 snapshot_date: 2026-04-02

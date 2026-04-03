@@ -73,11 +73,13 @@ async def backfill_market_categories(
         
         try:
             while True:
-                # Step 1: Get batch of DISTINCT market_ids where market_category IS NULL
+                # Step 1: Get batch of DISTINCT market_ids where market_category is NULL, empty, or 'unknown'
                 rows = await conn.fetch("""
                     SELECT DISTINCT market_id 
                     FROM whale_trades 
                     WHERE market_category IS NULL 
+                       OR market_category = '' 
+                       OR market_category = 'unknown'
                     LIMIT $1
                 """, batch_size)
                 
@@ -100,9 +102,22 @@ async def backfill_market_categories(
                 # Step 2: Process each market_id
                 for market_id in market_ids:
                     try:
-                        # Call the existing get_market_category function
+                        # Call the existing get_market_category function with timeout
                         # This function has its own caching
-                        category = await get_market_category(market_id)
+                        try:
+                            category = await asyncio.wait_for(
+                                get_market_category(market_id),
+                                timeout=10.0  # 10 second timeout per market_id
+                            )
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                "backfill_market_category_timeout",
+                                market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
+                                timeout_sec=10.0,
+                            )
+                            total_market_ids_processed += 1
+                            await asyncio.sleep(0.5)  # Rate limit even on timeout
+                            continue
                         
                         if category is None:
                             # API returned None - skip (don't write empty string)
@@ -113,13 +128,13 @@ async def backfill_market_categories(
                             )
                         else:
                             # Step 3: UPDATE whale_trades with the category
-                            # Only update rows where market_category IS NULL
+                            # Only update rows where market_category is NULL, empty, or 'unknown'
                             # (handle race condition where another process might have updated)
                             updated = await conn.execute("""
                                 UPDATE whale_trades 
                                 SET market_category = $1 
                                 WHERE market_id = $2 
-                                AND market_category IS NULL
+                                AND (market_category IS NULL OR market_category = '' OR market_category = 'unknown')
                             """, category, market_id)
                             
                             # Execute returns "UPDATE N" string, extract count
