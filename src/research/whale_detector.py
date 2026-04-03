@@ -37,7 +37,6 @@ from src.data.storage.category_backfill import backfill_market_categories
 from src.research.polymarket_data_client import (
     PolymarketDataClient,
 )
-from src.research.whale_trade_writer import save_whale_trade
 from src.research.whale_tracker import calculate_risk_score
 from src.db.whale_trades_repo import WhaleTradesRepo
 

@@ -13,6 +13,13 @@ Categories (из CLOB API tags[0]):
 Source: docs/API_MARKET_TYPES_AUDIT.md (TRD-417)
 """
 
+# DEPRECATED: This module is deprecated as of PHASE2A-004.
+# All code has been migrated to WhaleTradesRepo.
+# Importing this module will raise ImportError.
+raise ImportError(
+    "whale_trade_writer is deprecated. Use WhaleTradesRepo from src.db.whale_trades_repo instead."
+)
+
 import logging
 from decimal import Decimal
 from typing import Optional

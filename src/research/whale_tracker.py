@@ -29,7 +29,6 @@ from sqlalchemy.orm import sessionmaker
 
 from src.data.storage.market_category_cache import get_market_category
 from src.db.whale_trades_repo import WhaleTradesRepo
-from src.research.whale_trade_writer import save_whale_trade
 
 logger = structlog.get_logger(__name__)
 
