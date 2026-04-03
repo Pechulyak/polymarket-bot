@@ -29,12 +29,11 @@ from uuid import uuid4
 
 import structlog
 from sqlalchemy import create_engine, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.data.storage.market_category_cache import get_market_category
 from src.data.storage.market_title_cache import get_market_title
-from src.research.whale_trade_writer import save_whale_trade
+from src.db.whale_trades_repo import WhaleTradesRepo
 
 logger = structlog.get_logger(__name__)
 
@@ -188,6 +187,7 @@ class VirtualBankroll:
         self._total_trades: int = 0
         self._engine = None
         self._Session = None
+        self._whale_trades_repo: Optional[WhaleTradesRepo] = None
 
         logger.info(
             "virtual_bankroll_initialized",
@@ -271,13 +271,13 @@ class VirtualBankroll:
         if not self._engine:
             self._engine = create_engine(self.database_url)
             self._Session = sessionmaker(bind=self._engine)
-            
-            # Create async engine for whale trade writes
-            async_db_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://")
-            self._async_engine = create_async_engine(async_db_url)
-            self._async_session_maker = sessionmaker(
-                bind=self._async_engine, class_=AsyncSession, expire_on_commit=False
-            )
+            # Initialize WhaleTradesRepo for whale_trade writes
+            self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
+            logger.info("virtual_bankroll_database_configured")
+        
+        # Initialize repo if not already done
+        if not self._whale_trades_repo and self._Session:
+            self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
 
     async def _save_virtual_trade(
         self,
@@ -459,7 +459,7 @@ class VirtualBankroll:
         market_title: Optional[str] = None,
         outcome: Optional[str] = None,
     ) -> None:
-        """Save whale trade record for tracking copy trading source using unified save_whale_trade.
+        """Save whale trade record for tracking copy trading source via WhaleTradesRepo.
 
         Args:
             whale_address: Source whale wallet address
@@ -470,84 +470,41 @@ class VirtualBankroll:
             market_title: Market question/title (optional)
             outcome: Trade outcome (YES/NO) - optional
         """
-        # Previous implementation commented out - using unified save_whale_trade instead:
-        # await self._ensure_database()
-        # if not self._Session or not whale_address:
-        #     return
-        # session = self._Session()
-        # try:
-        #     query = text("""
-        #         SELECT id FROM whales WHERE wallet_address = :address
-        #     """)
-        #     result = session.execute(query, {"address": whale_address.lower()})
-        #     row = result.fetchone()
-        #     if not row:
-        #         logger.debug("whale_not_in_database", address=whale_address[:10])
-        #         return
-        #     whale_id = row[0]
-        #     insert_query = text("""
-        #         INSERT INTO whale_trades (
-        #             whale_id, market_id, market_title, side, size_usd, price, outcome, traded_at, source
-        #         ) VALUES (
-        #             :whale_id, :market_id, :market_title, :side, :size_usd, :price, :outcome, NOW(), :source
-        #         )
-        #     """)
-        #     session.execute(
-        #         insert_query,
-        #         {
-        #             "whale_id": whale_id,
-        #             "market_id": market_id,
-        #             "market_title": market_title,
-        #             "side": side,
-        #             "size_usd": float(size_usd),
-        #             "price": float(price),
-        #             "outcome": outcome,
-        #             "source": "REALTIME",
-        #         },
-        #     )
-        #     session.commit()
-        # except Exception as e:
-        #     logger.error("whale_trade_save_failed", error=str(e))
-        #     session.rollback()
-        # finally:
-        #     session.close()
-        
-        # Use unified save_whale_trade method
+        # Ensure database is configured
         await self._ensure_database()
-        
-        if not self._async_session_maker:
-            logger.debug("async_session_not_ready_skipping_whale_trade")
+
+        if not self._whale_trades_repo:
+            logger.debug("whale_trades_repo_not_ready_skipping_whale_trade")
             return
-        
+
         if not whale_address:
             return
-        
+
         try:
             # TRD-408: market_category removed from hot path - filled by background task
             market_category = None
-            
-            # Use unified save_whale_trade - derives whale_id from wallet_address automatically
-            await save_whale_trade(
-                session=self._async_session_maker,
+
+            # Use WhaleTradesRepo - derives whale_id from wallet_address automatically
+            result = self._whale_trades_repo.save_trade(
                 wallet_address=whale_address,
                 market_id=market_id,
                 side=side,
-                size_usd=float(size_usd),
-                price=float(price),
+                size_usd=size_usd,  # Decimal preserved
+                price=price,  # Decimal preserved
                 outcome=outcome,
                 market_title=market_title,
                 market_category=market_category,
                 tx_hash=None,  # No tx_hash for virtual trades
                 source="REALTIME",
-                whale_id=None,  # Auto-derived from wallet_address
             )
             logger.debug(
-                "whale_trade_recorded_unified",
+                "whale_trade_recorded_via_repo",
                 address=whale_address[:10],
                 market=market_id[:20],
+                result=result,
             )
         except Exception as e:
-            logger.error("whale_trade_save_failed_unified", error=str(e))
+            logger.error("whale_trade_save_failed_via_repo", error=str(e))
 
     async def execute_virtual_trade(
         self,
