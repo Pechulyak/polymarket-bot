@@ -179,6 +179,80 @@ scripts/pipeline_monitor.py — 7 проверок: whale_trades, paper_trades, 
 
 ---
 
+## 2026-04-03
+
+### PHASE1.5-001: Аудит Kelly sizing
+
+**Дата:** 2026-04-03  
+
+**Описание:**  
+Аудит текущего Kelly sizing в trigger copy_whale_trade_to_paper.
+
+**До:**  
+trigger использовал hardcoded bankroll=$100, fraction=0.25, cap=$2. Все 1738 paper_trades имели kelly_size=$2 (flat), size_usd кита не использовался в расчёте.
+
+**После:**  
+Определена необходимость proportional sizing. Downstream (main.py) использует kelly_size приоритетно — безопасно для изменения.
+
+**Влияние:**  
+trigger, paper_trades table
+
+---
+
+### PHASE1.5-002: Strategy config + estimated capital
+
+**Дата:** 2026-04-03  
+
+**Описание:**  
+Добавление strategy_config таблицы и estimated_capital поля в whales.
+
+**До:**  
+Отсутствовала конфигурация для Kelly sizing.
+
+**После:**  
+Создана strategy_config таблица (kelly_fraction, max_position_pct, min_trade_size_usd, our_bankroll). Добавлены поля whales.estimated_capital + capital_estimation_method. 0x32ed: estimated_capital=$200,000 (manual).
+
+**Влияние:**  
+БД: new tables, new columns
+
+---
+
+### PHASE1.5-003: Proportional Kelly sizing
+
+**Дата:** 2026-04-03  
+
+**Описание:**  
+Обновление trigger copy_whale_trade_to_paper на proportional sizing.
+
+**До:**  
+Flat $2 kelly_size для всех сделок.
+
+**После:**  
+Формула: (whale_size / whale_capital) * bankroll * kelly_fraction. Cap: max_position_pct (5%) of bankroll. Floor: min_trade_size_usd ($1), trades below skipped. Конфиг: kelly_fraction=0.25, max_position_pct=0.05, our_bankroll=$1000. Rollback: scripts/rollback_trigger_phase1.5.sql.
+
+**Влияние:**  
+trigger, paper_trades table
+
+---
+
+### PHASE1.5-004: Estimated capital для paper кита
+
+**Дата:** 2026-04-03  
+
+**Описание:**  
+Установка estimated_capital для paper кита 0x32ed.
+
+**До:**  
+Поле estimated_capital отсутствовало.
+
+**После:**  
+0x32ed: estimated_capital=$200,000, method=manual. Объединено с PHASE1.5-001.
+
+**Влияние:**  
+whales table
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:

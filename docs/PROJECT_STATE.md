@@ -272,10 +272,16 @@
   note: min 5 roundtrips, WR ≥60%, PnL >$0, tier HOT/WARM
 
 - Kelly Sizing
-  status: ACTIVE
-  updated: 2026-03-29
-  task: STRAT-701
-  note: fraction 0.25, max_position 5%
+  status: COMPLETED
+  updated: 2026-04-04
+  task: PHASE1.5-003
+  commit: 818f56a
+  formula: proportional (whale_size / whale_capital) * bankroll * kelly_fraction
+  config: strategy_config table
+  kelly_fraction: 0.25
+  max_position_pct: 0.05
+  our_bankroll: $1000
+  min_trade_size_usd: $1
 
 - Selected Whales
   status: PAPER
@@ -379,6 +385,35 @@ paper_trades_last_24h: 1302
 notifications_last_24h: 0
 
 conversion_whale_to_paper_48h: 17.42%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-04-04
+
+snapshot_date: 2026-04-04
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 23152
+paper_trades_rows: 2104
+paper_trade_notifications_rows: 0
+trades_rows: 2343
+bankroll_rows: 222
+
+whale_trades_last_24h: 1436
+paper_trades_last_24h: 372
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 26.04%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:

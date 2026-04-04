@@ -254,6 +254,18 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 
 ---
 
+## EPIC 11 — PROPORTIONAL KELLY SIZING (Phase 1.5)
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| PHASE1.5-001 | Аудит текущего Kelly sizing в trigger | DONE |
+| PHASE1.5-002 | strategy_config + estimated_capital schema | DONE |
+| PHASE1.5-003 | Обновление trigger — proportional sizing | DONE |
+| PHASE1.5-004 | Установка estimated_capital для paper кита | DONE |
+| PHASE1.5-005 | Верификация полного pipeline | TODO |
+
+---
+
 ## SYSTEM TASKS
 
 | ID | Задача | Статус |
