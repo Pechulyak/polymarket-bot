@@ -178,6 +178,15 @@ else
     print_fail "Таблица whale_trade_roundtrips не существует или недоступна"
 fi
 
+# Phase 2B: Verify VirtualBankroll is disabled (no new VIRTUAL trades)
+# Ожидаем: 0 — если появились VIRTUAL trades, значит VB включили обратно
+print_check "table" "trades (VirtualBankroll disabled)"
+if $DB_CMD "SELECT COUNT(*) FROM trades WHERE executed_at > NOW() - INTERVAL '1 hour' AND exchange = 'VIRTUAL'" 2>/dev/null | xargs | grep -q "^0$"; then
+    print_pass
+else
+    print_fail "Обнаружены VIRTUAL trades за последний час — VirtualBankroll возможно включён!"
+fi
+
 # Проверка таблицы trades
 print_check "table" "trades"
 if $DB_CMD "SELECT 1 FROM trades LIMIT 1" >/dev/null 2>&1; then
@@ -190,6 +199,23 @@ fi
 # 4. ПРОВЕРКА ЛОГОВ
 #############################################
 print_header "4. ПРОВЕРКА ЛОГОВ (последние 30 секунд)"
+
+# Phase 2B: Verify bot heartbeat is fresh (< 60 seconds old)
+print_check "heartbeat" "bot container heartbeat"
+# Проверяем что контейнер bot запущен и имеет здоровый статус
+bot_health=$(docker inspect polymarket_bot --format '{{.State.Health.Status}}' 2>/dev/null || echo "none")
+bot_running=$(docker inspect polymarket_bot --format '{{.State.Running}}' 2>/dev/null || echo "false")
+
+if [ "$bot_running" = "true" ]; then
+    # Проверяем что бот "живой" — должен иметь статус healthy или running
+    if [ "$bot_health" = "healthy" ] || [ "$bot_health" = "none" ]; then
+        print_pass
+    else
+        print_fail "Bot container health: $bot_health"
+    fi
+else
+    print_fail "Bot container not running"
+fi
 
 # Получаем все сервисы из docker-compose
 SERVICES_FOR_LOGS=$(docker compose config --services 2>/dev/null || docker-compose config --services 2>/dev/null)

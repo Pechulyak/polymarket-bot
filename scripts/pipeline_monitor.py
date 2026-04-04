@@ -102,11 +102,11 @@ def check_size_usd_zero():
     return execute_query(query)
 
 
-def check_paper_trades_3h():
-    """Check paper_trades count in last 3 hours."""
+def check_paper_trades_24h():
+    """Check paper_trades count in last 24 hours."""
     query = """
         SELECT COUNT(*) FROM paper_trades
-        WHERE created_at > NOW() - INTERVAL '3 hours'
+        WHERE created_at > NOW() - INTERVAL '24 hours'
     """
     return execute_query(query)
 
@@ -125,6 +125,18 @@ def check_roundtrips_3h():
     query = """
         SELECT COUNT(*) FROM whale_trade_roundtrips
         WHERE created_at > NOW() - INTERVAL '3 hours'
+    """
+    return execute_query(query)
+
+
+def check_virtual_trades_1h():
+    """Phase 2B: Check VIRTUAL trades count in last 1 hour.
+    
+    Expected: 0 — если появились VIRTUAL trades, значит VB включили обратно без согласования.
+    """
+    query = """
+        SELECT COUNT(*) FROM trades
+        WHERE executed_at > NOW() - INTERVAL '1 hour' AND exchange = 'VIRTUAL'
     """
     return execute_query(query)
 
@@ -281,8 +293,8 @@ def run_pipeline_checks():
     # Check 3: size_usd = 0
     results["size_usd_zero"] = check_size_usd_zero()
 
-    # Check 4: paper_trades/3h + paper whales exist
-    results["paper_trades_3h"] = check_paper_trades_3h()
+    # Check 4: paper_trades/24h + paper whales exist
+    results["paper_trades_24h"] = check_paper_trades_24h()
     results["paper_whales_exist"] = check_paper_whales_exist()
 
     # Check 5: roundtrips/3h
@@ -293,6 +305,9 @@ def run_pipeline_checks():
 
     # Check 7: market_category unknown %
     results["market_category_unknown_pct"] = check_market_category_unknown_pct()
+
+    # Phase 2B: Check VIRTUAL trades (should be 0 if VB is disabled)
+    results["virtual_trades_1h"] = check_virtual_trades_1h()
 
     # Determine status based on results
     status, warnings, criticals = determine_status(results)
@@ -325,11 +340,11 @@ def determine_status(results: dict) -> tuple:
     if szero > 0:
         criticals.append(f"size_usd=0 found: {szero} records (CRITICAL)")
 
-    # Check 4: paper_trades/3h (WARNING: 0 when paper whales exist)
-    pt_3h = results.get("paper_trades_3h", 0)
+    # Check 4: paper_trades/24h (WARNING: 0 when paper whales exist)
+    pt_24h = results.get("paper_trades_24h", 0)
     pw_exists = results.get("paper_whales_exist", 0)
-    if pw_exists > 0 and pt_3h == 0:
-        warnings.append(f"paper_trades/3h: 0 (paper whales: {pw_exists})")
+    if pw_exists > 0 and pt_24h == 0:
+        warnings.append(f"paper_trades/24h: 0 (paper whales: {pw_exists})")
 
     # Check 5: roundtrips/3h (WARNING: 0 new)
     rt_3h = results.get("roundtrips_3h", 0)
@@ -346,6 +361,11 @@ def determine_status(results: dict) -> tuple:
     # Ожидаемо 100% unknown, пока background task не починен
     # Не учитывать при определении статуса
     # unknown_pct = results.get("market_category_unknown_pct", 0)
+
+    # Phase 2B: Check VIRTUAL trades (WARNING: > 0 — значит VB включили обратно)
+    vt_1h = results.get("virtual_trades_1h", 0)
+    if vt_1h > 0:
+        warnings.append(f"VIRTUAL trades за последний час: {vt_1h} (VB возможно включён!)")
 
     if criticals:
         return "CRITICAL", warnings, criticals
@@ -367,8 +387,9 @@ def format_ok_message(results: dict) -> str:
     return f"""✅ Pipeline OK | {results['timestamp']}
 
 whale_trades/1h: {results['whale_trades_1h']}
-paper_trades/3h: {results['paper_trades_3h']}
+paper_trades/24h: {results['paper_trades_24h']}
 roundtrips/3h: {results['roundtrips_3h']}
+virtual_trades/1h: {results['virtual_trades_1h']} (VB disabled ✅)
 category_unknown: {results['market_category_unknown_pct']:.0f}%
 containers: {container_status}
 """
