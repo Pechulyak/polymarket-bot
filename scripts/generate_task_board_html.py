@@ -163,6 +163,9 @@ def parse_tasks_table(table_lines: list) -> list:
         cells = [c.strip() for c in line.split('|')[1:-1]]
         if len(cells) >= 3:
             task_id = cells[0]
+            # Skip header row
+            if task_id == 'ID':
+                continue
             task_name = cells[1]
             status = cells[2].replace('**', '').strip()
             tasks.append({
@@ -368,9 +371,6 @@ def generate_html(data: dict) -> str:
             <tbody>
 '''
             for task in epic['tasks']:
-                # Skip DONE tasks - they remain in MD but not shown in HTML
-                if task['status'] == 'DONE':
-                    continue
                 html += f'''                <tr>
                     <td class="task-id">{task['id']}</td>
                     <td>{task['name']}</td>

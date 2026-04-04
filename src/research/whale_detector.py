@@ -823,19 +823,19 @@ class WhaleDetector:
                     w.total_volume_usd,
                     w.avg_trade_size_usd,
                     w.risk_score,
-                    COALESCE(w.days_active, 0) as days_active,
+                    COALESCE(w.days_active_7d, 0) as days_active_7d,
                     COUNT(wt.id) as trades_last_24h,
                     COUNT(DISTINCT DATE(wt.traded_at)) as days_active_24h
                 FROM whales w
                 INNER JOIN whale_trades wt ON LOWER(w.wallet_address) = LOWER(wt.wallet_address)
                 WHERE wt.traded_at >= NOW() - INTERVAL '24 hours'
                 GROUP BY w.id, w.wallet_address, w.total_trades, w.total_volume_usd, 
-                         w.avg_trade_size_usd, w.risk_score, w.days_active
+                         w.avg_trade_size_usd, w.risk_score, w.days_active_7d
             """)
             result = session.execute(query)
             
             for row in result:
-                whale_id, wallet_address, total_trades, total_volume, avg_size, risk_score, days_active, trades_24h, days_24h = row
+                whale_id, wallet_address, total_trades, total_volume, avg_size, risk_score, days_active_7d, trades_24h, days_24h = row
                 
                 # Calculate trades_last_7_days estimate (use 24h trades as minimum)
                 trades_last_7_days = max(trades_24h, 1)
@@ -846,7 +846,7 @@ class WhaleDetector:
                     total_volume_usd=total_volume or Decimal("0"),
                     avg_trade_size_usd=avg_size or Decimal("0"),
                     trades_last_7_days=trades_last_7_days,
-                    days_active=max(days_active, days_24h or 1),
+                    days_active=max(days_active_7d, days_24h or 1),
                     risk_score=risk_score or 5,
                 )
                 
@@ -868,7 +868,7 @@ class WhaleDetector:
                     session.execute(update_query, {
                         "qualification_path": qualification_path,
                         "trades_last_7_days": trades_last_7_days,
-                        "days_active": max(days_active, days_24h or 1),
+                        "days_active": max(days_active_7d, days_24h or 1),
                         "whale_id": whale_id,
                     })
                     refreshed += 1
@@ -936,12 +936,12 @@ class WhaleDetector:
             """)
             session.execute(update_7d)
             
-            # TRD-419: Update both legacy days_active and new days_active_7d/30d
-            # days_active is kept for backward compat, days_active_7d is the new canonical
+            # TRD-419: Update days_active_7d/30d from whale_trades table
+            # DEPRECATED: days_active column was removed from whales table
+            # Use days_active_7d for 7-day window logic instead
             update_days = text("""
                 UPDATE whales w
-                SET days_active = t.days,
-                    days_active_7d = LEAST(t.days_7d, t.days),  -- 7d window
+                SET days_active_7d = LEAST(t.days_7d, t.days),  -- 7d window
                     days_active_30d = LEAST(t.days_30d, t.days),  -- 30d window
                     last_active_at = NOW(),
                     updated_at = NOW()
@@ -955,7 +955,7 @@ class WhaleDetector:
                     GROUP BY wallet_address
                 ) t
                 WHERE LOWER(w.wallet_address) = LOWER(t.wallet_address)
-                AND (w.days_active != t.days OR w.days_active_7d IS NULL OR w.days_active_30d IS NULL)
+                AND (w.days_active_7d != LEAST(t.days_7d, t.days) OR w.days_active_30d IS NULL)
             """)
             session.execute(update_days)
             

@@ -150,11 +150,6 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
-                <tr>
                     <td class="task-id">W-001</td>
                     <td>Whale Detection Pipeline</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
@@ -174,6 +169,16 @@
                     <td>Copy Trading Engine Integration</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
+                <tr>
+                    <td class="task-id">WHALE-701</td>
+                    <td>Whale Classification & Exclusion</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-607</td>
+                    <td>Fix whale re-discovery overwriting excluded status</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
             </tbody>
         </table>
 
@@ -190,11 +195,6 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
                 <tr>
                     <td class="task-id">A-101</td>
                     <td>Cross-Exchange Arbitrage Detector</td>
@@ -227,11 +227,6 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
-                <tr>
                     <td class="task-id">S-201</td>
                     <td>Kill Switch Mechanisms</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
@@ -263,11 +258,6 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
-                <tr>
                     <td class="task-id">SYS-301</td>
                     <td>Docker Orchestration & Deployment</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
@@ -276,6 +266,21 @@
                     <td class="task-id">SYS-302</td>
                     <td>Monitoring & Alerting System</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">SYS-326</td>
+                    <td>Safely suspend execution/downstream layers after paper_trades</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-501</td>
+                    <td>Fix timeout hang в HTTP calls (client.py)</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-502</td>
+                    <td>Separate paper/tracked polling loops, per-whale timeout</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
             </tbody>
         </table>
@@ -293,11 +298,6 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
                 <tr>
                     <td class="task-id">STRAT-701</td>
                     <td>Запуск paper-trade pipeline для отобранных китов</td>
@@ -335,9 +335,24 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
+                    <td class="task-id">SEC-401</td>
+                    <td>Full Security Audit (ports, env exposure, docker, firewall)</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">SEC-402</td>
+                    <td>Verify No Public Ports Policy enforcement</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">SEC-403</td>
+                    <td>Scan server for exposed services and vulnerabilities</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">SEC-404</td>
+                    <td>Restrict Qdrant to localhost only</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
             </tbody>
         </table>
@@ -355,11 +370,6 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
                 <tr>
                     <td class="task-id">SYS-401</td>
                     <td>Project cleanup (logs, temp files, unused scripts)</td>
@@ -385,6 +395,11 @@
                     <td>Fix дублирование roundtrip_builder + broken paper_settlement</td>
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
+                <tr>
+                    <td class="task-id">DOC-601</td>
+                    <td>Аудит PROJECT_STATE.md на соответствие governance</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
             </tbody>
         </table>
 
@@ -402,14 +417,9 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
-                <tr>
                     <td class="task-id">BUG-701</td>
                     <td>Fix days_active column reference (should be days_active_7d)</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-401</td>
@@ -437,6 +447,11 @@
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
+                    <td class="task-id">TRD-405</td>
+                    <td>Verify Kelly sizing logic</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
                     <td class="task-id">TRD-406</td>
                     <td>Fix zero-size paper trades on open path</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
@@ -447,9 +462,29 @@
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
+                    <td class="task-id">TRD-408</td>
+                    <td>Fix traded_at to use API timestamp instead of NOW()</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-409</td>
+                    <td>Fix settlement integration with VirtualBankroll</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-411</td>
+                    <td>Audit whale exit handling and buy/sell event recording across pipeline</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
                     <td class="task-id">TRD-412</td>
                     <td>Create whale_trade_roundtrips table and implement whale position reconstruction logic</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">ARC-502-B</td>
+                    <td>Fuzzy matching close for short selling (+27 CLOSED)</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-413</td>
@@ -457,9 +492,64 @@
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
+                    <td class="task-id">TRD-421</td>
+                    <td>Аудит whale_trades — Завершён</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-603</td>
+                    <td>Fix dedup filter paper_trades→trades + bankroll reset $1000</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-504</td>
+                    <td>Fix false new_trades counter in whale_detector logs</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-422</td>
+                    <td>Добавить market_category в whale_trades и унифицировать запись</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-426</td>
+                    <td>Fix tier пороги — 97% HOT</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-427</td>
+                    <td>Fix: OPEN roundtrips не обновляются settlement (757 stuck)</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-420-A</td>
+                    <td>Per-wallet polling для copy_status='paper' китов</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
                     <td class="task-id">TRD-420-B</td>
                     <td>Per-wallet polling для copy_status='tracked' китов (5 мин)</td>
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-430</td>
+                    <td>Аудит paper trading pipeline: trades → settlement → bankroll</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-601</td>
+                    <td>Diagnose settlement failure — 0 closed trades with resolved markets</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-601-FIX</td>
+                    <td>Switch settlement engine from Gamma API to CLOB API</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">BUG-604</td>
+                    <td>Bankroll reconciliation after settlement + fix event loop</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
             </tbody>
         </table>
@@ -478,9 +568,19 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
+                    <td class="task-id">TRD-414</td>
+                    <td>Backup whales and whale_trades + snapshot report</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-415</td>
+                    <td>Freeze whale discovery and whale_trades writes before cleanup</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-416</td>
+                    <td>Reduce whales universe to qualified subset and clean whale_trades</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-417</td>
@@ -488,9 +588,34 @@
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
+                    <td class="task-id">TRD-418</td>
+                    <td>Transform whales table schema to approved activity-based structure</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-419</td>
+                    <td>Migrate whales logic from legacy fields to new activity-based fields</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">ARC-503</td>
+                    <td>Remove legacy fields is_winner and profit_usd from whale_trades</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
                     <td class="task-id">TRD-420</td>
                     <td>Рефакторинг whale discovery: initial history aggregation + tiered polling</td>
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">DATA-404</td>
+                    <td>Reset virtual bankroll for fresh paper trading cycle</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">DATA-405</td>
+                    <td>Cleanup test records from database</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
             </tbody>
         </table>
@@ -508,11 +633,6 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
-                </tr>
                 <tr>
                     <td class="task-id">ANA-401</td>
                     <td>Extend trades table with market categories</td>
@@ -550,9 +670,24 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
+                    <td class="task-id">ARC-502-A</td>
+                    <td>Roundtrip Builder — создание OPEN roundtrips из BUY событий</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">ARC-502-B</td>
+                    <td>Roundtrip Builder — закрытие позиций через SELL события</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">ARC-502-C</td>
+                    <td>Roundtrip Builder — settlement через Gamma API</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">ARC-502-D</td>
+                    <td>Fix: whale_trade_roundtrips → whales P&L обновление</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
             </tbody>
         </table>
@@ -571,9 +706,29 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ID</td>
-                    <td>Задача</td>
-                    <td><span class="status-badge status-СТАТУС">Статус</span></td>
+                    <td class="task-id">PHASE1.5-001</td>
+                    <td>Аудит текущего Kelly sizing в trigger</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">PHASE1.5-002</td>
+                    <td>strategy_config + estimated_capital schema</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">PHASE1.5-003</td>
+                    <td>Обновление trigger — proportional sizing</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">PHASE1.5-004</td>
+                    <td>Установка estimated_capital для paper кита</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">PHASE1.5-005</td>
+                    <td>Верификация полного pipeline</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
             </tbody>
         </table>

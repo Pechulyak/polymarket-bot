@@ -20,7 +20,7 @@ DECLARE
     v_source VARCHAR(20) := 'unknown';
 BEGIN
     -- Get whale wallet address and estimated capital
-    SELECT w.wallet_address, COALESCE(w.estimated_capital, 0)
+    SELECT w.wallet_address, COALESCE(w.estimated_capital, 100000)
     INTO v_whale_address, v_whale_capital
     FROM whales w
     WHERE w.id = NEW.whale_id;

@@ -275,14 +275,7 @@
   status: OK
   updated: 2026-04-04
   task: PHASE1.5-005
-  note: verified via test data (4/4 pass), live data unavailable (whale inactive)
-  commit: 818f56a
-  formula: proportional (whale_size / whale_capital) * bankroll * kelly_fraction
-  config: strategy_config table
-  kelly_fraction: 0.25
-  max_position_pct: 0.05
-  our_bankroll: $1000
-  min_trade_size_usd: $1
+  note: proportional sizing, strategy_config driven
 
 - Selected Whales
   status: PAPER
