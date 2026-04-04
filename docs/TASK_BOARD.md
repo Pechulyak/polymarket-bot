@@ -160,7 +160,7 @@ Goals:
 - ensure trades(open) reduce available and increase allocated
 - ensure trades(closed) release allocated capital
 - ensure net_pnl is reflected in bankroll correctly
-| TRD-405 | Verify Kelly sizing logic | TODO |
+| TRD-405 | Verify Kelly sizing logic | DONE |
 | TRD-406 | Fix zero-size paper trades on open path | TODO |
 | TRD-407 | Investigate execution gap (paper_trades vs trades) | TODO |
 | TRD-408 | Fix traded_at to use API timestamp instead of NOW() | DONE |
@@ -262,7 +262,7 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 | PHASE1.5-002 | strategy_config + estimated_capital schema | DONE |
 | PHASE1.5-003 | Обновление trigger — proportional sizing | DONE |
 | PHASE1.5-004 | Установка estimated_capital для paper кита | DONE |
-| PHASE1.5-005 | Верификация полного pipeline | TODO |
+| PHASE1.5-005 | Верификация полного pipeline | DONE |
 
 ---
 
@@ -274,5 +274,5 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 
 ---
 
-*Обновлено: 2026-03-31*  
-*TRD-430 добавлена: 2026-03-31*
+*Обновлено: 2026-04-04*  
+*Обновлено: 2026-04-04*

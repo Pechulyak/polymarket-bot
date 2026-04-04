@@ -272,9 +272,10 @@
   note: min 5 roundtrips, WR ≥60%, PnL >$0, tier HOT/WARM
 
 - Kelly Sizing
-  status: COMPLETED
+  status: OK
   updated: 2026-04-04
-  task: PHASE1.5-003
+  task: PHASE1.5-005
+  note: verified via test data (4/4 pass), live data unavailable (whale inactive)
   commit: 818f56a
   formula: proportional (whale_size / whale_capital) * bankroll * kelly_fraction
   config: strategy_config table
