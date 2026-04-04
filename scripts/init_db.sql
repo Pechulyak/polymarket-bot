@@ -307,3 +307,19 @@ ALTER TABLE whales ADD COLUMN IF NOT EXISTS exclusion_reason VARCHAR(50);
 ALTER TABLE whales DROP CONSTRAINT IF EXISTS whales_copy_status_check;
 ALTER TABLE whales ADD CONSTRAINT whales_copy_status_check 
     CHECK (copy_status IN ('none', 'paper', 'live', 'tracked', 'excluded'));
+
+-- =============================================================================
+-- PHASE1.5-002: Strategy config for proportional Kelly sizing
+-- =============================================================================
+
+-- Strategy configuration table for Kelly sizing parameters
+CREATE TABLE IF NOT EXISTS strategy_config (
+    key VARCHAR(100) PRIMARY KEY,
+    value DECIMAL(20, 8) NOT NULL,
+    description TEXT,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- PHASE1.5-002: Whale capital estimation columns
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS estimated_capital DECIMAL(20, 8);
+ALTER TABLE whales ADD COLUMN IF NOT EXISTS capital_estimation_method VARCHAR(20) DEFAULT 'manual';
