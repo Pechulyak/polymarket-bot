@@ -161,16 +161,15 @@ def check_container_restarts():
     return restart_counts
 
 
-def check_market_category_unknown_pct():
-    """Check percentage of 'unknown' market_category in last 24 hours."""
+def check_market_category_unknown_count():
+    """Check count of 'unknown' market_category in last 24 hours."""
     query = """
         SELECT COUNT(*) FILTER (WHERE market_category = 'unknown')
-        * 100.0 / NULLIF(COUNT(*), 0)
         FROM whale_trades
         WHERE traded_at > NOW() - INTERVAL '24 hours'
     """
     result = execute_query(query)
-    return round(result, 2) if result else 0.0
+    return result if result else 0
 
 
 # =============================================================================
@@ -304,7 +303,7 @@ def run_pipeline_checks():
     results["container_restarts"] = check_container_restarts()
 
     # Check 7: market_category unknown %
-    results["market_category_unknown_pct"] = check_market_category_unknown_pct()
+    results["market_category_unknown_count"] = check_market_category_unknown_count()
 
     # Phase 2B: Check VIRTUAL trades (should be 0 if VB is disabled)
     results["virtual_trades_1h"] = check_virtual_trades_1h()
@@ -357,10 +356,10 @@ def determine_status(results: dict) -> tuple:
         if count > 3:
             criticals.append(f"{container} restart_count: {count} (CRITICAL)")
 
-    # Check 7: market_category unknown % — INFO only
-    # Ожидаемо 100% unknown, пока background task не починен
+    # Check 7: market_category unknown count — INFO only
+    # Ожидаемо 1523+ без категоризации, пока background task не починен
     # Не учитывать при определении статуса
-    # unknown_pct = results.get("market_category_unknown_pct", 0)
+    # unknown_count = results.get("market_category_unknown_count", 0)
 
     # Phase 2B: Check VIRTUAL trades (WARNING: > 0 — значит VB включили обратно)
     vt_1h = results.get("virtual_trades_1h", 0)
@@ -390,7 +389,7 @@ whale_trades/1h: {results['whale_trades_1h']}
 paper_trades/24h: {results['paper_trades_24h']}
 roundtrips/3h: {results['roundtrips_3h']}
 virtual_trades/1h: {results['virtual_trades_1h']} (VB disabled ✅)
-category_unknown: {results['market_category_unknown_pct']:.0f}%
+category_unknown: {results['market_category_unknown_count']} (needs backfill)
 containers: {container_status}
 """
 
