@@ -247,7 +247,7 @@
     </div>
 
     <div class="epic-card">
-        <h2>EPIC 4 — SYSTEM / INFRASTRUCTURE</h2>
+        <h2>EPIC 4 — DATA AUDIT & SCHEMA FIXES (PHASE 4)</h2>
         <table>
             <thead>
                 <tr>
@@ -258,29 +258,29 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">SYS-301</td>
-                    <td>Docker Orchestration & Deployment</td>
+                    <td class="task-id">PHASE4-001</td>
+                    <td>Data Audit: schema, JOINs, PnL formulas</td>
+                    <td><span class="status-badge status-DONE">DONE</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">PHASE4-002</td>
+                    <td>Add status column to paper_trades table</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">SYS-302</td>
-                    <td>Monitoring & Alerting System</td>
+                    <td class="task-id">PHASE4-003</td>
+                    <td>Fix JOIN disambiguation for paper_trades ↔ roundtrips</td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">SYS-326</td>
-                    <td>Safely suspend execution/downstream layers after paper_trades</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">PHASE4-004</td>
+                    <td>Standardize PnL formula to our_pnl_v2</td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">BUG-501</td>
-                    <td>Fix timeout hang в HTTP calls (client.py)</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">BUG-502</td>
-                    <td>Separate paper/tracked polling loops, per-whale timeout</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">PHASE4-005</td>
+                    <td>Verify Kelly distribution (proportional vs flat)</td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
             </tbody>
         </table>

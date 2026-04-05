@@ -86,16 +86,20 @@
 
 ---
 
-## EPIC 4 — SYSTEM / INFRASTRUCTURE
+## EPIC 4 — DATA AUDIT & SCHEMA FIXES (PHASE 4)
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| SYS-301 | Docker Orchestration & Deployment | TODO |
-| SYS-302 | Monitoring & Alerting System | TODO |
-| SYS-326 | Safely suspend execution/downstream layers after paper_trades | DONE |
-| BUG-501 | Fix timeout hang в HTTP calls (client.py) | DONE |
-| BUG-502 | Separate paper/tracked polling loops, per-whale timeout | DONE |
-Description: Verified real-time ingestion on both paper and tracked whales. Paper poll (30s) and tracked poll (5min) working independently.
+| PHASE4-001 | Data Audit: schema, JOINs, PnL formulas | DONE |
+| Description: Audit completed. Report: docs/audit/PHASE4-001-summary.md. Findings: 100% match rate post-Kelly filter, working JOIN logic, 3 schema issues identified. |
+| PHASE4-002 | Add status column to paper_trades table | TODO |
+| Description: Missing `status` column (open/closed). Critical for position tracking. Requires migration. |
+| PHASE4-003 | Fix JOIN disambiguation for paper_trades ↔ roundtrips | TODO |
+| Description: 10 paper_trades have 2-3 matching roundtrips. Need filter by `close_type` or closest `created_at`. |
+| PHASE4-004 | Standardize PnL formula to our_pnl_v2 | TODO |
+| Description: Two formulas produce different results. Standardize on `our_pnl_v2 = whale_pnl * (kelly_size / whale_size)` for all views. |
+| PHASE4-005 | Verify Kelly distribution (proportional vs flat) | TODO |
+| Description: Currently 97.9% flat $2, 2.1% proportional. Monitor transition. Recommended filter: `created_at > 2026-04-04` |
 
 ---
 
@@ -278,6 +282,21 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 | PHASE3-005 | Обновить roundtrip_builder.py → использовать БД | DONE |
 | PHASE3-006 | Удалить HTTP settlement из roundtrip_builder | DONE |
 | PHASE3-007 | Верификация end-to-end | IN_PROGRESS |
+Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Результаты: 2189 китов обновлено, market_resolutions populated. Сравнение с cron 10:00 UTC pending.
+
+---
+
+## PHASE 4 — MATERIALIZED VIEWS + DYNAMIC KELLY
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| PHASE4-001 | Аудит данных для views (схемы, связи, match rate) | DONE |
+| PHASE4-002 | View: whale_pnl_summary | TODO |
+| PHASE4-003 | View: paper_portfolio_state | TODO |
+| PHASE4-004 | View: paper_simulation_pnl | TODO |
+| PHASE4-005 | Cron refresh views | TODO |
+| PHASE4-006 | Dynamic Kelly — trigger берёт bankroll из view | TODO |
+| PHASE4-007 | Финальная верификация Фазы 4 | TODO |
 
 ---
 
