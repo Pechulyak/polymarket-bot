@@ -95,9 +95,9 @@
 | PHASE4-002 | Add status column to paper_trades table | CANCELLED |
 | Description: Not needed — position tracking uses roundtrips table instead. |
 | PHASE4-003 | Fix JOIN disambiguation for paper_trades ↔ roundtrips | DONE |
-| Description: Materialized view `paper_portfolio_state` created. DISTINCT ON resolves 1:many (77% of trades had >1 match). Final: initial_bankroll=$1000, realized_pnl=-$46.62, current_balance=$953.38, win_rate=41.3%, ROI=-4.66%. |
-| PHASE4-004 | Standardize PnL formula to our_pnl_v2 | TODO |
-| Description: Two formulas produce different results. Standardize on `our_pnl_v2 = whale_pnl * (kelly_size / whale_size)` for all views. |
+| Description: Materialized view `paper_portfolio_state` created. DISTINCT ON resolves 1:many (77% of trades had >1 match). Final: initial_bankroll=$1000, realized_pnl=-$46.62, current_balance=$953.38, win_rate=41.3%, ROI=-4.66%. Completed: 2026-04-05. |
+| PHASE4-004 | Standardize PnL formula to our_pnl_v2 | IN_PROGRESS |
+| Description: Two formulas produce different results. Standardize on `our_pnl_v2 = whale_pnl * (kelly_size / whale_size)` for all views. Started: 2026-04-05. |
 | PHASE4-005 | Verify Kelly distribution (proportional vs flat) | TODO |
 | Description: Currently 97.9% flat $2, 2.1% proportional. Monitor transition. Recommended filter: `created_at > 2026-04-04` |
 
@@ -293,7 +293,8 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 | PHASE4-001 | Аудит данных для views (схемы, связи, match rate) | DONE |
 | PHASE4-002 | View: whale_pnl_summary | DONE |
 | PHASE4-003 | View: paper_portfolio_state | DONE |
-| PHASE4-004 | View: paper_simulation_pnl | TODO |
+| PHASE4-004 | View: paper_simulation_pnl | DONE |
+| Description: Created materialized view with standardized PnL formula (our_pnl_v2 = whale_pnl * kelly_ratio). Validated against cross-check queries. Final: initial_bankroll=$1000, realized_pnl=-$46.62, current_balance=$953.38. Completed: 2026-04-05. |
 | PHASE4-005 | Cron refresh views | TODO |
 | PHASE4-006 | Dynamic Kelly — trigger берёт bankroll из view | TODO |
 | PHASE4-007 | Финальная верификация Фазы 4 | TODO |
