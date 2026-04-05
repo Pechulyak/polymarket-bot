@@ -34,14 +34,11 @@
   target_winrate: >60%
   target_drawdown: controlled
 
-- Риск-контур (Kelly)
-  status: OK
-  updated: 2026-03-04
-  task: TRD-201
-  note: quarter kelly
-
-  kelly_fraction: 0.25
-  max_position: 2%
+## Risk-contour (Kelly)
+- status: OK
+- updated: 2026-04-05
+- task: PHASE4-006, PHASE4-007
+- note: dynamic kelly, bankroll=$100, source=view
 
 - Edge статус
   status: IN_WORK
@@ -108,6 +105,37 @@
   updated: 2026-04-05
   task: PHASE4-004
   note: trade-by-trade P&L, 313 rows
+
+---
+
+## Materialized Views (PHASE4)
+
+### whale_pnl_summary (materialized)
+- status: OK
+- updated: 2026-04-05
+- task: PHASE4-001
+- note: 11 whales, 0x32ed PnL $135K
+
+### paper_portfolio_state (materialized)
+- status: OK
+- updated: 2026-04-05
+- task: PHASE4-007
+- note: bankroll reset $100, dynamic filter via bankroll_reset_at
+- metrics: current_balance=$100, realized_pnl=0, roi=0%
+
+### paper_simulation_pnl (materialized)
+- status: OK
+- updated: 2026-04-05
+- task: PHASE4-007
+- note: bankroll reset, 0 rows (fresh start)
+
+---
+
+## Bankroll Reset
+- mechanism: bankroll_reset_at in strategy_config (unix timestamp)
+- reset: 2026-04-05 19:23:55 UTC
+- current_bankroll: $100
+- next_reset: manual via strategy_config update
 
 ---
 

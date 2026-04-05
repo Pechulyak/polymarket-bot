@@ -299,7 +299,7 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 | Description: Created refresh_views.sh, added cron (15 */2 * * *), added 3 view checks to smoke_test.sh. All 23 checks pass. Completed: 2026-04-05. |
 | PHASE4-006 | Dynamic Kelly — trigger берёт bankroll из view | DONE |
 | Description: Trigger modified to use dynamic bankroll from paper_portfolio_state view. Config key kelly_bankroll_source=1 enables dynamic mode. Fallback: view → strategy_config → $1000. Verified: Dynamic ($1.19) vs Static ($1.25), Δ=-4.66%. Completed: 2026-04-05. |
-| PHASE4-007 | Финальная верификация Фазы 4 | TODO |
+| PHASE4-007 | Финальная верификация Фазы 4 | DONE |
 
 ---
 
