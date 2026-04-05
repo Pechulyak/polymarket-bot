@@ -92,8 +92,8 @@
 |----|--------|--------|
 | PHASE4-001 | Data Audit: schema, JOINs, PnL formulas | DONE |
 | Description: Audit completed. Report: docs/audit/PHASE4-001-summary.md. Findings: 100% match rate post-Kelly filter, working JOIN logic, 3 schema issues identified. |
-| PHASE4-002 | Add status column to paper_trades table | TODO |
-| Description: Missing `status` column (open/closed). Critical for position tracking. Requires migration. |
+| PHASE4-002 | Add status column to paper_trades table | CANCELLED |
+| Description: Not needed — position tracking uses roundtrips table instead. |
 | PHASE4-003 | Fix JOIN disambiguation for paper_trades ↔ roundtrips | TODO |
 | Description: 10 paper_trades have 2-3 matching roundtrips. Need filter by `close_type` or closest `created_at`. |
 | PHASE4-004 | Standardize PnL formula to our_pnl_v2 | TODO |
@@ -311,4 +311,4 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 *Обновлено: 2026-04-04*  
 *Обновлено: 2026-04-04*
 *Обновлено: 2026-04-04*
-*Обновлено: 2026-04-05* (PHASE4-002 DONE)
+*Обновлено: 2026-04-05* (PHASE4-002 CANCELLED)

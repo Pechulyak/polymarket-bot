@@ -286,7 +286,6 @@ CREATE TABLE IF NOT EXISTS paper_trades (
 -- Indexes for paper_trades
 CREATE INDEX IF NOT EXISTS idx_paper_trades_whale ON paper_trades(whale_address, created_at);
 CREATE INDEX IF NOT EXISTS idx_paper_trades_market ON paper_trades(market_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_paper_trades_status ON paper_trades(status);
 
 -- BUG-505: Partial unique index to prevent duplicate tx_hash entries
 -- Only enforces uniqueness for non-null tx_hash values
