@@ -274,8 +274,8 @@ Description: Completed. Roundtrip builder now updates whales table with P&L from
 | PHASE3-001 | Аудит текущего settlement в roundtrip_builder | DONE |
 | PHASE3-002 | Определить API endpoint для resolution data | DONE |
 | PHASE3-003 | Спроектировать market_resolutions таблицу | DONE |
-| PHASE3-004 | Перенести settlement логику в БД (trigger/procedure) | IN_PROGRESS |
-| PHASE3-005 | Обновить roundtrip_builder.py → использовать БД | TODO |
+| PHASE3-004 | Перенести settlement логику в БД (trigger/procedure) | DONE |
+| PHASE3-005 | Обновить roundtrip_builder.py → использовать БД | IN_PROGRESS |
 | PHASE3-006 | Удалить HTTP settlement из roundtrip_builder | TODO |
 | PHASE3-007 | Верификация end-to-end | TODO |
 
