@@ -90,21 +90,24 @@ def fetch_market_from_clob(market_id: str) -> Tuple[Optional[dict], Optional[str
 def parse_market_response(data: dict) -> dict:
     """
     Parse CLOB API response.
-    Returns dict with: is_closed, winner_outcome, tokens
+    Returns dict with: is_closed, winner_outcome, winner_index, tokens
     """
     is_closed = data.get('closed', False)
     tokens = data.get('tokens', [])
     
     winner_outcome = None
+    winner_index = None
     if is_closed and tokens:
-        for token in tokens:
+        for i, token in enumerate(tokens):
             if token.get('winner') is True:
                 winner_outcome = token.get('outcome')
+                winner_index = i
                 break
     
     return {
         'is_closed': is_closed,
         'winner_outcome': winner_outcome,
+        'winner_index': winner_index,
         'tokens': tokens
     }
 
@@ -114,6 +117,7 @@ def upsert_market_resolution(
     market_id: str,
     is_closed: bool,
     winner_outcome: Optional[str],
+    winner_index: Optional[int],
     tokens: list
 ) -> Tuple[bool, bool]:
     """
@@ -148,15 +152,16 @@ def upsert_market_resolution(
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO market_resolutions 
-                (market_id, is_closed, winner_outcome, tokens, fetched_at, resolved_at)
-            VALUES (%s, %s, %s, %s, NOW(), %s)
+                (market_id, is_closed, winner_outcome, winner_index, tokens, fetched_at, resolved_at)
+            VALUES (%s, %s, %s, %s, %s, NOW(), %s)
             ON CONFLICT (market_id) DO UPDATE SET
                 is_closed = EXCLUDED.is_closed,
                 winner_outcome = EXCLUDED.winner_outcome,
+                winner_index = EXCLUDED.winner_index,
                 tokens = EXCLUDED.tokens,
                 fetched_at = NOW(),
                 resolved_at = COALESCE(EXCLUDED.resolved_at, market_resolutions.resolved_at)
-        """, (market_id, is_closed, winner_outcome, tokens_json, resolved_at))
+        """, (market_id, is_closed, winner_outcome, winner_index, tokens_json, resolved_at))
     
     conn.commit()
     
@@ -221,11 +226,12 @@ def run():
                 market_id,
                 parsed['is_closed'],
                 parsed['winner_outcome'],
+                parsed['winner_index'],
                 parsed['tokens']
             )
             
             if is_new_resolution:
-                logger.info(f"[fetch_market_resolutions] Resolved: market_id={market_id} winner={parsed['winner_outcome']}")
+                logger.info(f"[fetch_market_resolutions] Resolved: market_id={market_id} winner={parsed['winner_outcome']} winner_index={parsed['winner_index']}")
                 stats['resolved'] += 1
             elif was_already_resolved:
                 stats['already_resolved'] += 1

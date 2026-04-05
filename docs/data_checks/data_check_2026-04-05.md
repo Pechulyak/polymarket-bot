@@ -1,6 +1,6 @@
 # Daily Data Audit Snapshot
 
-**Generated:** 2026-04-03 08:00:03
+**Generated:** 2026-04-05 08:00:02
 
 ---
 
@@ -9,11 +9,11 @@
 | Table | Row Count | Rows 24h | Rows 48h | First Row | Last Row |
 |-------|-----------|----------|----------|-----------|----------|
 | whales | 0 | N/A | N/A | N/A | N/A |
-| whale_trades | 21378 | 1313 | 3001 | 2026-03-22 10:28:37 | 2026-04-03 07:52:57 |
-| paper_trades | 1732 | 353 | 748 | 2026-03-29 16:16:18 | 2026-04-03 05:57:07 |
+| whale_trades | 24767 | 1512 | 2963 | 2026-03-22 10:28:37 | 2026-04-05 07:54:31 |
+| paper_trades | 2150 | 46 | 418 | 2026-03-29 16:16:18 | 2026-04-05 02:03:49 |
 | paper_trade_notifications | 0 | 0 | 0 | N/A | N/A |
-| trades | 1971 | N/A | N/A | 2026-03-30 18:15:27 | 2026-04-03 06:00:16 |
-| bankroll | 151 | 50 | 138 | 2026-03-31 19:40:48 | 2026-04-03 07:52:49 |
+| trades | 2346 | N/A | N/A | 2026-03-30 18:15:27 | 2026-04-04 16:54:05 |
+| bankroll | 223 | 1 | 72 | 2026-03-31 19:40:48 | 2026-04-04 08:05:33 |
 
 ---
 
@@ -29,11 +29,11 @@
 
 ### whale_trades
 
-- Unique whales: 1248
-- Unique whales (24h): 285
+- Unique whales: 1540
+- Unique whales (24h): 374
 - NULL price: 0
 - NULL size: 0
-- Latest trade: 2026-04-03 07:52:57
+- Latest trade: 2026-04-05 07:54:31
 
 ### paper_trades
 
@@ -42,8 +42,8 @@
 - NULL market_title: 0
 - NULL price: 0
 - NULL size: 0
-- Distinct kelly_size: 1
-- Min/Max/Avg kelly_size: 2.00000000 / 2.00000000 / 2.00
+- Distinct kelly_size: 47
+- Min/Max/Avg kelly_size: 1.03110250 / 12.39500000 / 2.00
 
 ### paper_trade_notifications
 
@@ -52,22 +52,22 @@
 
 ### trades
 
-- VIRTUAL rows: 1971
-- Open trades: 5
-- Closed trades: 1966
+- VIRTUAL rows: 2346
+- Open trades: 3
+- Closed trades: 2343
 
 ### bankroll
 
-- Rows 24h: 50
-- Rows 48h: 138
+- Rows 24h: 1
+- Rows 48h: 72
 - Earliest: 2026-03-31 19:40:48
-- Latest: 2026-04-03 07:52:49
+- Latest: 2026-04-04 08:05:33
 
 ---
 
 ## Cross-Table Consistency
 
-- whale_trades → paper_trades conversion (48h): 24.93%
+- whale_trades → paper_trades conversion (48h): 14.11%
 - paper_trades → notifications coverage (48h): 0.0%
 - Stale tables (>24h no new rows): paper_trade_notifications
 - Stale tables (>48h no new rows): paper_trade_notifications
