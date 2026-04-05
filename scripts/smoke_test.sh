@@ -240,6 +240,56 @@ for service in $SERVICES_FOR_LOGS; do
 done
 
 #############################################
+# 5. ПРОВЕРКА SETTLEMENT PIPELINE
+#############################################
+print_header "5. ПРОВЕРКА SETTLEMENT PIPELINE"
+
+# Check 20: No stuck OPEN roundtrips for resolved markets
+print_check "stuck" "No stuck roundtrips for resolved markets"
+STUCK=$(docker exec polymarket_postgres psql -U postgres -d polymarket -t -A -c \
+    "SELECT COUNT(*) FROM whale_trade_roundtrips rt JOIN market_resolutions mr ON rt.market_id=mr.market_id WHERE rt.status='OPEN' AND mr.is_closed=TRUE AND mr.winner_outcome IS NOT NULL;")
+if [ "$STUCK" -eq 0 ]; then
+    print_pass
+else
+    print_fail "$STUCK stuck roundtrips for resolved markets"
+fi
+
+#############################################
+# 6. ПРОВЕРКА MATERIALIZED VIEWS
+#############################################
+print_header "6. ПРОВЕРКА MATERIALIZED VIEWS"
+
+# Check 21: whale_pnl_summary exists and has data
+print_check "view" "whale_pnl_summary"
+VIEW_COUNT=$(docker exec polymarket_postgres psql -U postgres -d polymarket -t -A -c \
+    "SELECT COUNT(*) FROM whale_pnl_summary;" 2>/dev/null)
+if [ -n "$VIEW_COUNT" ] && [ "$VIEW_COUNT" -gt 0 ]; then
+    print_pass
+else
+    print_fail "Empty or missing"
+fi
+
+# Check 22: paper_portfolio_state has balance > 0
+print_check "view" "paper_portfolio_state"
+BALANCE=$(docker exec polymarket_postgres psql -U postgres -d polymarket -t -A -c \
+    "SELECT ROUND(current_balance::numeric, 2) FROM paper_portfolio_state LIMIT 1;" 2>/dev/null)
+if [ -n "$BALANCE" ] && [ "$BALANCE" != "" ]; then
+    print_pass
+else
+    print_fail "Empty or missing"
+fi
+
+# Check 23: paper_simulation_pnl has data
+print_check "view" "paper_simulation_pnl"
+SIM_COUNT=$(docker exec polymarket_postgres psql -U postgres -d polymarket -t -A -c \
+    "SELECT COUNT(*) FROM paper_simulation_pnl;" 2>/dev/null)
+if [ -n "$SIM_COUNT" ] && [ "$SIM_COUNT" -gt 0 ]; then
+    print_pass
+else
+    print_fail "Empty or missing"
+fi
+
+#############################################
 # ИТОГ
 #############################################
 # Функция overall_result вызывается автоматически через trap
