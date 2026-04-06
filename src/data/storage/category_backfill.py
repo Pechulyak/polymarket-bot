@@ -75,11 +75,14 @@ async def backfill_market_categories(
             while True:
                 # Step 1: Get batch of DISTINCT market_ids where market_category is NULL, empty, or 'unknown'
                 rows = await conn.fetch("""
-                    SELECT DISTINCT market_id 
-                    FROM whale_trades 
-                    WHERE market_category IS NULL 
-                       OR market_category = '' 
-                       OR market_category = 'unknown'
+                    SELECT market_id FROM (
+                        SELECT DISTINCT market_id 
+                        FROM whale_trades 
+                        WHERE market_category IS NULL 
+                           OR market_category = '' 
+                           OR market_category = 'unknown'
+                    ) t
+                    ORDER BY RANDOM()
                     LIMIT $1
                 """, batch_size)
                 

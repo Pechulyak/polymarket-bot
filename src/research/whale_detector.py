@@ -371,14 +371,12 @@ class WhaleDetector:
                 logger.error("cleanup_loop_error", error=str(e))
 
     async def _category_backfill_loop(self) -> None:
-        """Background category backfill — every 12 hours."""
-        while self._running:
-            try:
-                await backfill_market_categories(self.database_url, batch_size=100)
-                logger.info("category_backfill_complete")
-            except Exception as e:
-                logger.error("category_backfill_error", error=str(e))
-            await asyncio.sleep(43200)  # 12 hours
+        """DEPRECATED: moved to cron. See scripts/run_category_backfill.py
+        
+        Background category backfill is now run via cron every 2 hours.
+        This avoids async loop issues and provides better reliability.
+        """
+        pass  # Disabled: now runs via cron
 
     async def _cleanup_old_trades(self) -> None:
         """Remove trades older than detection window."""
