@@ -395,7 +395,65 @@
   ## 9. DAILY DATA SNAPSHOT
 
 <!-- AUTO-GENERATED: This section is updated by scripts/run_data_check.py -->
+### 2026-04-06
 
+snapshot_date: 2026-04-06
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 26791
+paper_trades_rows: 2533
+paper_trade_notifications_rows: 0
+trades_rows: 2346
+bankroll_rows: 223
+
+whale_trades_last_24h: 1995
+paper_trades_last_24h: 383
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 12.21%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-04-07
+
+snapshot_date: 2026-04-07
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 29468
+paper_trades_rows: 3005
+paper_trade_notifications_rows: 0
+trades_rows: 2346
+bankroll_rows: 223
+
+whale_trades_last_24h: 1983
+paper_trades_last_24h: 472
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 21.02%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
 
 <!-- END AUTO-GENERATED -->
 
