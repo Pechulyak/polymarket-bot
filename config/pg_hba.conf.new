@@ -1,0 +1,38 @@
+# pg_hba.conf — INFRA-002-004 (retry)
+# Создан: INFRA-002-004.3
+# 
+# Принцип безопасности: deny by default, allow explicitly
+# 
+# Контекст:
+# - Docker network (172.18.0.0/16) — изолирована, trust безопасен
+# - Local socket — доступен только изнутри postgres контейнера, trust безопасен
+# - Внешние подключения — scram-sha-256, только явно разрешённые IP
+# - SSL будет включён в INFRA-002-005, тогда host → hostssl
+
+# TYPE  DATABASE        USER              ADDRESS                METHOD
+
+# === Local unix socket (внутри контейнера postgres) ===
+# Используется: docker exec polymarket_postgres psql (settlement, views checks в smoke_test)
+local   all             all                                      trust
+
+# === Docker network (контейнеры проекта) ===
+# Используется: docker compose exec -T bot psql -h postgres (tables check в smoke_test)
+# Используется: bot/whale_detector/roundtrip_builder подключения к БД
+host    all             all               172.18.0.0/16          trust
+
+# === Localhost TCP (на случай если что-то подключается через 127.0.0.1) ===
+host    all             all               127.0.0.1/32           trust
+host    all             all               ::1/128                trust
+
+# === Grafana server — read-only (Сервер 2) ===
+# ВНИМАНИЕ: host (не hostssl) — SSL будет включён в INFRA-002-005
+# После 005 заменить host → hostssl
+host    polymarket      grafana_reader    62.60.233.100/32       scram-sha-256
+
+# === Order manager — limited access (Сервер 2, Фаза 5) ===
+# ВНИМАНИЕ: host (не hostssl) — SSL будет включён в INFRA-002-005
+host    polymarket      order_executor    62.60.233.100/32       scram-sha-256
+
+# === DENY EVERYTHING ELSE ===
+host    all             all               0.0.0.0/0              reject
+host    all             all               ::0/0                  reject

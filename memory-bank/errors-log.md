@@ -4,6 +4,25 @@
 
 ---
 
+### [2026-04-06] INFRA-002-004: smoke_test.sh упал при переходе на scram-sha-256
+
+- **Симптом:** При переписывании pg_hba.conf с trust на scram-sha-256 — smoke_test.sh упал с 22/23 до 16/7
+- **Причина:**
+  1. smoke_test.sh подключается через `docker compose exec -T bot psql -h postgres` (TCP)
+  2. Наш pg_hba требовал пароль для docker network 172.18.0.0/16
+  3. smoke_test.sh не передаёт PGPASSWORD
+- **Попытки решения:**
+  1. local trust, peer — не помогло (TCP требует пароль)
+  2. local trust, host scram — контейнеры упали
+  3. Полный rollback — восстановлен дефолтный pg_hba (trust for all)
+- **Статус:** ROLLBACK, система восстановлена (22/23 smoke_test)
+- **Правило:**
+  - smoke_test.sh использует TCP через bot, не socket через postgres
+  - trust для docker network 172.18.0.0/16 обязателен для current smoke_test
+  - ИЛИ исправить smoke_test.sh перед retry
+
+---
+
 ### [2026-03-24] TRD-424: roundtrip_builder не заполняет market_title и market_category
 
 - **Симптом:** При создании записей в whale_trade_roundtrips поля market_title и market_category остаются пустыми (NULL)
