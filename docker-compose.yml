@@ -13,7 +13,14 @@ services:
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
       - ./scripts/whale_analysis.sql:/scripts/whale_analysis.sql:ro
       - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
-    command: ["postgres", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+      - ./config/ssl:/etc/postgresql/ssl:ro
+    command: [
+      "postgres",
+      "-c", "hba_file=/etc/postgresql/pg_hba.conf",
+      "-c", "ssl=on",
+      "-c", "ssl_cert_file=/etc/postgresql/ssl/server.crt",
+      "-c", "ssl_key_file=/etc/postgresql/ssl/server.key"
+    ]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-polymarket}"]
       interval: 10s
