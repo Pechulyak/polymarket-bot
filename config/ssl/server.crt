@@ -1,0 +1,82 @@
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            45:f4:df:63:78:f8:ea:ab:8c:ea:57:ae:7f:f4:26:d1:6b:0e:23:4d
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: CN = polymarket-postgres, O = PolymarketBot, C = US
+        Validity
+            Not Before: Apr  9 15:32:08 2026 GMT
+            Not After : Apr  6 15:32:08 2036 GMT
+        Subject: CN = polymarket-postgres, O = PolymarketBot, C = US
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:9a:04:32:9a:11:cb:4b:30:87:a0:d1:7a:46:ed:
+                    83:1a:f2:b9:52:47:bd:f0:46:71:e4:22:ed:92:db:
+                    db:84:46:61:78:3b:50:f8:47:93:cd:24:16:a5:48:
+                    22:16:69:0f:cc:79:21:57:ee:8b:eb:20:88:9a:99:
+                    96:ec:a1:43:bc:b5:e3:32:49:96:10:ac:5f:a2:a4:
+                    ca:94:ea:a9:30:85:1e:fc:95:7a:99:33:98:8e:73:
+                    13:26:43:8d:0b:1d:a2:4b:77:09:35:26:bc:8e:23:
+                    5c:0d:15:d3:b5:a6:66:10:27:9f:47:61:b8:b1:9f:
+                    7b:b4:f3:fc:51:3e:d5:d3:36:24:88:6c:40:92:05:
+                    fb:f1:fd:b0:2c:ec:10:05:da:b4:b4:a5:5f:ff:d9:
+                    bf:e6:c4:61:24:d3:d3:04:ae:2a:cc:01:16:db:8b:
+                    a1:31:5a:57:ba:24:b6:35:88:24:0b:a6:f1:a8:eb:
+                    c3:c5:b2:74:67:65:08:18:c4:e9:63:dd:07:76:eb:
+                    a6:a6:04:c3:e6:96:60:8e:3e:92:c8:b0:fc:2b:b4:
+                    6d:fe:2b:cf:d5:62:a8:d7:f3:ff:63:a2:d2:c3:c4:
+                    1b:59:d4:2c:dc:82:98:df:96:e3:00:41:49:be:43:
+                    c9:da:60:ce:23:f2:b0:5c:71:ef:a2:5f:7b:97:63:
+                    b3:71
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Subject Key Identifier: 
+                9A:75:EB:97:41:44:7B:52:13:88:57:39:A1:51:C1:D6:A0:6B:EA:14
+            X509v3 Authority Key Identifier: 
+                9A:75:EB:97:41:44:7B:52:13:88:57:39:A1:51:C1:D6:A0:6B:EA:14
+            X509v3 Basic Constraints: critical
+                CA:TRUE
+            X509v3 Subject Alternative Name: 
+                DNS:polymarket-postgres, DNS:localhost, IP Address:127.0.0.1
+    Signature Algorithm: sha256WithRSAEncryption
+    Signature Value:
+        0a:92:8b:73:7a:a0:34:0c:e6:93:d2:03:83:df:f1:97:db:44:
+        e8:d8:d2:81:8e:0b:ef:f0:dc:03:b7:45:b9:32:b8:09:5b:ff:
+        79:c0:ea:8a:c7:7e:dd:c8:9c:61:be:5e:1a:2f:a0:08:1e:1c:
+        8c:64:a1:fc:2c:61:f9:91:3f:ee:e6:13:3a:0b:00:60:9e:f9:
+        e3:c7:af:34:2c:41:d0:59:fe:d6:12:93:d7:b6:8d:c8:d0:4b:
+        5b:ef:06:48:31:f9:5c:4e:e1:67:07:61:7d:a3:37:67:87:db:
+        a2:61:b1:6e:f7:31:3b:e9:e4:46:3a:8b:d9:6d:cc:45:0e:56:
+        5e:09:23:ea:9d:33:15:8a:e1:27:44:e9:76:15:41:f1:09:a7:
+        3a:b9:f7:f5:24:fa:72:56:e3:06:f9:41:bb:a0:ef:06:0a:74:
+        3d:c9:0d:1d:fb:78:5c:d4:68:e6:a7:a4:48:95:8d:9f:9f:2d:
+        37:de:87:2e:00:58:f0:74:29:14:a3:3f:7f:da:25:6e:24:51:
+        53:ba:5f:6e:30:82:03:79:cc:2b:0b:10:20:bf:00:cd:ec:4b:
+        e0:79:37:1c:c0:28:db:2a:65:6d:4a:0f:06:20:a6:7f:5f:be:
+        10:a4:e0:2f:74:bb:af:88:5c:b2:46:98:40:1d:47:aa:6f:65:
+        79:f3:bd:8b
+-----BEGIN CERTIFICATE-----
+MIIDmjCCAoKgAwIBAgIURfTfY3j46quM6leuf/Qm0WsOI00wDQYJKoZIhvcNAQEL
+BQAwQzEcMBoGA1UEAwwTcG9seW1hcmtldC1wb3N0Z3JlczEWMBQGA1UECgwNUG9s
+eW1hcmtldEJvdDELMAkGA1UEBhMCVVMwHhcNMjYwNDA5MTUzMjA4WhcNMzYwNDA2
+MTUzMjA4WjBDMRwwGgYDVQQDDBNwb2x5bWFya2V0LXBvc3RncmVzMRYwFAYDVQQK
+DA1Qb2x5bWFya2V0Qm90MQswCQYDVQQGEwJVUzCCASIwDQYJKoZIhvcNAQEBBQAD
+ggEPADCCAQoCggEBAJoEMpoRy0swh6DRekbtgxryuVJHvfBGceQi7ZLb24RGYXg7
+UPhHk80kFqVIIhZpD8x5IVfui+sgiJqZluyhQ7y14zJJlhCsX6KkypTqqTCFHvyV
+epkzmI5zEyZDjQsdokt3CTUmvI4jXA0V07WmZhAnn0dhuLGfe7Tz/FE+1dM2JIhs
+QJIF+/H9sCzsEAXatLSlX//Zv+bEYSTT0wSuKswBFtuLoTFaV7oktjWIJAum8ajr
+w8WydGdlCBjE6WPdB3brpqYEw+aWYI4+ksiw/Cu0bf4rz9ViqNfz/2Oi0sPEG1nU
+LNyCmN+W4wBBSb5DydpgziPysFxx76Jfe5djs3ECAwEAAaOBhTCBgjAdBgNVHQ4E
+FgQUmnXrl0FEe1ITiFc5oVHB1qBr6hQwHwYDVR0jBBgwFoAUmnXrl0FEe1ITiFc5
+oVHB1qBr6hQwDwYDVR0TAQH/BAUwAwEB/zAvBgNVHREEKDAmghNwb2x5bWFya2V0
+LXBvc3RncmVzgglsb2NhbGhvc3SHBH8AAAEwDQYJKoZIhvcNAQELBQADggEBAAqS
+i3N6oDQM5pPSA4Pf8ZfbROjY0oGOC+/w3AO3RbkyuAlb/3nA6orHft3InGG+Xhov
+oAgeHIxkofwsYfmRP+7mEzoLAGCe+ePHrzQsQdBZ/tYSk9e2jcjQS1vvBkgx+VxO
+4WcHYX2jN2eH26JhsW73MTvp5EY6i9ltzEUOVl4JI+qdMxWK4SdE6XYVQfEJpzq5
+9/Uk+nJW4wb5Qbug7wYKdD3JDR37eFzUaOanpEiVjZ+fLTfehy4AWPB0KRSjP3/a
+JW4kUVO6X24wggN5zCsLECC/AM3sS+B5NxzAKNsqZW1KDwYgpn9fvhCk4C90u6+I
+XLJGmEAdR6pvZXnzvYs=
+-----END CERTIFICATE-----
