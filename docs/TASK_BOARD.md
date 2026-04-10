@@ -103,6 +103,50 @@
 
 ---
 
+## EPIC 4 — SYSTEM / INFRASTRUCTURE
+
+| ID | Задача | Статус |
+|----|--------|--------|
+| SYS-322 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | TODO |
+
+### PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переходом на live
+
+**Status:** TODO
+**Приоритет:** 🔴 БЛОКЕР для перехода paper → live
+**Создана:** 2026-04-10
+**Контекст:** Скомпрометированы в scrollback во время INFRA-002-005.2 (команда `docker compose config | grep -A 15` вывела блок environment в stdout). Решение STRATEGY на 2026-04-10: ротацию отложить до pre-prod, риск принят (paper trading, порт закрыт, нет финансового impact).
+
+**Скомпрометированные секреты:**
+- BUILDER_API_KEY (Polymarket CLOB) — 🔴 финансовый impact в live
+- BUILDER_API_SECRET (Polymarket CLOB) — 🔴 финансовый impact в live
+- BUILDER_PASSPHRASE (Polymarket CLOB) — 🔴 финансовый impact в live
+- GRAFANA_DB_PASSWORD (PostgreSQL grafana_reader) — read-only, низкий impact
+- ORDER_EXECUTOR_DB_PASSWORD (PostgreSQL order_executor) — limited writer, средний impact
+
+**Goals:**
+- Запросить новые BUILDER_* ключи через Polymarket UI/API
+- Подтвердить отзыв старых BUILDER_* ключей на стороне Polymarket
+- Ротировать GRAFANA_DB_PASSWORD через `ALTER USER grafana_reader`
+- Ротировать ORDER_EXECUTOR_DB_PASSWORD через `ALTER USER order_executor`
+- Обновить `.env` через heredoc (не sed -i, не echo в stdout)
+- Recreate всех контейнеров, читающих обновлённые переменные
+- Smoke test: bot успешно аутентифицирован в CLOB, БД-подключения с Сервера 2 работают
+- Проверка `.env` после ротации: permissions 600, owner корректен
+
+**Pre-conditions для запуска задачи:**
+- Принято решение о переходе на live trading
+- Изучена процедура ротации BUILDER_* на стороне Polymarket (есть ли API revoke, lead time, grace period)
+- Готов rollback план: старые ключи сохранены в защищённом месте до подтверждения работы новых
+
+**Definition of Done:**
+- Все 5 секретов имеют новые значения в `.env`
+- Старые BUILDER_* ключи отозваны на стороне Polymarket (подтверждение)
+- Контейнеры healthy, smoke_test PASS
+- Запись в errors-log о закрытии долга
+- Запись в PROJECT_STATE.md о смене статуса безопасности
+
+---
+
 ## EPIC 5 — STRATEGY / RESEARCH
 
 | ID | Задача | Статус |
