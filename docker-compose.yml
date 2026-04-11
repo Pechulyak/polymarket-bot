@@ -21,6 +21,11 @@ services:
       "-c", "ssl_cert_file=/etc/postgresql/ssl/server.crt",
       "-c", "ssl_key_file=/etc/postgresql/ssl/server.key"
     ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-polymarket}"]
       interval: 10s
@@ -45,6 +50,11 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -79,6 +89,11 @@ services:
     volumes:
       - ./logs:/app/logs
       - bot_heartbeat:/tmp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     depends_on:
       postgres:
         condition: service_healthy
@@ -114,6 +129,11 @@ services:
     command: python src/run_whale_detection.py
     volumes:
       - whale_heartbeat:/tmp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     depends_on:
       postgres:
         condition: service_healthy
@@ -164,6 +184,11 @@ services:
       done"
     volumes:
       - roundtrip_heartbeat:/tmp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     depends_on:
       postgres:
         condition: service_healthy
