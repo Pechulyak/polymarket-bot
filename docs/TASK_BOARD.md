@@ -371,7 +371,10 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 | Type: INFRASTRUCTURE/SECURITY | Description: Docker DNAT обходит INPUT и ufw. Решение: DOCKER-USER chain + `-m conntrack --ctorigdstport 5433`. Правила: ESTABLISHED/RELATED ACCEPT → whitelist 62.60.233.100 ACCEPT → DROP. Верификация: позитивный тест с Сервера 2 OK, негативный с Windows timeout. | |
 | INFRA-002-006.1b | Firewall persistence — systemd unit для DOCKER-USER правил | DONE |
 | Type: INFRASTRUCTURE | Description: /etc/systemd/system/docker-firewall-rules.service. Idempotent cleanup loop + 3 ExecStart. Enabled on boot. netfilter-persistent disabled для избежания конфликта. | |
-| INFRA-002-007 | Тест полного подключения с Сервера 2 (psql + grafana_reader/order_executor + SSL) | TODO |
+| INFRA-002-007 | Тест полного подключения с Сервера 2 (psql + grafana_reader/order_executor + SSL) | DONE |
+| Type: INFRASTRUCTURE | Description: End-to-end test from Server 2 to Server 1 PostgreSQL. grafana_reader: SSL TLSv1.3 + AES-256-GCM, SELECT works on 3 analytical tables (whales=6957, paper_trades=4603, whale_trades=39872), CREATE/UPDATE blocked with permission denied. Grafana datasource configured (212.192.11.92:5433, sslmode=require), Save & Test OK. order_executor: SSL works, but has permission mismatch - only SELECT on analytical tables, no write, no pending_orders schema. Separate task INFRA-002-AUDIT-ORDER-EXEC created. | |
+| INFRA-002-AUDIT-ORDER-EXEC | Audit order_executor permissions — только SELECT на 5 аналитических таблицах, нет write, нет pending_orders schema. Решить: read-only заглушка или пересоздать под live execution pipeline | TODO |
+| Type: AUDIT/SECURITY | Description: Обнаружено при INFRA-002-007 верификации. Блокирует live order execution, не блокирует Grafana. | |
 
 ---
 

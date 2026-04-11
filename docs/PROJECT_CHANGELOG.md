@@ -292,6 +292,26 @@ firewall, systemd, docker networking, network security
 
 ---
 
+### INFRA-002-007: End-to-end connection test from Server 2
+
+**Дата:** 2026-04-11
+
+**Описание:**
+Верификация подключения с Сервера 2 к PostgreSQL Сервера 1 через SSL для Grafana dashboards.
+
+**До:**
+Инфраструктура (pg_hba, SSL, firewall) развёрнута, но end-to-end тест с Сервера 2 не проводился.
+
+**После:**
+grafana_reader: SSL TLSv1.3 + AES-256-GCM, SELECT работает на всех аналитических таблицах (whales=6957, paper_trades=4603, whale_trades=39872), write-операции (CREATE, UPDATE) падают с permission denied. Grafana PostgreSQL data source настроен (host 212.192.11.92:5433, sslmode=require), Save & Test = Database Connection OK.
+
+order_executor: коннект + SSL работают, но обнаружено несоответствие прав назначению — только SELECT на аналитических таблицах, нет write, нет pending_orders schema. Заведена отдельная задача INFRA-002-AUDIT-ORDER-EXEC.
+
+**Влияние:**
+Grafana data source, monitoring pipeline
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:
