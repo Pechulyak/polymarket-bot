@@ -111,6 +111,7 @@
 | SYS-323 | Docker cleanup — images + build cache | DONE |
 | SYS-324 | Очистка системных логов — journalctl + btmp | DONE |
 | SYS-325 | Container logs — truncate + настройка ротации | DONE |
+| **SYS-326** | **Project cleanup — logs + pycache + backups** | **DONE** |
 | SYS-500 | Whale Roundtrip Reconstructor | IN_PROGRESS |
 
 ### PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переходом на live
