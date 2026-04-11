@@ -366,7 +366,12 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 | Type: INFRASTRUCTURE | Description: pg_ctl reload + force-recreate (mount был сломан). Верификация: pg_hba_file_rules type=hostssl, MD5 совпадает, smoke_test 23/23 | |
 | INFRA-002-006.0a | Pre-flight audit — найти все места использования POSTGRES_PASSWORD | DONE |
 | INFRA-002-006.0b | Сменить POSTGRES_PASSWORD с Artem15 на сильный | DONE |
-| Type: CRITICAL | Description: Audit + rotation completed. Пароль ротирован, containers recreated, smoke_test 23/23, whale_trades pipeline verified. |
+| Type: CRITICAL | Description: Audit + rotation completed. Пароль ротирован, containers recreated, smoke_test 23/23, whale_trades pipeline verified. | |
+| INFRA-002-006.FIREWALL | Firewall hardening — закрыть порт 5433 для всех кроме 62.60.233.100 | DONE |
+| Type: INFRASTRUCTURE/SECURITY | Description: Docker DNAT обходит INPUT и ufw. Решение: DOCKER-USER chain + `-m conntrack --ctorigdstport 5433`. Правила: ESTABLISHED/RELATED ACCEPT → whitelist 62.60.233.100 ACCEPT → DROP. Верификация: позитивный тест с Сервера 2 OK, негативный с Windows timeout. | |
+| INFRA-002-006.1b | Firewall persistence — systemd unit для DOCKER-USER правил | DONE |
+| Type: INFRASTRUCTURE | Description: /etc/systemd/system/docker-firewall-rules.service. Idempotent cleanup loop + 3 ExecStart. Enabled on boot. netfilter-persistent disabled для избежания конфликта. | |
+| INFRA-002-007 | Тест полного подключения с Сервера 2 (psql + grafana_reader/order_executor + SSL) | TODO |
 
 ---
 
@@ -378,4 +383,4 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 
 ---
 
-*Обновлено: 2026-04-07*
+*Обновлено: 2026-04-11*

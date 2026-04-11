@@ -161,6 +161,25 @@
 
 ---
 
+### LESSON-006.2-3: Docker published ports + iptables на Ubuntu 24.04
+
+**Context:** INFRA-002-006.FIREWALL, 6 чатов на firewall-задачу.
+
+**Проблема:** Docker при публикации порта (`ports: "0.0.0.0:5433:5432"`) делает DNAT в PREROUTING. Это ломает традиционные подходы:
+1. Правила в INPUT chain не видят трафик — он идёт через FORWARD путь.
+2. ufw правила бесполезны — DNAT happens раньше ufw chains.
+3. DOCKER-USER с `--dport 5433` не матчит — после DNAT dport уже = 5432 (container port).
+
+**Решение:**
+- Фильтровать в DOCKER-USER через `-m conntrack --ctorigdstport 5433` (conntrack помнит original dst port до NAT).
+- Обязательно правило `--ctstate ESTABLISHED,RELATED -j ACCEPT` **первым**, иначе обратный трафик от контейнера попадает под DROP (source IP контейнера ≠ whitelist).
+- Persistence через systemd unit, НЕ через iptables-persistent (несовместим с ufw и Docker managed chains).
+- netfilter-persistent отключать на boot.
+
+**Pre-flight для любой firewall-задачи с Docker:** `nft list ruleset` + `iptables --version` (проверить nftables backend) + `cat /etc/docker/daemon.json` (userland-proxy setting).
+
+---
+
 ## Зафиксированные ошибки
 
 ### [2026-03-06] market_title сохраняется как NULL в БД

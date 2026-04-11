@@ -274,6 +274,24 @@ trigger, documentation
 
 ---
 
+### INFRA-002-006: PostgreSQL port 5433 firewall hardening
+
+**Дата:** 2026-04-11
+
+**Описание:**
+Закрытие внешнего доступа к PostgreSQL (порт 5433) для всех IP кроме Сервера 2 (62.60.233.100).
+
+**До:**
+Порт 5433 открыт миру. Попытки фильтрации через iptables INPUT, ufw и DOCKER-USER с `--dport 5433` не работали из-за Docker DNAT в PREROUTING.
+
+**После:**
+Фильтрация через DOCKER-USER chain с `-m conntrack --ctorigdstport 5433`. Три правила в порядке: ESTABLISHED/RELATED ACCEPT → 62.60.233.100 ACCEPT → DROP. Persistence через systemd unit `docker-firewall-rules.service` с idempotent cleanup loop. netfilter-persistent отключён для избежания конфликта на boot.
+
+**Влияние:**
+firewall, systemd, docker networking, network security
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:
