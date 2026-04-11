@@ -312,6 +312,24 @@ Grafana data source, monitoring pipeline
 
 ---
 
+### INFRA-002-008: Security baseline audit
+
+**Дата:** 2026-04-11
+
+**Описание:**
+Финальный read-only аудит 9 областей security posture БД после закрытия эпика INFRA-002. Baseline зафиксирован в отдельном документе.
+
+**До:**
+Отсутствовал единый reference документ состояния безопасности БД.
+
+**После:**
+Создан `docs/INFRA-002-SECURITY-BASELINE.md`. Network/SSL/pg_hba/Roles/Secrets — PASS. Обнаружены gaps: Logging (minimal), Backups (missing), Host hardening (SSH PasswordAuth, no fail2ban), Documentation (no user runbook). Gaps заведены как отдельные задачи: INFRA-003-BACKUP-POLICY, SEC-501-HOST-HARDENING, postgres-logging-hardening, firewall-startup-race-fix, user-provisioning-runbook. Эпик INFRA-002 закрыт полностью (8/8 задач).
+
+**Влияние:**
+documentation, security posture reference
+
+---
+
 ## ОГРАНИЧЕНИЯ
 
 Запрещено в CHANGELOG:
