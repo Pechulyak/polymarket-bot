@@ -100,6 +100,8 @@
 | Description: Two formulas produce different results. Standardize on `our_pnl_v2 = whale_pnl * (kelly_size / whale_size)` for all views. Started: 2026-04-05. |
 | PHASE4-005 | Verify Kelly distribution (proportional vs flat) | TODO |
 | Description: Currently 97.9% flat $2, 2.1% proportional. Monitor transition. Recommended filter: `created_at > 2026-04-04` |
+| SYS-328-AUDIT | File inventory — MD / migrations / Python files | DONE |
+| Type: ANALYSIS | Description: Инвентаризация завершена. 44 .md, 13 migration_*.sql (alembic_version НЕ существует), docs/bot_development_kit/04_CODE_LIBRARY — documentation only, мусор НЕ найден. Completed: 2026-04-11. |
 
 ---
 
