@@ -1,5 +1,22 @@
 # Master Changelog
 
+## [TASK] SYS-334 - 2026-04-12 - Fix market_category in whale_trade_roundtrips
+
+**Описание:**
+market_category не заполнялся в whale_trade_roundtrips (100% NULL).
+
+**До:**
+17,135 записей с NULL market_category. Дашборд by category пуст.
+
+**После:**
+Добавлена backfill_roundtrip_categories() по аналогии с whale_trades. Заполнение через JOIN с whale_trades, fallback на API. Cron каждые 2 часа покрывает новые записи.
+
+**Влияние:**
+- src/data/storage/category_backfill.py — добавлена функция backfill_roundtrip_categories()
+- scripts/run_category_backfill.py — добавлен вызов новой функции
+
+---
+
 ## [MILESTONE] v0.9.0 - 2026-03-02
   ### 📋 Governance
   - Интегрирован CHAT_GOVERNANCE.md в ключевые документы проекта

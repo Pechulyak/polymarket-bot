@@ -283,6 +283,12 @@
   updated: 2026-03-26
   task: ARC-502-D
 
+- market_category backfill
+  status: OK
+  updated: 2026-04-12
+  task: SYS-334
+  note: whale_trades + roundtrips
+
 - notifications pipeline
   status: OK
   updated: 2026-03-29

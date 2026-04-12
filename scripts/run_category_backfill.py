@@ -16,7 +16,7 @@ sys.path.insert(0, project_root)
 # Load .env file
 load_dotenv()
 
-from src.data.storage.category_backfill import backfill_market_categories
+from src.data.storage.category_backfill import backfill_market_categories, backfill_roundtrip_categories
 
 
 async def main():
@@ -27,9 +27,12 @@ async def main():
     print(f"Starting category backfill with database: {db_url[:30]}...")
     
     result = await backfill_market_categories(database_url=db_url, batch_size=500)
+    print(f"Whale Trades backfill complete: {result}")
     
-    print(f"Backfill complete: {result}")
-    return result
+    result_roundtrips = await backfill_roundtrip_categories(database_url=db_url, batch_size=500)
+    print(f"Roundtrips backfill complete: {result_roundtrips}")
+    
+    return {"whale_trades": result, "whale_trade_roundtrips": result_roundtrips}
 
 
 if __name__ == "__main__":
