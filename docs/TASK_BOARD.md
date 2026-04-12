@@ -106,6 +106,8 @@
 | Type: INFRASTRUCTURE | Description: journald 1G/7d + docker json-file 50m×3 + logrotate daily×7. Completed: 2026-04-11. |
 | SYS-333 | Fix rsyslog suspend/resume flood | DONE |
 | Type: INFRASTRUCTURE | Description: Root cause: missing log files (ufw.log, mail.log, mail.err). Fix: create files with syslog:adm 640. Verified: 0 flood entries/min. Completed: 2026-04-11. |
+| **SEC-501** | **SSH Hardening + проверка инцидента 006.1** | **DONE** |
+| Type: CRITICAL/SECURITY | Description: SSH hardening (PasswordAuth=no, PermitRootLogin=prohibit-password, fail2ban active). Проверка auth.log за 2026-04-10 08:51–09:11 UTC — подозрительной активности не обнаружено. Completed: 2026-04-12. |
 
 ---
 

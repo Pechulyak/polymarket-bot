@@ -321,6 +321,12 @@
 
 ## 6. БЕЗОПАСНОСТЬ
 
+- SSH hardening
+  status: DONE
+  updated: 2026-04-12
+  task: SEC-501
+  note: PasswordAuth=no, PermitRootLogin=prohibit-password, fail2ban active
+
 - Публичные порты
   status: OK
   updated: 2026-03-23
@@ -395,24 +401,24 @@
   ## 9. DAILY DATA SNAPSHOT
 
 <!-- AUTO-GENERATED: This section is updated by scripts/run_data_check.py -->
-### 2026-04-06
+### 2026-04-10
 
-snapshot_date: 2026-04-06
+snapshot_date: 2026-04-10
 database: polymarket
 schema: public
 
 whales_rows: 0
-whale_trades_rows: 26791
-paper_trades_rows: 2533
+whale_trades_rows: 36784
+paper_trades_rows: 4127
 paper_trade_notifications_rows: 0
 trades_rows: 2346
 bankroll_rows: 223
 
-whale_trades_last_24h: 1995
-paper_trades_last_24h: 383
+whale_trades_last_24h: 1838
+paper_trades_last_24h: 167
 notifications_last_24h: 0
 
-conversion_whale_to_paper_48h: 12.21%
+conversion_whale_to_paper_48h: 13.53%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:
@@ -426,24 +432,24 @@ notes:
 
 <!-- END AUTO-GENERATED -->
 
-### 2026-04-07
+### 2026-04-11
 
-snapshot_date: 2026-04-07
+snapshot_date: 2026-04-11
 database: polymarket
 schema: public
 
 whales_rows: 0
-whale_trades_rows: 29468
-paper_trades_rows: 3005
+whale_trades_rows: 39804
+paper_trades_rows: 4603
 paper_trade_notifications_rows: 0
 trades_rows: 2346
 bankroll_rows: 223
 
-whale_trades_last_24h: 1983
-paper_trades_last_24h: 472
+whale_trades_last_24h: 2433
+paper_trades_last_24h: 476
 notifications_last_24h: 0
 
-conversion_whale_to_paper_48h: 21.02%
+conversion_whale_to_paper_48h: 14.83%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:

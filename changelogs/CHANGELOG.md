@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-04-12 — SSH Hardening (SEC-501)
+
+- **SSH hardening**: PasswordAuthentication yes → no
+- **SSH hardening**: PermitRootLogin yes → prohibit-password
+- **fail2ban**: installed, SSH jail active
+- **ignoreip**: 127.0.0.1/8, 62.60.233.100, 83.139.133.100
+- **incident 006.1**: checked auth.log 08:51–09:11 UTC — no suspicious activity
+
+Commit: `sec: SEC-501 SSH hardening complete, fail2ban active`
+
+---
+
 ## 2026-03-31 — Pipeline End-to-End Fix
 
 - **BUG-602**: Bankroll restore from DB on restart (no more $100 hardcode reset)
