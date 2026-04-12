@@ -390,7 +390,7 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 | Type: AUDIT | Description: 9-этапный read-only аудит. Результат: docs/INFRA-002-SECURITY-BASELINE.md. Network/SSL/pg_hba/Roles/Secrets — PASS. Logging/Backups/Host hardening/Docs — gaps, заведены отдельные задачи. | |
 | INFRA-002-AUDIT-ORDER-EXEC | Audit order_executor permissions — только SELECT на 5 таблицах, нет write, нет pending_orders schema | TODO |
 | Type: AUDIT/SECURITY | Description: Обнаружено при INFRA-002-007 верификации. Блокирует live order execution, не блокирует Grafana. | |
-| INFRA-003-BACKUP-POLICY | Automated pg_dump + off-site + encryption + retention + restore test | TODO |
+| INFRA-003 | Backup Policy: automated encrypted DB backups to Backblaze B2 | DONE |
 | Type: CRITICAL/INFRASTRUCTURE | Description: Нет автоматического backup. Блокирует live execution. | |
 | SEC-501-HOST-HARDENING | SSH hardening (PasswordAuth=no, PermitRootLogin, fail2ban) | TODO |
 | Type: CRITICAL/SECURITY | Description: SSH имеет gaps: PermitRootLogin=yes, PasswordAuthentication=yes, no fail2ban. Обход network security -> shell -> .env -> full DB access. | |

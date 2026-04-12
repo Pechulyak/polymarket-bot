@@ -15,6 +15,24 @@
 
 ---
 
+### INFRA-003 — Backup Policy
+
+**Дата:** 2026-04-12
+
+**Описание:**  
+Реализована автоматизированная политика резервного копирования БД.
+
+**До:**  
+Бэкапы отсутствовали. Потеря postgres volume = потеря всех данных без возможности восстановления.
+
+**После:**  
+Ежедневный pg_dump (03:00 UTC) → GPG AES256 → Backblaze B2 (retention 7d). Restore test верифицирован (16 таблиц, 17135 roundtrips). Telegram alert при failure.
+
+**Влияние:**  
+scripts/backup_db.sh, scripts/backup_restore_test.sh, crontab, pipeline_monitor, .env
+
+---
+
 ## ФОРМАТ ЗАПИСИ
 
 ### <TASK_ID> — <Краткое название>

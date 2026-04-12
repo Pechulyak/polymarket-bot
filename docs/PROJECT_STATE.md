@@ -339,6 +339,12 @@
   task: SYS-401
   note: docker network
 
+- Backups
+  status: OK
+  updated: 2026-04-12
+  task: INFRA-003
+  note: daily encrypted B2, retention 7d, Telegram alert
+
 - .env доступ
   status: OK
   updated: 2026-03-23
@@ -419,6 +425,37 @@ paper_trades_last_24h: 167
 notifications_last_24h: 0
 
 conversion_whale_to_paper_48h: 13.53%
+conversion_paper_to_notifications_48h: 0.0%
+
+stale_tables_24h:
+- paper_trade_notifications
+- trades
+- bankroll
+
+notes:
+- bankroll contains only test data
+- trades table contains only virtual test trades
+
+<!-- END AUTO-GENERATED -->
+
+### 2026-04-12
+
+snapshot_date: 2026-04-12
+database: polymarket
+schema: public
+
+whales_rows: 0
+whale_trades_rows: 42297
+paper_trades_rows: 4867
+paper_trade_notifications_rows: 0
+trades_rows: 2346
+bankroll_rows: 223
+
+whale_trades_last_24h: 2319
+paper_trades_last_24h: 264
+notifications_last_24h: 0
+
+conversion_whale_to_paper_48h: 15.46%
 conversion_paper_to_notifications_48h: 0.0%
 
 stale_tables_24h:
