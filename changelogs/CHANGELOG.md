@@ -1,6 +1,12 @@
 # CHANGELOG
 
-## 2026-04-12 — SSH Hardening (SEC-501)
+## 2026-04-14 — smoke_test.sh freshness check (SYS-335)
+
+- **Check A fixed**: market_resolutions freshness now uses `COUNT(*) WHERE fetched_at < NOW() - INTERVAL '3 hours'` instead of flawed `MAX(fetched_at)` approach
+- **Check B removed**: coverage gap LEFT JOIN check removed (false positives for active markets)
+- **Final result**: 24/24 PASS, 0 FAIL
+
+Commit: `task: SYS-335 smoke_test freshness check — 24 checks total`
 
 - **SSH hardening**: PasswordAuthentication yes → no
 - **SSH hardening**: PermitRootLogin yes → prohibit-password

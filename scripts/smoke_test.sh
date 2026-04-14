@@ -254,6 +254,15 @@ else
     print_fail "$STUCK stuck roundtrips for resolved markets"
 fi
 
+# Check A: market_resolutions freshness (<3h)
+print_check "DB" "market_resolutions freshness (<3h)"
+RESULT=$(docker exec polymarket_postgres psql -U postgres -d polymarket -t -A -c "SELECT COUNT(*) FROM market_resolutions WHERE fetched_at < NOW() - INTERVAL '3 hours';")
+if [ "$RESULT" -eq 0 ]; then
+    print_pass
+else
+    print_fail "stale records: ${RESULT} market_resolutions older than 3h"
+fi
+
 #############################################
 # 6. ПРОВЕРКА MATERIALIZED VIEWS
 #############################################

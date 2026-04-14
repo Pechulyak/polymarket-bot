@@ -278,6 +278,12 @@
   task: PHASE3-007
   note: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. 2189 китов обновлено. Cron 10:00 UTC pending verification.
 
+- smoke_test.sh
+  status: OK
+  updated: 2026-04-14
+  task: SYS-335
+  note: +1 check, 24 total, freshness gap fixed
+
 - whales P&L pipeline
   status: OK
   updated: 2026-03-26
