@@ -256,7 +256,7 @@ fi
 
 # Check A: market_resolutions freshness (<3h)
 print_check "DB" "market_resolutions freshness (<3h)"
-RESULT=$(docker exec polymarket_postgres psql -U postgres -d polymarket -t -A -c "SELECT COUNT(*) FROM market_resolutions WHERE fetched_at < NOW() - INTERVAL '3 hours';")
+RESULT=$(docker exec polymarket_postgres psql -U postgres -d polymarket -t -A -c "SELECT COUNT(*) FROM market_resolutions mr JOIN whale_trade_roundtrips rt ON mr.market_id = rt.market_id WHERE rt.status = 'OPEN' AND mr.fetched_at < NOW() - INTERVAL '3 hours';")
 if [ "$RESULT" -eq 0 ]; then
     print_pass
 else

@@ -12,6 +12,11 @@
 
 Commit: `task: SYS-336 kelly sizing fix — min $1, max 5%, whale filter 1%, dynamic bankroll`
 
+## SYS-335 (2026-04-15)
+- Fixed Check A in smoke_test.sh to only flag stale market_resolutions for markets with OPEN roundtrips (not all markets)
+- Previous: counted ALL stale records (4111 false positives)
+- Now: JOINs with whale_trade_roundtrips WHERE status='OPEN' to only detect actionable staleness
+
 ---
 
 ## 2026-04-14 — smoke_test.sh freshness check (SYS-335)
