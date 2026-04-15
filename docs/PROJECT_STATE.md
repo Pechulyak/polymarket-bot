@@ -36,9 +36,9 @@
 
 ## Risk-contour (Kelly)
 - status: OK
-- updated: 2026-04-05
-- task: PHASE4-006, PHASE4-007
-- note: dynamic kelly, bankroll=$100, source=view
+- updated: 2026-04-15
+- task: PHASE4-006, PHASE4-007, SYS-336
+- note: dynamic kelly, bankroll=$99.29, source=view. SYS-336: min=$1, max=5%, whale filter=1%
 
 - Edge статус
   status: IN_WORK

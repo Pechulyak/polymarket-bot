@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-04-15 — Kelly sizing fix (SYS-336)
+
+- **strategy_config**: min_trade_size_usd=$0.01 → $1.00, new min_whale_trade_pct=0.01
+- **Trigger**: copy_whale_trade_to_paper() updated with:
+  - Whale filter: skip if whale_trade_pct < 1% of estimated_capital
+  - Min/max: GREATEST($1, LEAST(v_our_size, bankroll*0.05))
+  - v_proportion = v_whale_pct (no recalculation)
+- **Tests**: 3/3 PASS (filter, min $1, max 5%)
+- **Migration**: scripts/migration_sys336_kelly_fix.sql
+
+Commit: `task: SYS-336 kelly sizing fix — min $1, max 5%, whale filter 1%, dynamic bankroll`
+
+---
+
 ## 2026-04-14 — smoke_test.sh freshness check (SYS-335)
 
 - **Check A fixed**: market_resolutions freshness now uses `COUNT(*) WHERE fetched_at < NOW() - INTERVAL '3 hours'` instead of flawed `MAX(fetched_at)` approach

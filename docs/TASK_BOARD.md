@@ -110,6 +110,8 @@
 | Type: ANALYSIS | Description: Filled market_category in whale_trade_roundtrips via JOIN with whale_trades. 17,217 records updated. Completed: 2026-04-12. |
 | SYS-335 | Fix smoke_test.sh — добавить проверки свежести fetch и coverage gap | DONE |
 | Type: WRITE | Description: Check A fixed (MAX → COUNT WHERE), Check B removed. Final: 24/24 PASS, 0 FAIL. Commit: task: SYS-335 smoke_test freshness check — 24 checks total. Completed: 2026-04-14. |
+| **SYS-336** | **Fix Kelly sizing: минимум $1, максимум 5% bankroll, фильтр кита >= 1% депозита** | **DONE** |
+| Type: WRITE | Description: Fix Kelly sizing: минимум $1, максимум 5% bankroll, фильтр кита >= 1% его депозита, динамический bankroll. Tests: 3/3 PASS. Commit: task: SYS-336 kelly sizing fix. Completed: 2026-04-15. |
 | **SEC-501** | **SSH Hardening + проверка инцидента 006.1** | **DONE** |
 | Type: CRITICAL/SECURITY | Description: SSH hardening (PasswordAuth=no, PermitRootLogin=prohibit-password, fail2ban active). Проверка auth.log за 2026-04-10 08:51–09:11 UTC — подозрительной активности не обнаружено. Completed: 2026-04-12. |
 | **SYS-331** | Fix stuck roundtrips — 37 OPEN despite resolved markets | DONE |
