@@ -239,6 +239,12 @@
   task: PHASE1-005
   note: 24h verified, repo active, monitor running
 
+- Daily Whale Alert Monitor
+  status: OK
+  updated: 2026-04-16
+  task: ANA-501
+  note: cron 08:00 UTC, 5 checks
+
 - Discovery pipeline
   status: IN_WORK
   updated: 2026-03-23

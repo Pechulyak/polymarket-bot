@@ -56,6 +56,27 @@ scripts/backup_db.sh, scripts/backup_restore_test.sh, crontab, pipeline_monitor,
 
 ---
 
+## ANA-501 — Daily Whale Alert Monitor
+
+**Дата:** 2026-04-16
+
+**Описание:**  
+Создан ежедневный мониторинг китов (cron 08:00 UTC).
+
+**До:**  
+Отсутствовал механизм алертов по проблемам китов.
+
+**После:**  
+5 проверок: неактивность paper/tracked, skip rate, WR деградация, новые кандидаты. Пороги в strategy_config.
+
+**Влияние:**  
+scripts/run_daily_whale_alert.py, scripts/migration_ana501_whale_alert_thresholds.sql, crontab
+
+**Зависимости / риски:**  
+Skip rate window = MAX(reviewed_at, now-7d) для корректного учёта новых китов.
+
+---
+
 ## ПРИМЕР
 
 ### TRD-413 — Whale trades ingestion audit

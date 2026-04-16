@@ -306,6 +306,8 @@ Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | ANA-402 | Integrate Polymarket /categories endpoint | TODO |
 | ANA-403 | Whale behaviour analysis by category | TODO |
 | ANA-404 | Whale behaviour analysis by entry price (≥0.95, ≤0.05) | TODO |
+| ANA-501 | Daily Whale Alert Monitor (Слой 1) | DONE |
+| Description: Cron 08:00 UTC, 5 SQL checks, Telegram alerts. Details: PROJECT_CHANGELOG.md. Completed: 2026-04-16. |
 
 ---
 
