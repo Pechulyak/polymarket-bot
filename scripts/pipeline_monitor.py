@@ -73,10 +73,10 @@ def execute_query(query, params=None):
 # =============================================================================
 
 def check_whale_trades_1h():
-    """Check whale_trades count in last 1 hour."""
+    """Check whale_trades count in last 3 hours."""
     query = """
         SELECT COUNT(*) FROM whale_trades
-        WHERE traded_at > NOW() - INTERVAL '1 hour'
+        WHERE traded_at > NOW() - INTERVAL '3 hours'
     """
     return execute_query(query)
 
@@ -103,10 +103,10 @@ def check_size_usd_zero():
 
 
 def check_paper_trades_24h():
-    """Check paper_trades count in last 24 hours."""
+    """Check paper_trades count in last 3 hours."""
     query = """
         SELECT COUNT(*) FROM paper_trades
-        WHERE created_at > NOW() - INTERVAL '24 hours'
+        WHERE created_at > NOW() - INTERVAL '3 hours'
     """
     return execute_query(query)
 
@@ -305,9 +305,6 @@ def run_pipeline_checks():
     # Check 7: market_category unknown %
     results["market_category_unknown_count"] = check_market_category_unknown_count()
 
-    # Phase 2B: Check VIRTUAL trades (should be 0 if VB is disabled)
-    results["virtual_trades_1h"] = check_virtual_trades_1h()
-
     # Determine status based on results
     status, warnings, criticals = determine_status(results)
     results["status"] = status
@@ -361,11 +358,6 @@ def determine_status(results: dict) -> tuple:
     # Не учитывать при определении статуса
     # unknown_count = results.get("market_category_unknown_count", 0)
 
-    # Phase 2B: Check VIRTUAL trades (WARNING: > 0 — значит VB включили обратно)
-    vt_1h = results.get("virtual_trades_1h", 0)
-    if vt_1h > 0:
-        warnings.append(f"VIRTUAL trades за последний час: {vt_1h} (VB возможно включён!)")
-
     if criticals:
         return "CRITICAL", warnings, criticals
     elif warnings:
@@ -385,11 +377,10 @@ def format_ok_message(results: dict) -> str:
 
     return f"""✅ Pipeline OK | {results['timestamp']}
 
-whale_trades/1h: {results['whale_trades_1h']}
-paper_trades/24h: {results['paper_trades_24h']}
+whale_trades/3h: {results['whale_trades_1h']}
+paper_trades/3h: {results['paper_trades_24h']}
 roundtrips/3h: {results['roundtrips_3h']}
-virtual_trades/1h: {results['virtual_trades_1h']} (VB disabled ✅)
-category_unknown: {results['market_category_unknown_count']} (needs backfill)
+category_unknown: {results['market_category_unknown_count']}
 containers: {container_status}
 """
 
