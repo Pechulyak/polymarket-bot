@@ -310,9 +310,10 @@ Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | ANA-404 | Whale behaviour analysis by entry price (≥0.95, ≤0.05) | TODO |
 | ANA-501 | Daily Whale Alert Monitor (Слой 1) | DONE |
 | Description: Cron 08:00 UTC, 5 SQL checks, Telegram alerts. Details: PROJECT_CHANGELOG.md. Completed: 2026-04-16. |
-| ANA-502 | Weekly AI Analysis — DB Migration (whale_ai_analysis) | IN_PROGRESS |
+| ANA-502 | Weekly AI Analysis — DB Migration (whale_ai_analysis) | DONE |
 | Description: Migration for weekly AI analysis results storage. Fields: model_used, raw_input_json, raw_output_json, recommendations_json, red_flags_json, requires_human_review, telegram_sent_at, error_log. |
 | ANA-502-SCRIPT | Weekly AI analysis script implementation | IN_PROGRESS |
+| ANA-502-CRON | Weekly analysis: test run + cron | DONE |
 | **ANA-502-SQL** | **SQL-слой: финальные запросы для еженедельного AI-анализа** | **DONE** |
 | Description: Финальные SQL-запросы для еженедельного AI-анализа китов. Блок 1: метрики paper/tracked китов. Блок 2: кандидаты из none. Блок 3: системный edge по категориям. Commit: 97148e7. |
 

@@ -10,10 +10,19 @@ import sys
 import urllib.parse
 import urllib.request
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """JSON encoder that handles Decimal types."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
 
 load_dotenv()
 
@@ -361,7 +370,7 @@ def call_openrouter(metrics_json: str, model: str, provider_url: str) -> str:
     try:
         req = urllib.request.Request(
             provider_url,
-            data=json.dumps(payload).encode('utf-8'),
+            data=json.dumps(payload, cls=DecimalEncoder).encode('utf-8'),
             headers=headers,
             method='POST'
         )
@@ -414,14 +423,11 @@ def send_telegram(message: str) -> bool:
         print("Telegram not configured - skipping alert")
         return False
     
-    # Convert Markdown emojis to HTML-safe format
-    message = message.replace("**", "<b>").replace("**", "</b>")
-    
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "HTML",
+        "parse_mode": None,
     }
     
     try:
@@ -453,13 +459,13 @@ def format_telegram_message(analysis: dict, metrics: dict) -> str:
     lines = []
     date_str = datetime.utcnow().strftime("%Y-%m-%d")
     
-    lines.append(f"🐋 <b>WEEKLY WHALE ANALYSIS</b> — {date_str}")
+    lines.append(f"🐋 WEEKLY WHALE ANALYSIS — {date_str}")
     lines.append("")
     
     # Active whales section
-    whales = analysis.get('whale_statuses', [])
+    whales = analysis.get('recommendations', [])
     if whales:
-        lines.append("📊 <b>АКТИВНЫЕ КИТЫ:</b>")
+        lines.append("📊 АКТИВНЫЕ КИТЫ:")
         for w in whales[:10]:
             addr_short = w.get('wallet_address', 'unknown')
             if addr_short and len(addr_short) > 10:
@@ -473,37 +479,37 @@ def format_telegram_message(analysis: dict, metrics: dict) -> str:
     # Red flags
     red_flags = analysis.get('red_flags', [])
     if red_flags:
-        lines.append("🚨 <b>RED FLAGS:</b>")
+        lines.append("🚨 RED FLAGS:")
         for rf in red_flags[:5]:
-            whale = rf.get('whale_address', 'unknown')
+            whale = rf.get('wallet_address', 'unknown')
             if whale and len(whale) > 10:
                 whale = whale[:10] + "..."
-            issue = rf.get('issue', 'unknown')
-            severity = rf.get('severity', 'unknown')
-            lines.append(f"{whale}: {issue} [{severity}]")
+            flag_type = rf.get('flag_type', 'unknown')
+            description = rf.get('description', 'unknown')
+            lines.append(f"{whale}: {flag_type} - {description}")
         lines.append("")
     else:
-        lines.append("🚨 <b>RED FLAGS:</b> нет")
+        lines.append("🚨 RED FLAGS: нет")
         lines.append("")
     
     # Category assessment
-    categories = analysis.get('category_assessment', [])
+    categories = analysis.get('category_insights', [])
     if categories:
-        lines.append("📈 <b>КАТЕГОРИИ:</b>")
+        lines.append("📈 КАТЕГОРИИ:")
         for cat in categories[:5]:
             cat_name = cat.get('category', 'unknown')
             edge = cat.get('edge_assessment', 'unknown')
-            lines.append(f"{cat_name}: {edge}")
+            lines.append(f"{cat_name}: {edge} - {cat.get('note', '')}")
         lines.append("")
     
     # Summary
     summary = analysis.get('summary', 'нет данных')
-    lines.append(f"💡 <b>SUMMARY:</b> {summary}")
+    lines.append(f"💡 SUMMARY: {summary}")
     lines.append("")
     
     # SQL for confirmed changes
     sql_updates = []
-    for w in whales:
+    for w in analysis.get('recommendations', []):
         action = w.get('recommended_action', '')
         wallet = w.get('wallet_address', '')
         if action == 'upgrade' and wallet:
@@ -511,7 +517,7 @@ def format_telegram_message(analysis: dict, metrics: dict) -> str:
         elif action == 'downgrade' and wallet:
             sql_updates.append(f"UPDATE whales SET copy_status='none' WHERE wallet_address='{wallet}';")
     
-    lines.append("✅ <b>SQL ДЛЯ ПОДТВЕРЖДЁННЫХ ИЗМЕНЕНИЙ:</b>")
+    lines.append("✅ SQL ДЛЯ ПОДТВЕРЖДЁННЫХ ИЗМЕНЕНИЙ:")
     if sql_updates:
         for sql in sql_updates[:10]:
             lines.append(sql)
@@ -568,7 +574,7 @@ def main():
         
         # Step 3: INSERT record (fix row_id for later UPDATE)
         print("Creating analysis record...")
-        raw_input = json.dumps(metrics)
+        raw_input = json.dumps(metrics, cls=DecimalEncoder)
         
         with conn.cursor() as cur:
             cur.execute("""
@@ -594,9 +600,9 @@ def main():
         
         # Step 6: UPDATE record with output
         print("Updating analysis record...")
-        raw_output = json.dumps(parsed)
-        recommendations = json.dumps(parsed.get('whale_statuses', []))
-        red_flags = json.dumps(parsed.get('red_flags', []))
+        raw_output = json.dumps(parsed, cls=DecimalEncoder)
+        recommendations = json.dumps(parsed.get('whale_statuses', []), cls=DecimalEncoder)
+        red_flags = json.dumps(parsed.get('red_flags', []), cls=DecimalEncoder)
         
         with conn.cursor() as cur:
             cur.execute("""
