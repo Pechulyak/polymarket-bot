@@ -312,6 +312,8 @@ Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | Description: Cron 08:00 UTC, 5 SQL checks, Telegram alerts. Details: PROJECT_CHANGELOG.md. Completed: 2026-04-16. |
 | ANA-502 | Weekly AI Analysis — DB Migration (whale_ai_analysis) | IN_PROGRESS |
 | Description: Migration for weekly AI analysis results storage. Fields: model_used, raw_input_json, raw_output_json, recommendations_json, red_flags_json, requires_human_review, telegram_sent_at, error_log. |
+| **ANA-502-SQL** | **SQL-слой: финальные запросы для еженедельного AI-анализа** | **DONE** |
+| Description: Финальные SQL-запросы для еженедельного AI-анализа китов. Блок 1: метрики paper/tracked китов. Блок 2: кандидаты из none. Блок 3: системный edge по категориям. Commit: 97148e7. |
 
 ---
 
