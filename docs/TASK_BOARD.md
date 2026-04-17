@@ -277,6 +277,8 @@ Description: Аудит завершён. Timezone hypothesis rejected — pipel
 Description: Settlement использовал Gamma API (422 error). Переключение на CLOB API `/markets/{market_id}` для корректного получения resolution data. Результат: 459 trades закрыты. |
 | BUG-604 | Bankroll reconciliation after settlement + fix event loop | DONE |
 Description: Settlement не обновляет VirtualBankroll (event loop conflict). Добавить reconciliation из trades table. Реализовано: reconcile_from_trades() в virtual_bankroll.py, вызывается при старте и после каждого settlement цикла. Удалён дублирующий _save_bankroll_history из load_open_positions_from_db(). Результат: bankroll консистентный - $909.19 (initial $1000 - $90.80 P&L), 485 open, 459 closed, 50.3% win rate.
+| **BUG-801** | **Audit pnl_status UNAVAILABLE in whale_trade_roundtrips** | **DONE** |
+| Description: Root cause: SQL settle_resolved_positions() не устанавливала gross_pnl_usd и pnl_status. Backfill: 10,123 rows. smoke_test 24/24 PASS. Commit: cbba3c1.
 
 ---
 
