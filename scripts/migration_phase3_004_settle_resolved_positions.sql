@@ -153,13 +153,15 @@ BEGIN
             -- Calculate PnL
             v_net_pnl := (v_close_price - r.open_price) * r.open_size_usd;
 
-            -- Update the roundtrip record
+            -- BUG-801 FIX: Update with gross_pnl_usd and pnl_status
             UPDATE whale_trade_roundtrips
             SET 
                 status = 'CLOSED',
                 close_price = v_close_price,
                 close_type = v_close_type,
+                gross_pnl_usd = v_net_pnl,      -- BUG-801 FIX
                 net_pnl_usd = v_net_pnl,
+                pnl_status = 'CONFIRMED',         -- BUG-801 FIX
                 closed_at = NOW()
             WHERE id = r.roundtrip_id;
 

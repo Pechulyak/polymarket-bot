@@ -4,6 +4,35 @@
 
 ---
 
+### [2026-04-17] BUG-801: pnl_status = UNAVAILABLE после CLOSED в whale_trade_roundtrips
+
+- **Симптом:** 10,056 CLOSED roundtrips в whale_trade_roundtrips имели pnl_status = 'UNAVAILABLE' при наличии заполненного net_pnl_usd.
+- **Причина:**
+  1. SQL функция `settle_resolved_positions()` (migration_phase3_004) закрывала позиции через SETTLEMENT_WIN/SETTLEMENT_LOSS, но НЕ устанавливала:
+     - `gross_pnl_usd` (оставался NULL)
+     - `pnl_status` (оставался UNAVAILABLE)
+  2. Python код логично оставлял статус UNAVAILABLE при gross_pnl_usd = NULL
+- **Решение:**
+  1. Backfill запрос для существующих данных:
+     ```sql
+     UPDATE whale_trade_roundtrips
+     SET gross_pnl_usd = net_pnl_usd,
+         pnl_status = 'CONFIRMED',
+         updated_at = NOW()
+     WHERE status = 'CLOSED'
+       AND pnl_status = 'UNAVAILABLE'
+       AND close_type IN ('SETTLEMENT_WIN', 'SETTLEMENT_LOSS')
+       AND gross_pnl_usd IS NULL
+       AND net_pnl_usd IS NOT NULL;
+     ```
+     Результат: 10,123 строк обновлено.
+  2. Патч живой функции в PostgreSQL (добавлены `gross_pnl_usd` и `pnl_status` в UPDATE)
+  3. Обновлён файл `scripts/migration_phase3_004_settle_resolved_positions.sql`
+- **Верификация:** Свежие settlement записи (updated_at 2026-04-17 18:22) имеют pnl_status = CONFIRMED и gross_pnl_usd заполнен.
+- **Правило:** При добавлении новых колонок (gross_pnl_usd, pnl_status) в существующую таблицу — добавить UPDATE этой колонки во ВСЕ места где изменяется status на CLOSED. Проверять живую функцию в PostgreSQL отдельно от файла миграции.
+
+---
+
 ### [2026-04-09] INFRA-002-005.2: credentials выведены в stdout через `docker compose config | grep`
 
 - **Симптом:** В Task Pack этапа 3 была команда `docker compose config | grep -A 15 "polymarket_postgres"`. При выполнении в stdout попали POSTGRES_PASSWORD, GRAFANA_DB_PASSWORD, ORDER_EXECUTOR_DB_PASSWORD, BUILDER_API_KEY/SECRET/PASSPHRASE, DATABASE_URL.
