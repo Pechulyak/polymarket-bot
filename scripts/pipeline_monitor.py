@@ -72,11 +72,11 @@ def execute_query(query, params=None):
 # Check functions
 # =============================================================================
 
-def check_whale_trades_1h():
-    """Check whale_trades count in last 3 hours."""
+def check_whale_trades_24h():
+    """Check whale_trades count in last 24 hours."""
     query = """
         SELECT COUNT(*) FROM whale_trades
-        WHERE traded_at > NOW() - INTERVAL '3 hours'
+        WHERE traded_at > NOW() - INTERVAL '24 hours'
     """
     return execute_query(query)
 
@@ -103,10 +103,10 @@ def check_size_usd_zero():
 
 
 def check_paper_trades_24h():
-    """Check paper_trades count in last 3 hours."""
+    """Check paper_trades count in last 24 hours."""
     query = """
         SELECT COUNT(*) FROM paper_trades
-        WHERE created_at > NOW() - INTERVAL '3 hours'
+        WHERE created_at > NOW() - INTERVAL '24 hours'
     """
     return execute_query(query)
 
@@ -120,11 +120,11 @@ def check_paper_whales_exist():
     return execute_query(query)
 
 
-def check_roundtrips_3h():
-    """Check roundtrips count in last 3 hours."""
+def check_roundtrips_24h():
+    """Check roundtrips count in last 24 hours."""
     query = """
         SELECT COUNT(*) FROM whale_trade_roundtrips
-        WHERE created_at > NOW() - INTERVAL '3 hours'
+        WHERE created_at > NOW() - INTERVAL '24 hours'
     """
     return execute_query(query)
 
@@ -283,8 +283,8 @@ def run_pipeline_checks():
         "timestamp": datetime.utcnow().isoformat(),
     }
 
-    # Check 1: whale_trades/1h
-    results["whale_trades_1h"] = check_whale_trades_1h()
+    # Check 1: whale_trades/24h
+    results["whale_trades_24h"] = check_whale_trades_24h()
 
     # Check 2: market_category NULL %
     results["market_category_null_pct"] = check_market_category_null_pct()
@@ -296,8 +296,8 @@ def run_pipeline_checks():
     results["paper_trades_24h"] = check_paper_trades_24h()
     results["paper_whales_exist"] = check_paper_whales_exist()
 
-    # Check 5: roundtrips/3h
-    results["roundtrips_3h"] = check_roundtrips_3h()
+    # Check 5: roundtrips/24h
+    results["roundtrips_24h"] = check_roundtrips_24h()
 
     # Check 6: container restarts
     results["container_restarts"] = check_container_restarts()
@@ -319,12 +319,12 @@ def determine_status(results: dict) -> tuple:
     warnings = []
     criticals = []
 
-    # Check 1: whale_trades/1h (WARNING: < 10, CRITICAL: 0)
-    wt_1h = results.get("whale_trades_1h", 0)
-    if wt_1h == 0:
-        criticals.append(f"whale_trades/1h: 0 (CRITICAL)")
-    elif wt_1h < 10:
-        warnings.append(f"whale_trades/1h: {wt_1h} (< 10)")
+    # Check 1: whale_trades/24h (WARNING: < 50, CRITICAL: 0)
+    wt_24h = results.get("whale_trades_24h", 0)
+    if wt_24h == 0:
+        criticals.append(f"whale_trades/24h: 0 (CRITICAL)")
+    elif wt_24h < 50:
+        warnings.append(f"whale_trades/24h: {wt_24h} (< 50)")
 
     # Check 2: market_category NULL % (WARNING: > 5%)
     null_pct = results.get("market_category_null_pct", 0)
@@ -342,10 +342,10 @@ def determine_status(results: dict) -> tuple:
     if pw_exists > 0 and pt_24h == 0:
         warnings.append(f"paper_trades/24h: 0 (paper whales: {pw_exists})")
 
-    # Check 5: roundtrips/3h (WARNING: 0 new)
-    rt_3h = results.get("roundtrips_3h", 0)
-    if rt_3h == 0:
-        warnings.append(f"roundtrips/3h: 0 new")
+    # Check 5: roundtrips/24h (WARNING: 0 new)
+    rt_24h = results.get("roundtrips_24h", 0)
+    if rt_24h == 0:
+        warnings.append(f"roundtrips/24h: 0 new")
 
     # Check 6: container restarts (CRITICAL: > 3)
     restarts = results.get("container_restarts", {})
@@ -377,9 +377,9 @@ def format_ok_message(results: dict) -> str:
 
     return f"""✅ Pipeline OK | {results['timestamp']}
 
-whale_trades/3h: {results['whale_trades_1h']}
-paper_trades/3h: {results['paper_trades_24h']}
-roundtrips/3h: {results['roundtrips_3h']}
+whale_trades/24h: {results['whale_trades_24h']}
+paper_trades/24h: {results['paper_trades_24h']}
+roundtrips/24h: {results['roundtrips_24h']}
 category_unknown: {results['market_category_unknown_count']}
 containers: {container_status}
 """
