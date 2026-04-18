@@ -123,7 +123,7 @@
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| SYS-322 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | TODO |
+| SYS-322 | PRE-PROD-SECRETS-ROTATION (moved to SYSTEM TASKS) | DONE |
 | SYS-323 | Docker cleanup — images + build cache | DONE |
 | SYS-324 | Очистка системных логов — journalctl + btmp | DONE |
 | SYS-325 | Container logs — truncate + настройка ротации | DONE |
@@ -175,7 +175,8 @@
 | STRAT-701 | Запуск paper-trade pipeline для отобранных китов | READY |
 | Type: STAGING | Priority: HIGH | |
 | Selected: 0x32ed... (WR 81.8%, +$6,599, 11 roundtrips) | 0xd48a... (WR 87.5%, +$1,726, 8 roundtrips) | |
-| SYS-325 | Paper Trade Quality Audit (High Price Entries) | READY |
+| SYS-325 | Paper Trade Quality Audit (High Price Entries) | IN_PROGRESS |
+| Note | Audit not executed, no results found — needs execution | |
 
 ---
 
@@ -426,6 +427,10 @@ Description: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. Рез�
 
 | ID | Задача | Статус |
 |----|--------|--------|
+| SYS-309 | Daily Data Audit Snapshot (run_data_check.py) | DONE |
+| Type: INFRASTRUCTURE | Note: cron intentionally disabled, script kept for manual use | |
+| SYS-322 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | DONE |
+| Type: CRITICAL | Note: verified — no public ports, DOCKER-USER firewall active. See SEC-402. | |
 | SYS-501 | Project Filesystem Cleanup (logs, temp, md artifacts) | DONE |
 | SYS-330 | trade_duplicate rate flood investigation | BACKLOG |
 | Priority: 🟢 Low | Comment: дедупликация работает корректно, риск только рост лог-файла, покрыт logrotate |
