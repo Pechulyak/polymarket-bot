@@ -314,6 +314,7 @@ Description: Refactor whale discovery logic. See PROJECT_STATE for details.
 | Description: Migration for weekly AI analysis results storage. Fields: model_used, raw_input_json, raw_output_json, recommendations_json, red_flags_json, requires_human_review, telegram_sent_at, error_log. |
 | ANA-502-SCRIPT | Weekly AI analysis script implementation | IN_PROGRESS |
 | ANA-502-CRON | Weekly analysis: test run + cron | DONE |
+| ANA-502-FIX | Fix recommendations_json + prompt rules | IN_PROGRESS |
 | **ANA-502-SQL** | **SQL-слой: финальные запросы для еженедельного AI-анализа** | **DONE** |
 | Description: Финальные SQL-запросы для еженедельного AI-анализа китов. Блок 1: метрики paper/tracked китов. Блок 2: кандидаты из none. Блок 3: системный edge по категориям. Commit: 97148e7. |
 

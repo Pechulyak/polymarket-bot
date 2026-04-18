@@ -66,12 +66,17 @@ Crypto and Weather/Economics are statistically insignificant sample sizes.
 - Win rate 14d drops below 50% for 2 consecutive weeks
 - Weekly PnL negative for 3 of last 4 weeks
 - Zero activity for 14+ days
+- recommended_status must be "excluded" (never "none") when downgrading from paper or tracked
+- Include exclusion_reason field: one of "low_win_rate", "inactive", "negative_pnl"
 
 ### Red flags (requires_human_review = true):
 - One-hit wonder: top-3 trades > 90% of total PnL
 - Win rate 14d degrades > 5pp vs all-time WR
 - Sudden activity spike (trades_7d > 3x historical average)
 - New whale in paper < 7 days: skip rate not representative
+
+### Categories:
+- confirmed_count < 500 → edge_assessment maximum "weak" regardless of WR or PnL
 
 ### Structural filters (NOT bugs):
 - skip_ratio = 0 for paper/tracked whales is expected — they use PAPER_TRACK/TRACKED source
@@ -90,9 +95,11 @@ Respond ONLY with valid JSON. No preamble, no markdown, no explanation outside J
       "wallet_address": "0x...",
       "current_status": "paper|tracked|none",
       "recommended_action": "keep|upgrade|downgrade|watch",
-      "recommended_status": "paper|tracked|none",
+      "recommended_status": "paper|tracked|excluded",
       "confidence": "high|medium|low",
-      "reasoning": "<2-3 sentences max>"
+      "reasoning": "<2-3 sentences max>",
+      "whale_comment": "<краткий комментарий для whales.whale_comment — только при upgrade/downgrade, null при keep/watch>",
+      "exclusion_reason": "<low_win_rate|inactive|negative_pnl|null>"
     }
   ],
   "red_flags": [
@@ -507,17 +514,24 @@ def format_telegram_message(analysis: dict, metrics: dict) -> str:
     lines.append(f"💡 SUMMARY: {summary}")
     lines.append("")
     
-    # SQL for confirmed changes
+    # SQL for confirmed changes (human-in-the-loop)
     sql_updates = []
     for w in analysis.get('recommendations', []):
         action = w.get('recommended_action', '')
         wallet = w.get('wallet_address', '')
+        current_status = w.get('current_status', '')
+        whale_comment = w.get('whale_comment', '')
+        exclusion_reason = w.get('exclusion_reason', '')
+        
         if action == 'upgrade' and wallet:
-            sql_updates.append(f"UPDATE whales SET copy_status='tracked' WHERE wallet_address='{wallet}';")
+            target = 'paper' if current_status == 'tracked' else 'tracked'
+            comment_sql = f", whale_comment='{whale_comment}', reviewed_at=NOW()" if whale_comment else ""
+            sql_updates.append(f"UPDATE whales SET copy_status='{target}'{comment_sql} WHERE wallet_address='{wallet}';")
         elif action == 'downgrade' and wallet:
-            sql_updates.append(f"UPDATE whales SET copy_status='none' WHERE wallet_address='{wallet}';")
+            reason_sql = f", exclusion_reason='{exclusion_reason}'" if exclusion_reason and exclusion_reason != 'null' else ""
+            sql_updates.append(f"UPDATE whales SET copy_status='excluded'{reason_sql}, reviewed_at=NOW() WHERE wallet_address='{wallet}';")
     
-    lines.append("✅ SQL ДЛЯ ПОДТВЕРЖДЁННЫХ ИЗМЕНЕНИЙ:")
+    lines.append("SQL ДЛЯ ПОДТВЕРЖДЁННЫХ ИЗМЕНЕНИЙ:")
     if sql_updates:
         for sql in sql_updates[:10]:
             lines.append(sql)
@@ -601,7 +615,7 @@ def main():
         # Step 6: UPDATE record with output
         print("Updating analysis record...")
         raw_output = json.dumps(parsed, cls=DecimalEncoder)
-        recommendations = json.dumps(parsed.get('whale_statuses', []), cls=DecimalEncoder)
+        recommendations = json.dumps(parsed.get('recommendations', []), cls=DecimalEncoder)
         red_flags = json.dumps(parsed.get('red_flags', []), cls=DecimalEncoder)
         
         with conn.cursor() as cur:
