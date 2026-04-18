@@ -167,15 +167,15 @@
 
 - roundtrip_builder
   status: OK
-  updated: 2026-03-26
-  task: TRD-427
-  note: Теперь запускает --settle каждые 2 часа
+  updated: 2026-04-18
+  task: DBG-AUDIT-001/DBG-CLOSE-001
+  note: standalone container, healthy, settlement via cron script
 
 - paper_settlement
-  status: DISABLED
-  updated: 2026-03-26
-  task: SYS-601-FIX
-  note: broken - file does not exist
+  status: DEPRECATED
+  updated: 2026-04-18
+  task: DBG-AUDIT-001/DBG-CLOSE-001
+  note: disabled in main.py, replaced by roundtrip_builder
 
 ---
 

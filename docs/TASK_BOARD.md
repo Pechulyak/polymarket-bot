@@ -128,7 +128,7 @@
 | SYS-324 | Очистка системных логов — journalctl + btmp | DONE |
 | SYS-325 | Container logs — truncate + настройка ротации | DONE |
 | **SYS-326** | **Project cleanup — logs + pycache + backups** | **DONE** |
-| SYS-500 | Whale Roundtrip Reconstructor | IN_PROGRESS |
+| SYS-500 | Whale Roundtrip Reconstructor | DONE |
 
 ### PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переходом на live
 
@@ -197,11 +197,11 @@
 | SYS-401 | Project cleanup (logs, temp files, unused scripts) | READY |
 | SYS-402 | Remove unused docker images and dangling volumes | TODO |
 | SYS-403 | Verify .env permissions and secret handling | TODO |
-| SYS-500 | Whale Roundtrip Reconstructor | IN_PROGRESS |
+| SYS-500 | Whale Roundtrip Reconstructor | DONE |
 
 Description: Интегрирован в main.py. Проверка закрытия позиций за сегодня.
 
-| SYS-601-FIX | Fix дублирование roundtrip_builder + broken paper_settlement | IN_PROGRESS |
+| SYS-601-FIX | Fix дублирование roundtrip_builder + broken paper_settlement | DONE |
 | DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | DONE |
 
 ---
