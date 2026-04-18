@@ -57,10 +57,10 @@
 
 | ID | Задача | Статус |
 |----|--------|--------|
-| W-001 | Whale Detection Pipeline | TODO |
-| W-002 | Whale Tracking Database | TODO |
-| W-003 | Strategy Metrics Engine | TODO |
-| W-004 | Copy Trading Engine Integration | TODO |
+| W-001 | Whale Detection Pipeline | DONE | whale_detector.py active, реализован |
+| W-002 | Whale Tracking Database | DONE | WhaleTradesRepo — единая точка записи |
+| W-003 | Strategy Metrics Engine | DONE | Kelly sizing + materialized views реализованы |
+| W-004 | Copy Trading Engine Integration | FROZEN | copy_trading_engine.py отключён |
 | WHALE-701 | Whale Classification & Exclusion | DONE |
 | BUG-607 | Fix whale re-discovery overwriting excluded status | DONE |
 
