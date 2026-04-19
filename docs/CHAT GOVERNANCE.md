@@ -125,6 +125,53 @@ Winrate > 60%
    - изменение статуса или структуры
 5. TASK_BOARD.html является производным файлом и не редактируется вручную.
 
+6. **Формат строки задачи** (строго):
+   `| ID | Задача | Тег | Статус |`
+
+   Четыре колонки обязательно. Тег — опциональный (пусто или `feature:xxx`).
+
+7. **Название задачи**: краткое (3-8 слов), на русском языке, обязательно.
+   Без описаний, goals, pre-conditions в названии.
+
+8. **Inline-комментарии в TASK_BOARD запрещены**. Блоки `Description:`,
+   `**Goals:**`, `**Pre-conditions:**`, `**Definition of Done:**` и аналогичные
+   многострочные пояснения под строкой задачи в TASK_BOARD не включаются.
+   Подробная спецификация задачи хранится:
+   - в CHANGELOG (после выполнения) или
+   - в отдельном документе задачи (`docs/tasks/TASK_ID.md`), если требуется
+     развёрнутый спек.
+
+9. **Префикс задачи = префикс эпика**. Задача принадлежит ровно одному эпику.
+   Допустимые префиксы:
+   - `PIPE-*` — Pipeline Refactoring
+   - `TRD-*` — Trading Correctness
+   - `DATA-*` — Data Integrity
+   - `ANA-*` — Analytics
+   - `SEC-*` — Security
+   - `INFRA-*` — Infrastructure
+   - `HYG-*` — System Hygiene
+   - `DOC-*` — Documentation & Governance
+   - `BUG-*` — Cross-cutting Bugs
+
+   Связь между эпиками / фичами, затрагивающими несколько эпиков —
+   через поле «Тег» в формате `feature:xxx`
+   (например: `feature:live-execution`, `feature:paper-rotation`).
+
+10. **Структура TASK_BOARD.md** фиксирована:
+    - Шапка (статусы, приоритет, правила, workflow)
+    - 3 LANE-блока (WHALE, ARB, SMART) — информационные, задач внутри нет
+    - 9 EPIC-блоков с таблицами задач
+    - Footer с датой обновления
+
+    Добавление новых LANE или EPIC — отдельная задача уровня STRATEGY,
+    требует обновления этого документа.
+
+11. **Допустимые статусы задачи**:
+    `TODO`, `IN_PROGRESS`, `READY`, `DONE`, `FROZEN`, `CANCELLED`, `BACKLOG`.
+
+    В TASK_BOARD.html не включаются задачи со статусом `DONE` и `CANCELLED`
+    (фильтр генератора).
+
 ---
 
 ## SECURITY POLICY — NETWORK EXPOSURE
