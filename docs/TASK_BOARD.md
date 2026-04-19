@@ -31,7 +31,7 @@
 | PHASE2A-002 | Переключение virtual_bankroll.py на WhaleTradesRepo | DONE |
 | PHASE2A-003 | Переключение whale_poller.py на WhaleTradesRepo | DONE |
 | PHASE2A-004 | Deprecation whale_trade_writer.py + очистка мёртвых импортов | DONE |
-| PHASE2A-005 | Аудит и удаление deprecated whale_trade_writer | IN_PROGRESS |
+| PHASE2A-005 | Аудит и удаление deprecated whale_trade_writer | DONE |
 
 ### PHASE 2B — Unified Writer (paper_trades)
 
@@ -40,9 +40,9 @@
 | PHASE2B-001 | Аудит: найти все пути записи в paper_trades | DONE |
 | PHASE2B-002 | Отключение VirtualBankroll paper-trade loop в main.py | DONE |
 | PHASE2B-003 | Создание PaperTradesRepo (единая точка записи) | DONE |
-| PHASE2B-004 | Переключение модулей на PaperTradesRepo | TODO |
-| PHASE2B-005 | Создание DB trigger: whale_trades → paper_trades | IN_PROGRESS |
-| PHASE2B-006 | Удаление ручного копирования | TODO |
+| PHASE2B-004 | Переключение модулей на PaperTradesRepo | DONE |
+| PHASE2B-005 | Создание DB trigger: whale_trades → paper_trades | DONE |
+| PHASE2B-006 | Удаление ручного копирования | DONE |
 
 ---
 
