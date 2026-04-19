@@ -1,8 +1,8 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-04-18
+Обновлено: 2026-04-19
 Версия: v2_clean  
-Фаза: Реструктуризация (после cleanup)
+Фаза: Paper trading (edge validation)
 
 ---
 
@@ -14,20 +14,20 @@
 
 - Режим торговли
   status: OK
-  updated: 2026-03-23
-  task: SYS-326
+  updated: 2026-04-19
+  task: 
   note: paper active
 
 - Режим наблюдения
   status: OK
-  updated: 2026-03-23
-  task: SYS-326
+  updated: 2026-04-19
+  task: 
   note: downstream off
 
 - Trading Metrics (цели выхода в live)
   status: IN_WORK
-  updated: 2026-03-23
-  task: STRAT-001
+  updated: 2026-04-19
+  task: 
   note: targets defined
 
   target_roi: 25%
@@ -36,14 +36,14 @@
 
 ## Risk-contour (Kelly)
 - status: OK
-- updated: 2026-04-15
-- task: PHASE4-006, PHASE4-007, SYS-336
-- note: dynamic kelly, bankroll=$99.29, source=view. SYS-336: min=$1, max=5%, whale filter=1%
+- updated: 2026-04-19
+- task: PIPE-029, PIPE-030
+- note: dynamic kelly, bankroll via view
 
 - Edge статус
   status: IN_WORK
   updated: 2026-03-23
-  task: STRAT-002
+  task: 
   note: not confirmed
 
 - API статус
@@ -56,8 +56,8 @@
 - Telegram
   API - ok
   Уведомления - OK  
-  updated: 2026-03-29
-  task: STRAT-701
+  updated: 2026-04-19
+  task: TRD-439
   note: unfrozen  
 ---
 
@@ -72,63 +72,59 @@
 - Таблица whale_trades
   status: OK
   updated: 2026-03-27
-  task: ARC-503
-  note: legacy fields removed (is_winner, profit_usd)
+  task: DATA-406
+  note: legacy fields removed
 
 - Таблица paper_trades
   status: OK
   updated: 2026-03-29
-  task: STRAT-701
+  task: TRD-439
   note: unfrozen, filtered by copy_status='paper'
 
 - Таблица trades
   status: OK
   updated: 2026-03-29
-  task: STRAT-701
+  task: TRD-439
   note: unfrozen
 
 - Таблица whale_trade_roundtrips
   status: OK
   updated: 2026-03-26
-  task: ARC-502-C
+  task: PIPE-038
   note: settlement via CLOB API working
-  issue: tested on 4 closed markets, 23 roundtrips settled
 
 - Таблица bankroll
   status: OK
   updated: 2026-03-29
-  task: STRAT-701
+  task: TRD-439
   note: reset to $100, unfrozen
 
 ---
 
-## Materialized Views (PHASE4)
+## Materialized Views
 
 ### whale_pnl_summary (materialized)
 - status: OK
 - updated: 2026-04-05
-- task: PHASE4-001
-- note: 11 whales, 0x32ed PnL $135K
+- task: PIPE-024
+- note: aggregated P&L per whale, refresh 2h
 
 ### paper_portfolio_state (materialized)
 - status: OK
 - updated: 2026-04-05
-- task: PHASE4-007
-- note: bankroll reset $100, dynamic filter via bankroll_reset_at
-- metrics: current_balance=$100, realized_pnl=0, roi=0%
+- task: PIPE-030
+- note: dynamic filter via bankroll_reset_at
 
 ### paper_simulation_pnl (materialized)
 - status: OK
 - updated: 2026-04-05
-- task: PHASE4-007
-- note: bankroll reset, 0 rows (fresh start)
+- task: PIPE-030
+- note: trade-by-trade paper P&L
 
 ---
 
 ## Bankroll Reset
 - mechanism: bankroll_reset_at in strategy_config (unix timestamp)
-- reset: 2026-04-05 19:23:55 UTC
-- current_bankroll: $100
 - next_reset: manual via strategy_config update
 
 ---
@@ -138,37 +134,37 @@
 - postgres
   status: OK
   updated: 2026-03-23
-  task: SYS-301
+  task: 
   note: running
 
 - redis
   status: OK
   updated: 2026-03-23
-  task: SYS-301
+  task: 
   note: running
 
 - whale_detector
   status: ACTIVE
-  updated: 2026-03-30
-  task: BUG-504
-  note: paper(2)+tracked polling, duplicate detection fixed
+  updated: 2026-04-02
+  task: TRD-434
+  note: paper+tracked polling, duplicate detection fixed
 
 - bot (main)
   status: PARTIAL
   updated: 2026-03-23
-  task: SYS-326
+  task: 
   note: no execution
 
 - roundtrip_builder
   status: OK
   updated: 2026-04-18
-  task: DBG-AUDIT-001/DBG-CLOSE-001
+  task: PIPE-041
   note: standalone container, healthy, settlement via cron script
 
 - paper_settlement
   status: DEPRECATED
   updated: 2026-04-18
-  task: DBG-AUDIT-001/DBG-CLOSE-001
+  task: PIPE-041
   note: disabled in main.py, replaced by roundtrip_builder
 
 ---
@@ -178,49 +174,43 @@
 - whale_detector.py
   status: ACTIVE
   updated: 2026-04-02
-  task: PHASE1-002
+  task: PIPE-002
   note: записи через WhaleTradesRepo
 
 - whale_tracker.py
   status: OK
   updated: 2026-04-02
-  task: PHASE1-003
+  task: PIPE-003
   note: save_whale_trade через WhaleTradesRepo
 
 - whale_trade_writer.py
   status: DEPRECATED
   updated: 2026-04-02
-  task: PHASE1-003
-  note: заменён WhaleTradesRepo, используется только virtual_bankroll
+  task: PIPE-009
+  note: заменён WhaleTradesRepo
 
 - virtual_bankroll.py
   status: FROZEN
   updated: 2026-03-23
-  task: SYS-326
+  task: 
   note: disabled
 
 - main.py
   status: PARTIAL
   updated: 2026-03-26
-  task: SYS-601-FIX
+  task: 
   note: roundtrip jobs disabled (duplicates container)
 
 - copy_trading_engine.py
   status: FROZEN
   updated: 2026-03-23
-  task: SYS-326
+  task: 
   note: disabled
-
-- whale_trade_writer.py
-  status: DEPRECATED
-  updated: 2026-04-02
-  task: PHASE1-001
-  note: replaced by whale_trades_repo.py
 
 - whale_trades_repo.py
   status: OK
   updated: 2026-04-02
-  task: PHASE1-001
+  task: PIPE-001
   note: единая точка записи whale_trades
 
 ---
@@ -230,14 +220,20 @@
 - Pipeline Phase 1
   status: OK
   updated: 2026-04-03
-  task: PHASE1-005
+  task: PIPE-005
   note: 24h verified, repo active, monitor running
 
 - Daily Whale Alert Monitor
   status: OK
   updated: 2026-04-16
   task: ANA-501
-  note: cron 08:00 UTC, 5 checks
+  note: cron 08:00 UTC, Telegram alerts
+
+- Weekly AI whale analysis
+  status: ACTIVE
+  updated: 2026-04-19
+  task: ANA-502
+  note: cron weekly, Telegram recommendations
 
 - Discovery pipeline
   status: IN_WORK
@@ -256,56 +252,65 @@
   updated: 2026-03-26
   task: TRD-426
   note: thresholds fixed (HOT: 1d, WARM: 7d)
-  hot_count: 593
-  warm_count: 860
-  cold_count: 5
 
 - whale_trades → paper_trades
   status: OK
   updated: 2026-03-30
-  task: BUG-502
-  note: real-time verified, 2 paper whales
+  task: 
+  note: real-time verified, paper whales
 
 - paper_trades → trades
   status: OK
   updated: 2026-03-29
-  task: STRAT-701
+  task: TRD-439
   note: unfrozen
 
 - settlement pipeline
   status: OK
   updated: 2026-04-05
-  task: PHASE3-007
-  note: Ручной запуск 09:33 UTC — ✅ УСПЕШНО. 2189 китов обновлено. Cron 10:00 UTC pending verification.
+  task: PIPE-023
+  note: settlement via cron script, resolved markets closed automatically
 
 - smoke_test.sh
   status: OK
   updated: 2026-04-14
-  task: SYS-335
-  note: +1 check, 24 total, freshness gap fixed
+  task: 
+  note: all checks passing
 
 - whales P&L pipeline
   status: OK
   updated: 2026-03-26
-  task: ARC-502-D
+  task: PIPE-039
 
 - market_category backfill
   status: OK
   updated: 2026-04-12
-  task: SYS-334
+  task: 
   note: whale_trades + roundtrips
 
 - notifications pipeline
   status: OK
   updated: 2026-03-29
-  task: STRAT-701
+  task: TRD-439
   note: unfrozen
 
 - pipeline_monitor
   status: ACTIVE
   updated: 2026-04-02
-  task: PHASE1-004
+  task: PIPE-004
   note: cron */30, Telegram alerts every 30min
+
+- Paper-trade pipeline (active whales)
+  status: ACTIVE
+  updated: 2026-04-19
+  task: TRD-439
+  note: edge validation phase
+
+- Tracked polling loop
+  status: ACTIVE
+  updated: 2026-04-19
+  task: TRD-420-B
+  note: per-wallet, 5min interval
 
 ---
 
@@ -314,20 +319,20 @@
 - P&L Gate
   status: ACTIVE
   updated: 2026-03-29
-  task: STRAT-701
+  task: TRD-439
   note: min 5 roundtrips, WR ≥60%, PnL >$0, tier HOT/WARM
 
 - Kelly Sizing
   status: OK
   updated: 2026-04-04
-  task: PHASE1.5-005
+  task: PIPE-035
   note: proportional sizing, strategy_config driven
 
 - Selected Whales
   status: PAPER
   updated: 2026-03-30
-  task: BUG-502
-  note: 0x32ed (WR 81.8%, +$6599), 0x2652dd (WR 100%, +$2917), 0xd48a (WR 87.5%, +$1726)
+  task: 
+  note: paper whales selected via P&L Gate, managed by STRATEGY
 
 ---
 
@@ -342,29 +347,28 @@
 - Публичные порты
   status: OK
   updated: 2026-03-23
-  task: SYS-401
+  task: 
   note: internal only
 
 - Доступ к БД
   status: OK
   updated: 2026-03-23
-  task: SYS-401
+  task: 
   note: docker network
 
 - Backups
   status: OK
   updated: 2026-04-12
-  task: INFRA-003
+  task: INFRA-018
   note: daily encrypted B2, retention 7d, Telegram alert
 
 - .env доступ
   status: OK
   updated: 2026-03-23
-  task: SYS-401
+  task: 
   note: restricted
 
 ---
-
 
 ## 7. АКТИВНЫЕ БЛОКЕРЫ
 
@@ -389,7 +393,7 @@ none
 - PROJECT_STATE.md
   status: OK
   updated: 2026-04-19
-  task: 
+  task: DOC-603
   note: updated
 
 - CHAT GOVERNANCE.md
@@ -400,7 +404,7 @@ none
 
 - PROJECT_STATE_GOVERNANCE.md
   status: OK
-  updated: 2026-03-24
+  updated: 2026-04-19
   task: 
   note: governance rules
 
@@ -409,12 +413,3 @@ none
   updated: 2026-04-19
   task: 
   note: main changelog
-
-
-  
-
-
-
-
-
-
