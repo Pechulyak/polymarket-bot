@@ -243,24 +243,7 @@
 
     <div class="epic-card">
         <h2><span class="section-label label-epic">EPIC</span>PIPE — Pipeline Refactoring</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Тег</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">PIPE-023</td>
-                    <td>Верификация end-to-end</td>
-                    <td></td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                </tr>
-            </tbody>
-        </table>
+        <p class="empty-message">Все задачи выполнены</p>
 
     </div>
 
@@ -280,7 +263,7 @@
                     <td class="task-id">TRD-401</td>
                     <td>Аудит целостности таблицы trades</td>
                     <td></td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
+                    <td><span class="status-badge status-BACKLOG">BACKLOG</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-402</td>
@@ -319,28 +302,10 @@
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">TRD-413</td>
-                    <td>Аудит полноты ingestion whale_trades для tracked китов</td>
-                    <td></td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
                     <td class="task-id">TRD-417</td>
                     <td>Audit API response structure across market types before whales schema redesign</td>
                     <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-420</td>
-                    <td>Рефакторинг whale discovery: initial history aggregation + tiered polling</td>
-                    <td></td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-420-B</td>
-                    <td>Per-wallet polling для copy_status='tracked' китов (5 мин)</td>
-                    <td></td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-431</td>
@@ -352,7 +317,7 @@
                     <td class="task-id">TRD-439</td>
                     <td>Запуск paper-trade pipeline для отобранных китов</td>
                     <td></td>
-                    <td><span class="status-badge status-READY">READY</span></td>
+                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
             </tbody>
         </table>
@@ -400,18 +365,6 @@
                     <td>Анализ поведения китов по цене входа (≥0.95, ≤0.05)</td>
                     <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ANA-502-FIX</td>
-                    <td>Исправление recommendations_json + prompt rules</td>
-                    <td></td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ANA-502-SCRIPT</td>
-                    <td>Реализация скрипта еженедельного AI анализа</td>
-                    <td></td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
             </tbody>
         </table>
@@ -500,12 +453,6 @@
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td class="task-id">HYG-001</td>
-                    <td>Очистка проекта (логи, temp файлы, неиспользуемые скрипты)</td>
-                    <td></td>
-                    <td><span class="status-badge status-READY">READY</span></td>
-                </tr>
                 <tr>
                     <td class="task-id">HYG-002</td>
                     <td>Удалить неиспользуемые docker images и dangling volumes</td>
