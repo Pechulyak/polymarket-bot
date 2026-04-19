@@ -125,21 +125,21 @@
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
 | TRD-401 | Аудит целостности таблицы trades | | BACKLOG |
-| TRD-402 | Исправление заполнения полей trades в execution pipeline | | TODO |
-| TRD-403 | Верификация поведения settlement (sell vs event resolution) | | TODO |
-| TRD-404 | Верификация учёта bankroll (entry/exit updates) | | TODO |
+| TRD-402 | Исправление заполнения полей trades в execution pipeline | | DONE |
+| TRD-403 | Верификация settlement behaviour в portfolio view | | TODO |
+| TRD-404 | Верификация bankroll в portfolio view | | TODO |
 | TRD-405 | Верификация логики Kelly sizing | | DONE |
-| TRD-406 | Исправление zero-size paper trades на open path | | TODO |
-| TRD-407 | Исследование execution gap (paper_trades vs trades) | | TODO |
+| TRD-406 | Исправление zero-size paper trades на open path | | DONE |
+| TRD-407 | Исследование execution gap (paper_trades vs trades) | | CANCELLED |
 | TRD-408 | Исправление traded_at — использовать API timestamp вместо NOW() | | DONE |
 | TRD-409 | Исправление интеграции settlement с VirtualBankroll | | DONE |
 | TRD-411 | Аудит обработки whale exit и записи buy/sell событий | | DONE |
-| TRD-412 | Создание таблицы whale_trade_roundtrips и логики реконструкции позиций | | TODO |
+| TRD-412 | Создание таблицы whale_trade_roundtrips и логики реконструкции позиций | | DONE |
 | TRD-413 | Аудит полноты ingestion whale_trades для tracked китов | | DONE |
 | TRD-414 | Backup whales and whale_trades + snapshot report | | DONE |
 | TRD-415 | Freeze whale discovery and whale_trades writes before cleanup | | DONE |
 | TRD-416 | Reduce whales universe to qualified subset and clean whale_trades | | DONE |
-| TRD-417 | Audit API response structure across market types before whales schema redesign | | TODO |
+| TRD-417 | Audit API response structure across market types before whales schema redesign | | DONE |
 | TRD-418 | Transform whales table schema to approved activity-based structure | | DONE |
 | TRD-419 | Migrate whales logic from legacy fields to new activity-based fields | | DONE |
 | TRD-420 | Рефакторинг whale discovery: initial history aggregation + tiered polling | | DONE |
@@ -150,7 +150,7 @@
 | TRD-426 | Исправление tier порогов — 97% HOT | | DONE |
 | TRD-427 | Исправление: OPEN roundtrips не обновляются settlement (757 stuck) | | DONE |
 | TRD-430 | Аудит paper trading pipeline: trades → settlement → bankroll | | DONE |
-| TRD-431 | Исправление потока virtual bankroll через lifecycle трейда | | TODO |
+| TRD-431 | Исправление потока virtual bankroll через lifecycle трейда | | CANCELLED |
 | TRD-432 | Исправление ссылки на days_active (была days_active_7d) | | DONE |
 | TRD-433 | Исправление dedup filter paper_trades→trades + bankroll reset | | DONE |
 | TRD-434 | Исправление false счётчика new_trades в whale_detector logs | | DONE |
@@ -202,7 +202,7 @@
 | SEC-403 | Сканирование сервера на открытые сервисы и уязвимости | | DONE |
 | SEC-404 | Ограничить Qdrant только localhost | | DONE |
 | SEC-501 | SSH Hardening + проверка инцидента 006.1 | | DONE |
-| SEC-502 | SSH hardening | | TODO |
+| SEC-502 | SSH hardening | | CANCELLED |
 | SEC-503 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | | DONE |
 | SEC-504 | Политика хранения логов — journalctl + docker + logrotate | | DONE |
 | SEC-505 | Исправление rsyslog suspend/resume flood | | DONE |
@@ -229,14 +229,14 @@
 | INFRA-014 | Firewall persistence — systemd unit для DOCKER-USER правил | | DONE |
 | INFRA-015 | Тест полного подключения с Сервера 2 | | DONE |
 | INFRA-016 | Финальный security baseline audit INFRA-002 | | DONE |
-| INFRA-017 | Audit order_executor permissions | | TODO |
+| INFRA-017 | Audit order_executor permissions | | DONE |
 | INFRA-018 | Backup Policy: automated encrypted DB backups to Backblaze B2 | | DONE |
 | INFRA-019 | Daily Data Audit Snapshot (run_data_check.py) | | DONE |
-| INFRA-020 | trade_duplicate rate flood investigation | | TODO |
+| INFRA-020 | trade_duplicate rate flood investigation | | DONE |
 | INFRA-021 | Исправление smoke_test.sh — проверки свежести fetch | | DONE |
-| INFRA-022 | Enable log_connections/disconnections | | TODO |
-| INFRA-023 | Устранить окно незащищённости между docker start и firewall unit | | TODO |
-| INFRA-024 | Runbook для добавления нового DB user | | TODO |
+| INFRA-022 | Enable log_connections/disconnections | | CANCELLED |
+| INFRA-023 | Устранить окно незащищённости между docker start и firewall unit | | CANCELLED |
+| INFRA-024 | Runbook для добавления нового DB user | | DONE |
 | INFRA-TASKBOARD-HTML | Обновить генератор TASK_BOARD.html под новый формат (LANE + EPIC, колонка Тег, фильтр DONE) | | DONE |
 
 ---
@@ -246,8 +246,8 @@
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
 | HYG-001 | Очистка проекта (логи, temp файлы, неиспользуемые скрипты) | | DONE |
-| HYG-002 | Удалить неиспользуемые docker images и dangling volumes | | TODO |
-| HYG-003 | Проверить permissions .env и обработку секретов | | TODO |
+| HYG-002 | Удалить неиспользуемые docker images и dangling volumes | | DONE |
+| HYG-003 | Проверить permissions .env и обработку секретов | | DONE |
 | HYG-004 | Docker cleanup — images + build cache | | DONE |
 | HYG-005 | Очистка системных логов — journalctl + btmp | | DONE |
 | HYG-006 | Container logs — truncate + настройка ротации | | DONE |
