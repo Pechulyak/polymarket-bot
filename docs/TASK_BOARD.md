@@ -236,6 +236,7 @@
 | INFRA-022 | Enable log_connections/disconnections | | TODO |
 | INFRA-023 | Устранить окно незащищённости между docker start и firewall unit | | TODO |
 | INFRA-024 | Runbook для добавления нового DB user | | TODO |
+| INFRA-TASKBOARD-HTML | Обновить генератор TASK_BOARD.html под новый формат (LANE + EPIC, колонка Тег, фильтр DONE) | | DONE |
 
 ---
 

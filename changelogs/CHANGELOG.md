@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-04-19 | INFRA-TASKBOARD-HTML | Обновлён generate_task_board_html.py: фильтр DONE/CANCELLED (восстановление SYS-313), поддержка LANE/EPIC нового формата, колонка "Тег", приглушение FROZEN LANE, "Все задачи выполнены" для пустых эпиков. HTML теперь валиден. |
 | 2026-04-19 | HYG-009 | Рефакторинг TASK_BOARD: 3 LANE + 9 EPIC (PIPE/TRD/DATA/ANA/SEC/INFRA/HYG/DOC/BUG), 139 задач. УДАЛЕНЫ: W-001,W-002,W-003 (дубли работы), W-004 (FROZEN), A-101..A-103 (ARB FROZEN), S-201..S-203 (SMART FROZEN). ПЕРЕНЕСЕНА: WHALE-701 → TRD-441. СХЛОПНУТЫ ДУБЛИ: SYS-322 (2→1), ARC-502-B (2→1). Новые ID: PIPE-*, TRD-401..TRD-441, DATA-404/405/406/407, ANA-401..ANA-503, SEC-401..SEC-505, INFRA-001..INFRA-024, HYG-001..HYG-009, DOC-601..DOC-602, BUG-607 |
 | 2026-04-19 | W-001 | Whale Detection Pipeline: whale_detector.py active, реализован |
 | 2026-04-19 | W-002 | Whale Tracking Database: WhaleTradesRepo — единая точка записи |
