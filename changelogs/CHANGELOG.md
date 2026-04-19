@@ -37,6 +37,7 @@
 | 2026-04-19 | user-provisioning-runbook | Процедура добавления user описана в pg_hba.conf комментариях |
 | 2026-04-19 | SYS-309 | Daily Data Audit Snapshot: cron intentionally disabled, script kept for manual use |
 | 2026-04-19 | SYS-330 | trade_duplicate rate flood: дедупликация работает корректно, риск только рост лог-файла |
+| 2026-04-19 | SYS-601 | Очистка TASK_BOARD и CHANGELOG: унификация формата, русские названия, удаление Description |
 | 2026-04-19 | BUG-603 | Dedup filter переключён на opportunity_id (paper_trades.id) |
 | 2026-04-19 | BUG-604 | Bankroll reconciliation из таблицы trades |
 | 2026-04-19 | BUG-801 | Audit pnl_status UNAVAILABLE в whale_trade_roundtrips: backfill 10,123 rows, smoke_test 24/24 PASS |

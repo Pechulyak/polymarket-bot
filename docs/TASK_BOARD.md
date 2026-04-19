@@ -139,6 +139,7 @@
 | SYS-401 | Очистка проекта (логи, temp файлы, неиспользуемые скрипты) | READY |
 | SYS-402 | Удалить неиспользуемые docker images и dangling volumes | TODO |
 | SYS-403 | Проверить permissions .env и обработку секретов | TODO |
+| SYS-601 | Очистка TASK_BOARD и CHANGELOG — унификация формата | DONE |
 | SYS-601-FIX | Исправление дублирования roundtrip_builder + broken paper_settlement | DONE |
 | DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | DONE |
 
