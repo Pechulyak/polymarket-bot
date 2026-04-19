@@ -262,6 +262,7 @@
 |----|--------|-----|--------|
 | DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | | DONE |
 | DOC-602 | Очистка TASK_BOARD и CHANGELOG — унификация формата | | DONE |
+| DOC-GOVERNANCE-UPDATE | Обновить governance-документы под новый формат TASK_BOARD (пункты 6-11) | | DONE |
 
 ---
 
