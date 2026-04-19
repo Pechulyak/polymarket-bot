@@ -57,6 +57,17 @@ Behavioural modelling
 Execution
 Задачи Roo
 
+📊 ANALYTICAL CHAT
+Scope:
+Формулирует задачи на естественном языке
+SQL не пишет
+Roo самостоятельно изучает схему (\d+ table) и пишет запросы
+Подключается к SQL только по явному запросу Roo после его собственной попытки
+Запрещено:
+Самостоятельно писать SQL-запросы
+Выполнять задачи без Roo
+Изменять код напрямую
+
 🔎 REVIEW
 
 Scope:
@@ -84,11 +95,13 @@ Scope:
 Разрешённый поток:
 Research → Strategy → Roo
 Review → Strategy → Roo
+Analytical → Strategy → Roo
 Запрещённый поток:
 Research → Roo
 Review → Roo
 Smart Money → Roo
 Arbitrage → Roo
+Analytical → Roo
 
 4. Приоритет стратегий
 Primary Execution Lane:
