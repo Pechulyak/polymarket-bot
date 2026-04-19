@@ -135,7 +135,7 @@
 | TRD-409 | Исправление интеграции settlement с VirtualBankroll | | DONE |
 | TRD-411 | Аудит обработки whale exit и записи buy/sell событий | | DONE |
 | TRD-412 | Создание таблицы whale_trade_roundtrips и логики реконструкции позиций | | TODO |
-| TRD-413 | Аудит полноты ingestion whale_trades для tracked китов | | TODO |
+| TRD-413 | Аудит полноты ingestion whale_trades для tracked китов | | DONE |
 | TRD-414 | Backup whales and whale_trades + snapshot report | | DONE |
 | TRD-415 | Freeze whale discovery and whale_trades writes before cleanup | | DONE |
 | TRD-416 | Reduce whales universe to qualified subset and clean whale_trades | | DONE |
