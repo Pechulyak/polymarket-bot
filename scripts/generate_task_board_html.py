@@ -4,6 +4,8 @@ TASK_BOARD HTML Generator
 
 Generates docs/TASK_BOARD.html from docs/TASK_BOARD.md for visual preview.
 
+Supports new format: LANE + EPIC structure with 4-column tables (ID, Task, Tag, Status).
+
 Usage:
     python3 scripts/generate_task_board_html.py
 
@@ -16,6 +18,12 @@ from datetime import datetime
 from pathlib import Path
 
 
+# Statuses excluded from HTML output (completed/cancelled tasks)
+EXCLUDED_STATUSES = {'DONE', 'CANCELLED'}
+# Statuses shown in HTML
+ACTIVE_STATUSES = {'TODO', 'IN_PROGRESS', 'READY', 'FROZEN', 'BACKLOG'}
+
+
 def get_status_badge(status: str) -> str:
     """Generate color-coded HTML badge for task status."""
     status_colors = {
@@ -25,8 +33,10 @@ def get_status_badge(status: str) -> str:
         'TESTED': '#ff9800',        # Orange
         'DONE': '#4caf50',          # Green
         'BLOCKED': '#f44336',       # Red
+        'FROZEN': '#607d8b',        # Blue-grey
+        'CANCELLED': '#9e9e9e',     # Grey
+        'BACKLOG': '#795548',       # Brown
     }
-    color = status_colors.get(status.upper(), '#9e9e9e')
     return f'<span class="status-badge status-{status.upper()}">{status}</span>'
 
 
@@ -35,8 +45,9 @@ def parse_markdown_tasks(markdown_content: str) -> dict:
     data = {
         'title': 'TASK_BOARD',
         'statuses': [],
-        'priority': None,
+        'lanes': [],
         'epics': [],
+        'priority': None,
         'rules': [],
         'workflow': '',
         'update_date': ''
@@ -48,7 +59,7 @@ def parse_markdown_tasks(markdown_content: str) -> dict:
     if lines and lines[0].startswith('# '):
         data['title'] = lines[0][2:].strip()
     
-    # Find status table
+    # Parse status table
     in_status_section = False
     status_lines = []
     for i, line in enumerate(lines):
@@ -61,64 +72,121 @@ def parse_markdown_tasks(markdown_content: str) -> dict:
             elif line.startswith('##'):
                 in_status_section = False
     
-    # Parse status table
     for line in status_lines:
         cells = [c.strip() for c in line.split('|')[1:-1]]
         if len(cells) >= 2:
             data['statuses'].append({'name': cells[0], 'desc': cells[1]})
     
-    # Find priority
+    # Parse priority section (as info block, no internal parsing)
+    in_priority = False
+    priority_lines = []
     for line in lines:
-        match = re.search(r'\*\*([W]-\d+)\s+[-—]\s+([^\*]+)\s*\*\*\(([^)]+)\)', line)
-        if match:
-            data['priority'] = {
-                'id': match.group(1),
-                'name': match.group(2).strip(),
-                'status': match.group(3)
-            }
-            break
+        if '## Текущий приоритет' in line:
+            in_priority = True
+            continue
+        if in_priority:
+            if line.startswith('##'):
+                in_priority = False
+            elif line.strip():
+                priority_lines.append(line.strip())
+    if priority_lines:
+        data['priority'] = '\n'.join(priority_lines)
     
-    # Find EPIC sections - simpler approach
-    current_epic = None
+    # Parse LANE and EPIC sections
+    current_section = None  # 'lane', 'epic', or None
+    current_title = None
     table_rows = []
+    section_type = None  # 'lane' or 'epic'
     
-    for i, line in enumerate(lines):
-        # Start of EPIC section
-        epic_match = re.match(r'##\s+(EPIC\s+\d+\s+[-—]\s+.+)', line)
-        if epic_match:
-            # Save previous epic if exists
-            if current_epic and table_rows:
-                data['epics'].append({
-                    'title': current_epic,
-                    'tasks': parse_tasks_table(table_rows)
-                })
-            current_epic = epic_match.group(1)
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        
+        # LANE section
+        lane_match = re.match(r'##\s+LANE:\s+([A-Z]+)\s+[-—]\s+(.+)', line)
+        if lane_match:
+            # Save previous section
+            if current_title and table_rows:
+                if section_type == 'lane':
+                    data['lanes'].append({'title': current_title, 'status': extract_section_status(table_rows)})
+                elif section_type == 'epic':
+                    tasks = parse_tasks_table(table_rows, filter_status=True)
+                    data['epics'].append({'title': current_title, 'tasks': tasks})
+            
+            current_title = f"{lane_match.group(1)} — {lane_match.group(2)}"
+            section_type = 'lane'
             table_rows = []
+            current_section = 'lane'
+            
+            # Collect description lines until --- or next ##
+            desc_lines = []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i]
+                if next_line.startswith('---') or (next_line.startswith('##') and next_line.strip()):
+                    break
+                desc_lines.append(next_line.strip())
+                i += 1
+            
+            # Store description in table_rows temporarily (for status extraction)
+            if desc_lines:
+                table_rows = desc_lines
+            
+            # Extract status from description
+            status = 'ACTIVE'
+            for desc in desc_lines:
+                if desc.startswith('**Статус:**'):
+                    if 'FROZEN' in desc:
+                        status = 'FROZEN'
+                    break
+            
+            # Save LANE immediately (no task table expected)
+            data['lanes'].append({'title': current_title, 'status': status})
+            current_title = None
+            table_rows = []
+            current_section = None
+            section_type = None
             continue
         
-        # Table row
-        if line.startswith('|') and current_epic:
-            # Skip separator line
+        # EPIC section
+        epic_match = re.match(r'##\s+EPIC:\s+([A-Z]+)\s+[-—]\s+(.+)', line)
+        if epic_match:
+            # Save previous section
+            if current_title and table_rows:
+                if section_type == 'epic':
+                    tasks = parse_tasks_table(table_rows, filter_status=True)
+                    data['epics'].append({'title': current_title, 'tasks': tasks})
+            
+            current_title = f"{epic_match.group(1)} — {epic_match.group(2)}"
+            section_type = 'epic'
+            table_rows = []
+            current_section = 'epic'
+            i += 1
+            continue
+        
+        # Table row within current EPIC section (LANE has no task table)
+        if line.startswith('|') and current_section == 'epic':
             if '---' not in line:
                 table_rows.append(line)
-        # End of EPIC section (next ## or --- or empty after table)
-        elif line.startswith('---') or (line.startswith('##') and current_epic):
-            if current_epic and table_rows:
-                data['epics'].append({
-                    'title': current_epic,
-                    'tasks': parse_tasks_table(table_rows)
-                })
+        
+        # End of EPIC section (--- or ##)
+        elif line.startswith('---') or (line.startswith('## EPIC') and current_section == 'epic'):
+            if current_title and table_rows:
+                tasks = parse_tasks_table(table_rows, filter_status=True)
+                data['epics'].append({'title': current_title, 'tasks': tasks})
+                current_title = None
                 table_rows = []
-                current_epic = None
+                current_section = None
+                section_type = None
+        
+        i += 1
     
-    # Don't forget last epic
-    if current_epic and table_rows:
-        data['epics'].append({
-            'title': current_epic,
-            'tasks': parse_tasks_table(table_rows)
-        })
+    # Don't forget last EPIC
+    if current_title and table_rows:
+        tasks = parse_tasks_table(table_rows, filter_status=True)
+        data['epics'].append({'title': current_title, 'tasks': tasks})
     
-    # Find rules
+    # Parse rules
     in_rules = False
     for line in lines:
         if '## Правила управления задачами' in line:
@@ -131,10 +199,9 @@ def parse_markdown_tasks(markdown_content: str) -> dict:
             elif line.startswith('##'):
                 in_rules = False
     
-    # Find workflow
+    # Parse workflow
     for i, line in enumerate(lines):
         if '## Workflow' in line and i + 1 < len(lines):
-            # Look for code block
             for j in range(i+1, min(i+5, len(lines))):
                 if lines[j].strip().startswith('```'):
                     for k in range(j+1, min(j+3, len(lines))):
@@ -156,21 +223,50 @@ def parse_markdown_tasks(markdown_content: str) -> dict:
     return data
 
 
-def parse_tasks_table(table_lines: list) -> list:
-    """Parse task rows from Markdown table."""
+def extract_section_status(table_lines: list) -> str:
+    """Extract status from LANE description (last line before table)."""
+    return 'ACTIVE'
+
+
+def parse_tasks_table(table_lines: list, filter_status: bool = False) -> list:
+    """Parse task rows from Markdown table with 4 columns (ID, Task, Tag, Status)."""
     tasks = []
     for line in table_lines:
         cells = [c.strip() for c in line.split('|')[1:-1]]
-        if len(cells) >= 3:
+        if len(cells) >= 4:
             task_id = cells[0]
             # Skip header row
             if task_id == 'ID':
                 continue
             task_name = cells[1]
-            status = cells[2].replace('**', '').strip()
+            tag = cells[2] if len(cells) > 2 else ''
+            status = cells[3].replace('**', '').strip() if len(cells) > 3 else ''
+            
+            # Filter by status if requested
+            if filter_status and status.upper() in EXCLUDED_STATUSES:
+                continue
+            
             tasks.append({
                 'id': task_id,
                 'name': task_name,
+                'tag': tag,
+                'status': status
+            })
+        elif len(cells) >= 3:
+            # Fallback: 3 columns (ID, Task, Status) — treat as old format
+            task_id = cells[0]
+            if task_id == 'ID':
+                continue
+            task_name = cells[1]
+            status = cells[2].replace('**', '').strip()
+            
+            if filter_status and status.upper() in EXCLUDED_STATUSES:
+                continue
+            
+            tasks.append({
+                'id': task_id,
+                'name': task_name,
+                'tag': '',
                 'status': status
             })
     return tasks
@@ -192,7 +288,7 @@ def generate_html(data: dict) -> str:
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             line-height: 1.6;
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
@@ -220,6 +316,7 @@ def generate_html(data: dict) -> str:
             border-radius: 8px;
             margin: 20px 0;
             font-size: 1.1em;
+            white-space: pre-line;
         }}
         .priority strong {{
             font-size: 1.2em;
@@ -262,6 +359,9 @@ def generate_html(data: dict) -> str:
         .status-TESTED {{ background: #ff9800; }}
         .status-DONE {{ background: #4caf50; }}
         .status-BLOCKED {{ background: #f44336; }}
+        .status-FROZEN {{ background: #607d8b; }}
+        .status-CANCELLED {{ background: #9e9e9e; }}
+        .status-BACKLOG {{ background: #795548; }}
         
         .status-table {{
             background: white;
@@ -307,11 +407,44 @@ def generate_html(data: dict) -> str:
             margin: 20px 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }}
+        .lane-card {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #4caf50;
+        }}
+        .lane-card.frozen {{
+            border-left-color: #607d8b;
+            opacity: 0.7;
+        }}
         .task-id {{
             font-weight: 600;
             color: #666;
             font-family: monospace;
         }}
+        .task-tag {{
+            font-size: 0.85em;
+            color: #888;
+        }}
+        .empty-message {{
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+        }}
+        .section-label {{
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-right: 8px;
+        }}
+        .label-lane {{ background: #667eea; color: white; }}
+        .label-epic {{ background: #4caf50; color: white; }}
     </style>
 </head>
 <body>
@@ -345,19 +478,29 @@ def generate_html(data: dict) -> str:
     
     # Priority
     if data['priority']:
-        p = data['priority']
         html += f'''
     <h2>🎯 Текущий приоритет</h2>
     <div class="priority">
-        <strong>{p['id']}</strong> — {p['name']} {get_status_badge(p['status'])}
+        {data['priority']}
+    </div>
+'''
+    
+    # LANE sections
+    for lane in data['lanes']:
+        is_frozen = 'FROZEN' in lane.get('status', '').upper()
+        html += f'''
+    <div class="lane-card{' frozen' if is_frozen else ''}">
+        <h2><span class="section-label label-lane">LANE</span>{lane['title']}</h2>
+        <p class="empty-message">Информационный блок. Задачи — в соответствующих EPIC.</p>
     </div>
 '''
     
     # EPICs
     for epic in data['epics']:
+        epic_title = epic['title']
         html += f'''
     <div class="epic-card">
-        <h2>{epic['title']}</h2>
+        <h2><span class="section-label label-epic">EPIC</span>{epic_title}</h2>
 '''
         if epic['tasks']:
             html += '''        <table>
@@ -365,20 +508,26 @@ def generate_html(data: dict) -> str:
                 <tr>
                     <th>ID</th>
                     <th>Задача</th>
+                    <th>Тег</th>
                     <th>Статус</th>
                 </tr>
             </thead>
             <tbody>
 '''
             for task in epic['tasks']:
+                tag_html = f'<span class="task-tag">{task["tag"]}</span>' if task.get('tag') else ''
                 html += f'''                <tr>
                     <td class="task-id">{task['id']}</td>
                     <td>{task['name']}</td>
+                    <td>{tag_html}</td>
                     <td>{get_status_badge(task['status'])}</td>
                 </tr>
 '''
             html += '''            </tbody>
         </table>
+'''
+        else:
+            html += '''        <p class="empty-message">Все задачи выполнены</p>
 '''
         html += '''
     </div>
@@ -441,7 +590,7 @@ def main():
     
     # Print summary
     total_tasks = sum(len(epic['tasks']) for epic in data['epics'])
-    print(f'Total EPICs: {len(data["epics"])}, Total tasks: {total_tasks}')
+    print(f'Total LANEs: {len(data["lanes"])}, Total EPICs: {len(data["epics"])}, Total tasks in HTML: {total_tasks}')
     
     return 0
 

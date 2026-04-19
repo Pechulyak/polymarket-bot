@@ -11,7 +11,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             line-height: 1.6;
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
@@ -39,6 +39,7 @@
             border-radius: 8px;
             margin: 20px 0;
             font-size: 1.1em;
+            white-space: pre-line;
         }
         .priority strong {
             font-size: 1.2em;
@@ -81,6 +82,9 @@
         .status-TESTED { background: #ff9800; }
         .status-DONE { background: #4caf50; }
         .status-BLOCKED { background: #f44336; }
+        .status-FROZEN { background: #607d8b; }
+        .status-CANCELLED { background: #9e9e9e; }
+        .status-BACKLOG { background: #795548; }
         
         .status-table {
             background: white;
@@ -126,11 +130,44 @@
             margin: 20px 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
+        .lane-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #4caf50;
+        }
+        .lane-card.frozen {
+            border-left-color: #607d8b;
+            opacity: 0.7;
+        }
         .task-id {
             font-weight: 600;
             color: #666;
             font-family: monospace;
         }
+        .task-tag {
+            font-size: 0.85em;
+            color: #888;
+        }
+        .empty-message {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+        }
+        .section-label {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-right: 8px;
+        }
+        .label-lane { background: #667eea; color: white; }
+        .label-epic { background: #4caf50; color: white; }
     </style>
 </head>
 <body>
@@ -138,234 +175,88 @@
     
     <p><em>Единственный source of truth для статусов и списка задач проекта.</em></p>
 
-    <div class="epic-card">
-        <h2>EPIC 1 — WHALE COPY STRATEGY</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">W-001</td>
-                    <td>Whale Detection Pipeline</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">W-002</td>
-                    <td>Whale Tracking Database</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">W-003</td>
-                    <td>Strategy Metrics Engine</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">W-004</td>
-                    <td>Copy Trading Engine Integration</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">WHALE-701</td>
-                    <td>Whale Classification & Exclusion</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">BUG-607</td>
-                    <td>Fix whale re-discovery overwriting excluded status</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-            </tbody>
-        </table>
+    <h2>📌 Статусы задач</h2>
+    <table class="status-table">
+        <thead>
+            <tr>
+                <th>Статус</th>
+                <th>Описание</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="status-badge status-СТАТУС">Статус</span></td>
+                <td>Описание</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-TODO">TODO</span></td>
+                <td>Задача в очереди, не начата</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
+                <td>Задача выполняется</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-READY">READY</span></td>
+                <td>Задача готова к выполнению</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-DONE">DONE</span></td>
+                <td>Задача завершена</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-FROZEN">FROZEN</span></td>
+                <td>Задача/эпик приостановлен</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-CANCELLED">CANCELLED</span></td>
+                <td>Задача отменена</td>
+            </tr>
+            <tr>
+                <td><span class="status-badge status-BACKLOG">BACKLOG</span></td>
+                <td>В бэклоге (вне приоритета)</td>
+            </tr>
+        </tbody>
+    </table>
 
+    <h2>🎯 Текущий приоритет</h2>
+    <div class="priority">
+        **ACTIVE:** WHALE Copy Strategy (paper trading)
+**FROZEN:** Arbitrage | Smart Money
+---
+    </div>
+
+    <div class="lane-card">
+        <h2><span class="section-label label-lane">LANE</span>WHALE — Whale Copy Strategy</h2>
+        <p class="empty-message">Информационный блок. Задачи — в соответствующих EPIC.</p>
+    </div>
+
+    <div class="lane-card frozen">
+        <h2><span class="section-label label-lane">LANE</span>ARB — Arbitrage</h2>
+        <p class="empty-message">Информационный блок. Задачи — в соответствующих EPIC.</p>
+    </div>
+
+    <div class="lane-card frozen">
+        <h2><span class="section-label label-lane">LANE</span>SMART — Smart Money</h2>
+        <p class="empty-message">Информационный блок. Задачи — в соответствующих EPIC.</p>
     </div>
 
     <div class="epic-card">
-        <h2>EPIC 2 — ARBITRAGE SYSTEM</h2>
+        <h2><span class="section-label label-epic">EPIC</span>PIPE — Pipeline Refactoring</h2>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Задача</th>
+                    <th>Тег</th>
                     <th>Статус</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">A-101</td>
-                    <td>Cross-Exchange Arbitrage Detector</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">A-102</td>
-                    <td>Bybit Hedging Integration</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">A-103</td>
-                    <td>Order Book Inefficiency Scanner</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-    </div>
-
-    <div class="epic-card">
-        <h2>EPIC 3 — SMART MONEY</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">S-201</td>
-                    <td>Kill Switch Mechanisms</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">S-202</td>
-                    <td>Position Limits & Drawdown Controls</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">S-203</td>
-                    <td>Commission & Fee Tracker</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-    </div>
-
-    <div class="epic-card">
-        <h2>EPIC 4 — DATA AUDIT & SCHEMA FIXES (PHASE 4)</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">PHASE4-001</td>
-                    <td>Data Audit: schema, JOINs, PnL formulas</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">PHASE4-002</td>
-                    <td>Add status column to paper_trades table</td>
-                    <td><span class="status-badge status-CANCELLED">CANCELLED</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">PHASE4-003</td>
-                    <td>Fix JOIN disambiguation for paper_trades ↔ roundtrips</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">PHASE4-004</td>
-                    <td>Standardize PnL formula to our_pnl_v2</td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">PHASE4-005</td>
-                    <td>Verify Kelly distribution (proportional vs flat)</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-328-AUDIT</td>
-                    <td>File inventory — MD / migrations / Python files</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-329</td>
-                    <td>Log retention policy — journalctl + docker + logrotate</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-333</td>
-                    <td>Fix rsyslog suspend/resume flood</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-334</td>
-                    <td>Fix market_category in whale_trade_roundtrips</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-335</td>
-                    <td>Fix smoke_test.sh — добавить проверки свежести fetch и coverage gap</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">**SYS-336**</td>
-                    <td>**Fix Kelly sizing: минимум $1, максимум 5% bankroll, фильтр кита >= 1% депозита**</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">**SEC-501**</td>
-                    <td>**SSH Hardening + проверка инцидента 006.1**</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">**SYS-331**</td>
-                    <td>Fix stuck roundtrips — 37 OPEN despite resolved markets</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-    </div>
-
-    <div class="epic-card">
-        <h2>EPIC 4 — SYSTEM / INFRASTRUCTURE</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">SYS-322</td>
-                    <td>PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-323</td>
-                    <td>Docker cleanup — images + build cache</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-324</td>
-                    <td>Очистка системных логов — journalctl + btmp</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-325</td>
-                    <td>Container logs — truncate + настройка ротации</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">**SYS-326**</td>
-                    <td>**Project cleanup — logs + pycache + backups**</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-500</td>
-                    <td>Whale Roundtrip Reconstructor</td>
+                    <td class="task-id">PIPE-023</td>
+                    <td>Верификация end-to-end</td>
+                    <td></td>
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
             </tbody>
@@ -374,339 +265,94 @@
     </div>
 
     <div class="epic-card">
-        <h2>EPIC 5 — STRATEGY / RESEARCH</h2>
+        <h2><span class="section-label label-epic">EPIC</span>TRD — Trading Correctness</h2>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Задача</th>
+                    <th>Тег</th>
                     <th>Статус</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td class="task-id">STRAT-701</td>
-                    <td>Запуск paper-trade pipeline для отобранных китов</td>
-                    <td><span class="status-badge status-READY">READY</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">Type: STAGING</td>
-                    <td>Priority: HIGH</td>
-                    <td><span class="status-badge status-"></span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">Selected: 0x32ed... (WR 81.8%, +$6,599, 11 roundtrips)</td>
-                    <td>0xd48a... (WR 87.5%, +$1,726, 8 roundtrips)</td>
-                    <td><span class="status-badge status-"></span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-325</td>
-                    <td>Paper Trade Quality Audit (High Price Entries)</td>
-                    <td><span class="status-badge status-READY">READY</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-    </div>
-
-    <div class="epic-card">
-        <h2>EPIC 6 — SECURITY</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">SEC-401</td>
-                    <td>Full Security Audit (ports, env exposure, docker, firewall)</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SEC-402</td>
-                    <td>Verify No Public Ports Policy enforcement</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SEC-403</td>
-                    <td>Scan server for exposed services and vulnerabilities</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SEC-404</td>
-                    <td>Restrict Qdrant to localhost only</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-    </div>
-
-    <div class="epic-card">
-        <h2>EPIC 7 — SYSTEM HYGIENE</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">SYS-401</td>
-                    <td>Project cleanup (logs, temp files, unused scripts)</td>
-                    <td><span class="status-badge status-READY">READY</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-402</td>
-                    <td>Remove unused docker images and dangling volumes</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-403</td>
-                    <td>Verify .env permissions and secret handling</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-500</td>
-                    <td>Whale Roundtrip Reconstructor</td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">SYS-601-FIX</td>
-                    <td>Fix дублирование roundtrip_builder + broken paper_settlement</td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">DOC-601</td>
-                    <td>Аудит PROJECT_STATE.md на соответствие governance</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-    </div>
-
-    <div class="epic-card">
-        <h2>EPIC 8 — TRADING CORRECTNESS</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">BUG-701</td>
-                    <td>Fix days_active column reference (should be days_active_7d)</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
                 <tr>
                     <td class="task-id">TRD-401</td>
-                    <td>Audit trades table integrity</td>
+                    <td>Аудит целостности таблицы trades</td>
+                    <td></td>
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-402</td>
-                    <td>Fix trades field population in execution pipeline</td>
+                    <td>Исправление заполнения полей trades в execution pipeline</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-403</td>
-                    <td>Verify settlement behaviour (sell vs event resolution)</td>
+                    <td>Верификация поведения settlement (sell vs event resolution)</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-404</td>
-                    <td>Verify bankroll accounting (entry/exit updates)</td>
+                    <td>Верификация учёта bankroll (entry/exit updates)</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">FIN-401</td>
-                    <td>Fix virtual bankroll flow across trade lifecycle</td>
-                    <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-405</td>
-                    <td>Verify Kelly sizing logic</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-406</td>
-                    <td>Fix zero-size paper trades on open path</td>
+                    <td>Исправление zero-size paper trades на open path</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-407</td>
-                    <td>Investigate execution gap (paper_trades vs trades)</td>
+                    <td>Исследование execution gap (paper_trades vs trades)</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-408</td>
-                    <td>Fix traded_at to use API timestamp instead of NOW()</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-409</td>
-                    <td>Fix settlement integration with VirtualBankroll</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-411</td>
-                    <td>Audit whale exit handling and buy/sell event recording across pipeline</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-412</td>
-                    <td>Create whale_trade_roundtrips table and implement whale position reconstruction logic</td>
+                    <td>Создание таблицы whale_trade_roundtrips и логики реконструкции позиций</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ARC-502-B</td>
-                    <td>Fuzzy matching close for short selling (+27 CLOSED)</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-413</td>
-                    <td>Audit whale_trades ingestion completeness for tracked whales</td>
+                    <td>Аудит полноты ingestion whale_trades для tracked китов</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-421</td>
-                    <td>Аудит whale_trades — Завершён</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">BUG-603</td>
-                    <td>Fix dedup filter paper_trades→trades + bankroll reset $1000</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">BUG-504</td>
-                    <td>Fix false new_trades counter in whale_detector logs</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-422</td>
-                    <td>Добавить market_category в whale_trades и унифицировать запись</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-426</td>
-                    <td>Fix tier пороги — 97% HOT</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-427</td>
-                    <td>Fix: OPEN roundtrips не обновляются settlement (757 stuck)</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-420-A</td>
-                    <td>Per-wallet polling для copy_status='paper' китов</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-420-B</td>
-                    <td>Per-wallet polling для copy_status='tracked' китов (5 мин)</td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-430</td>
-                    <td>Аудит paper trading pipeline: trades → settlement → bankroll</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">BUG-601</td>
-                    <td>Diagnose settlement failure — 0 closed trades with resolved markets</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">BUG-601-FIX</td>
-                    <td>Switch settlement engine from Gamma API to CLOB API</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">BUG-604</td>
-                    <td>Bankroll reconciliation after settlement + fix event loop</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">**BUG-801**</td>
-                    <td>**Audit pnl_status UNAVAILABLE in whale_trade_roundtrips**</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-    </div>
-
-    <div class="epic-card">
-        <h2>EPIC 9 — DATA INTEGRITY</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Задача</th>
-                    <th>Статус</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="task-id">TRD-414</td>
-                    <td>Backup whales and whale_trades + snapshot report</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-415</td>
-                    <td>Freeze whale discovery and whale_trades writes before cleanup</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-416</td>
-                    <td>Reduce whales universe to qualified subset and clean whale_trades</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-417</td>
                     <td>Audit API response structure across market types before whales schema redesign</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-418</td>
-                    <td>Transform whales table schema to approved activity-based structure</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">TRD-419</td>
-                    <td>Migrate whales logic from legacy fields to new activity-based fields</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ARC-503</td>
-                    <td>Remove legacy fields is_winner and profit_usd from whale_trades</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">TRD-420</td>
                     <td>Рефакторинг whale discovery: initial history aggregation + tiered polling</td>
+                    <td></td>
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">DATA-404</td>
-                    <td>Reset virtual bankroll for fresh paper trading cycle</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">TRD-420-B</td>
+                    <td>Per-wallet polling для copy_status='tracked' китов (5 мин)</td>
+                    <td></td>
+                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">DATA-405</td>
-                    <td>Cleanup test records from database</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">TRD-431</td>
+                    <td>Исправление потока virtual bankroll через lifecycle трейда</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">TRD-439</td>
+                    <td>Запуск paper-trade pipeline для отобранных китов</td>
+                    <td></td>
+                    <td><span class="status-badge status-READY">READY</span></td>
                 </tr>
             </tbody>
         </table>
@@ -714,65 +360,58 @@
     </div>
 
     <div class="epic-card">
-        <h2>EPIC 10 — ANALYTICS PREPARATION</h2>
+        <h2><span class="section-label label-epic">EPIC</span>DATA — Data Integrity</h2>
+        <p class="empty-message">Все задачи выполнены</p>
+
+    </div>
+
+    <div class="epic-card">
+        <h2><span class="section-label label-epic">EPIC</span>ANA — Analytics</h2>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Задача</th>
+                    <th>Тег</th>
                     <th>Статус</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
                     <td class="task-id">ANA-401</td>
-                    <td>Extend trades table with market categories</td>
+                    <td>Расширить таблицу trades категориями рынков</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">ANA-402</td>
-                    <td>Integrate Polymarket /categories endpoint</td>
+                    <td>Интеграция Polymarket /categories endpoint</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">ANA-403</td>
-                    <td>Whale behaviour analysis by category</td>
+                    <td>Анализ поведения китов по категориям</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
                     <td class="task-id">ANA-404</td>
-                    <td>Whale behaviour analysis by entry price (≥0.95, ≤0.05)</td>
+                    <td>Анализ поведения китов по цене входа (≥0.95, ≤0.05)</td>
+                    <td></td>
                     <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">ANA-501</td>
-                    <td>Daily Whale Alert Monitor (Слой 1)</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ANA-502</td>
-                    <td>Weekly AI Analysis — DB Migration (whale_ai_analysis)</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ANA-502-SCRIPT</td>
-                    <td>Weekly AI analysis script implementation</td>
+                    <td class="task-id">ANA-502-FIX</td>
+                    <td>Исправление recommendations_json + prompt rules</td>
+                    <td></td>
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">ANA-502-CRON</td>
-                    <td>Weekly analysis: test run + cron</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ANA-502-FIX</td>
-                    <td>Fix recommendations_json + prompt rules</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">**ANA-502-SQL**</td>
-                    <td>**SQL-слой: финальные запросы для еженедельного AI-анализа**</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">ANA-502-SCRIPT</td>
+                    <td>Реализация скрипта еженедельного AI анализа</td>
+                    <td></td>
+                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
             </tbody>
         </table>
@@ -780,35 +419,22 @@
     </div>
 
     <div class="epic-card">
-        <h2>EPIC 11 — DATA LIFECYCLE</h2>
+        <h2><span class="section-label label-epic">EPIC</span>SEC — Security</h2>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Задача</th>
+                    <th>Тег</th>
                     <th>Статус</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">ARC-502-A</td>
-                    <td>Roundtrip Builder — создание OPEN roundtrips из BUY событий</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ARC-502-B</td>
-                    <td>Roundtrip Builder — закрытие позиций через SELL события</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ARC-502-C</td>
-                    <td>Roundtrip Builder — settlement через Gamma API</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
-                </tr>
-                <tr>
-                    <td class="task-id">ARC-502-D</td>
-                    <td>Fix: whale_trade_roundtrips → whales P&L обновление</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">SEC-502</td>
+                    <td>SSH hardening</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
             </tbody>
         </table>
@@ -816,48 +442,110 @@
     </div>
 
     <div class="epic-card">
-        <h2>EPIC 11 — PROPORTIONAL KELLY SIZING (Phase 1.5)</h2>
+        <h2><span class="section-label label-epic">EPIC</span>INFRA — Infrastructure</h2>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Задача</th>
+                    <th>Тег</th>
                     <th>Статус</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td class="task-id">PHASE1.5-001</td>
-                    <td>Аудит текущего Kelly sizing в trigger</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">INFRA-017</td>
+                    <td>Audit order_executor permissions</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">PHASE1.5-002</td>
-                    <td>strategy_config + estimated_capital schema</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">INFRA-020</td>
+                    <td>trade_duplicate rate flood investigation</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">PHASE1.5-003</td>
-                    <td>Обновление trigger — proportional sizing</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">INFRA-022</td>
+                    <td>Enable log_connections/disconnections</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">PHASE1.5-004</td>
-                    <td>Установка estimated_capital для paper кита</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">INFRA-023</td>
+                    <td>Устранить окно незащищённости между docker start и firewall unit</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">PHASE1.5-005</td>
-                    <td>Верификация полного pipeline</td>
-                    <td><span class="status-badge status-DONE">DONE</span></td>
+                    <td class="task-id">INFRA-024</td>
+                    <td>Runbook для добавления нового DB user</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
             </tbody>
         </table>
 
+    </div>
+
+    <div class="epic-card">
+        <h2><span class="section-label label-epic">EPIC</span>HYG — System Hygiene</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Задача</th>
+                    <th>Тег</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="task-id">HYG-001</td>
+                    <td>Очистка проекта (логи, temp файлы, неиспользуемые скрипты)</td>
+                    <td></td>
+                    <td><span class="status-badge status-READY">READY</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">HYG-002</td>
+                    <td>Удалить неиспользуемые docker images и dangling volumes</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">HYG-003</td>
+                    <td>Проверить permissions .env и обработку секретов</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+
+    <div class="epic-card">
+        <h2><span class="section-label label-epic">EPIC</span>DOC — Documentation & Governance</h2>
+        <p class="empty-message">Все задачи выполнены</p>
+
+    </div>
+
+    <div class="epic-card">
+        <h2><span class="section-label label-epic">EPIC</span>BUG — Cross-cutting Bugs</h2>
+        <p class="empty-message">Все задачи выполнены</p>
+
+    </div>
+
+    <h2>📜 Правила управления задачами</h2>
+    <div class="rules">
+        <p>Любые изменения TASK_BOARD выполняются только через Roo.</p>
+        <p>Strategy формирует изменение через ORCHESTRATOR TASK PACK.</p>
+        <p>Ручное редактирование TASK_BOARD.md запрещено.</p>
+        <p>TASK_BOARD.html является производным файлом и не редактируется вручную.</p>
+        <p>TASK_ID привязан к EPIC-префиксу: PIPE-*, TRD-*, DATA-*, ANA-*, SEC-*, INFRA-*, HYG-*, DOC-*, BUG-*.</p>
     </div>
 
     <div class="footer">
-        <p>Обновлено: 2026-04-11</p>
+        <p>Обновлено: 2026-04-19</p>
         <p class="generated">HTML сгенерирован автоматически из docs/TASK_BOARD.md</p>
     </div>
 </body>
