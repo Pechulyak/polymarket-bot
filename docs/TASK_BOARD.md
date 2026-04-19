@@ -5,303 +5,271 @@
 
 ---
 
-| TRD-402 | Исправление заполнения полей trades в execution pipeline | TODO |
+## Статусы задач
+
+| Статус | Описание |
+|--------|----------|
+| TODO | Задача в очереди, не начата |
+| IN_PROGRESS | Задача выполняется |
+| READY | Задача готова к выполнению |
+| DONE | Задача завершена |
+| FROZEN | Задача/эпик приостановлен |
+| CANCELLED | Задача отменена |
+| BACKLOG | В бэклоге (вне приоритета) |
 
 ---
 
-## PHASE 1 — PIPELINE REFACTORING
+## Текущий приоритет
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| PHASE1-001 | WhaleTradesRepo — единая точка записи whale_trades | DONE |
-| PHASE1-002 | Переключение whale_detector.py на repo | DONE |
-| PHASE1-003 | Переключение whale_tracker.py на repo | DONE |
-| PHASE1-004 | Pipeline Monitor + Telegram алерты | DONE |
-| PHASE1-005 | Финальная верификация Фазы 1 (24ч) | DONE |
+**ACTIVE:** WHALE Copy Strategy (paper trading)
+
+**FROZEN:** Arbitrage | Smart Money
 
 ---
 
-## PHASE 2 — PIPELINE REFACTORING
+## Правила управления задачами
 
-### PHASE 2A — Unified Writer (whale_trades)
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| PHASE2A-001 | Аудит: найти все пути записи в whale_trades | DONE |
-| PHASE2A-002 | Переключение virtual_bankroll.py на WhaleTradesRepo | DONE |
-| PHASE2A-003 | Переключение whale_poller.py на WhaleTradesRepo | DONE |
-| PHASE2A-004 | Deprecation whale_trade_writer.py + очистка мёртвых импортов | DONE |
-| PHASE2A-005 | Аудит и удаление deprecated whale_trade_writer | DONE |
-
-### PHASE 2B — Unified Writer (paper_trades)
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| PHASE2B-001 | Аудит: найти все пути записи в paper_trades | DONE |
-| PHASE2B-002 | Отключение VirtualBankroll paper-trade loop в main.py | DONE |
-| PHASE2B-003 | Создание PaperTradesRepo (единая точка записи) | DONE |
-| PHASE2B-004 | Переключение модулей на PaperTradesRepo | DONE |
-| PHASE2B-005 | Создание DB trigger: whale_trades → paper_trades | DONE |
-| PHASE2B-006 | Удаление ручного копирования | DONE |
+1. Любые изменения TASK_BOARD выполняются только через Roo.
+2. Strategy формирует изменение через ORCHESTRATOR TASK PACK.
+3. Ручное редактирование TASK_BOARD.md запрещено.
+4. TASK_BOARD.html является производным файлом и не редактируется вручную.
+5. TASK_ID привязан к EPIC-префиксу: PIPE-*, TRD-*, DATA-*, ANA-*, SEC-*, INFRA-*, HYG-*, DOC-*, BUG-*.
 
 ---
 
-## EPIC 1 — WHALE COPY STRATEGY
+## Workflow
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| W-001 | Обнаружение китов — pipeline | DONE |
-| W-002 | База данных китов — единая точка записи | DONE |
-| W-003 | Движок метрик стратегии (Kelly + views) | DONE |
-| W-004 | Интеграция copy-trading engine | FROZEN |
-| WHALE-701 | Классификация и исключение китов | DONE |
-| BUG-607 | Исправление: re-discovery перезаписывает excluded-статус | DONE |
+1. STRATEGY передаёт задачу в ORCHESTRATOR TASK PACK
+2. Roo выполняет задачу и обновляет статус
+3. После завершения — верификация + review STRATEGY
+4. Изменения фиксируются через git commit с TASK_ID
 
 ---
 
-## EPIC 2 — ARBITRAGE SYSTEM
+## LANE: WHALE — Whale Copy Strategy
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| A-101 | Обнаружение кросс-биржевого арбитража | TODO |
-| A-102 | Интеграция хеджирования Bybit | TODO |
-| A-103 | Сканер неэффективностей книги заказов | TODO |
+**Статус:** ACTIVE (paper trading)
+
+Информационный блок. Задачи — в EPIC: TRD.
 
 ---
 
-## EPIC 3 — SMART MONEY
+## LANE: ARB — Arbitrage
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| S-201 | Механизмы Kill Switch | TODO |
-| S-202 | Лимиты позиций и контроль просадки | TODO |
-| S-203 | Трекер комиссий и сборов | TODO |
+**Статус:** FROZEN
+
+Информационный блок. Задачи отсутствуют.
 
 ---
 
-## EPIC 4 — DATA AUDIT & SCHEMA FIXES (PHASE 4)
+## LANE: SMART — Smart Money
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| PHASE4-001 | Аудит данных: схема, JOINs, формулы PnL | DONE |
-| PHASE4-002 | Добавить колонку status в таблицу paper_trades | CANCELLED |
-| PHASE4-003 | Исправить JOIN disambiguation для paper_trades ↔ roundtrips | DONE |
-| PHASE4-004 | Стандартизировать формулу PnL на our_pnl_v2 | IN_PROGRESS |
-| PHASE4-005 | Верификация Kelly распределения (пропорциональное vs плоское) | TODO |
-| SYS-328-AUDIT | Инвентаризация файлов — MD / migrations / Python | DONE |
-| SYS-329 | Политика хранения логов — journalctl + docker + logrotate | DONE |
-| SYS-333 | Исправление rsyslog suspend/resume flood | DONE |
-| SYS-334 | Исправление market_category в whale_trade_roundtrips | DONE |
-| SYS-335 | Исправление smoke_test.sh — проверки свежести fetch | DONE |
-| SYS-336 | Исправление Kelly sizing: минимум $1, максимум 5% bankroll | DONE |
-| SEC-501 | SSH Hardening + проверка инцидента 006.1 | DONE |
-| SYS-331 | Исправление застрявших roundtrips — 37 OPEN при resolved markets | DONE |
+**Статус:** FROZEN
+
+Информационный блок. Задачи отсутствуют.
 
 ---
 
-## EPIC 4 — SYSTEM / INFRASTRUCTURE
+## EPIC: PIPE — Pipeline Refactoring
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| SYS-323 | Docker cleanup — images + build cache | DONE |
-| SYS-324 | Очистка системных логов — journalctl + btmp | DONE |
-| SYS-325 | Container logs — truncate + настройка ротации | DONE |
-| SYS-326 | Project cleanup — logs + pycache + backups | DONE |
-| SYS-500 | Whale Roundtrip Reconstructor | DONE |
-
-| SYS-322 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переходом на live | TODO |
-
----
-
-## EPIC 5 — STRATEGY / RESEARCH
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| STRAT-701 | Запуск paper-trade pipeline для отобранных китов | READY |
-
----
-
-## EPIC 6 — SECURITY
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| SEC-401 | Полный Security Audit (порты, env exposure, docker, firewall) | DONE |
-| SEC-402 | Проверка политики No Public Ports | DONE |
-| SEC-403 | Сканирование сервера на открытые сервисы и уязвимости | DONE |
-| SEC-404 | Ограничить Qdrant только localhost | DONE |
-
----
-
-## EPIC 7 — SYSTEM HYGIENE
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| SYS-401 | Очистка проекта (логи, temp файлы, неиспользуемые скрипты) | READY |
-| SYS-402 | Удалить неиспользуемые docker images и dangling volumes | TODO |
-| SYS-403 | Проверить permissions .env и обработку секретов | TODO |
-| SYS-601 | Очистка TASK_BOARD и CHANGELOG — унификация формата | DONE |
-| SYS-601-FIX | Исправление дублирования roundtrip_builder + broken paper_settlement | DONE |
-| DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | DONE |
-
----
-
-## EPIC 8 — TRADING CORRECTNESS
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| BUG-701 | Исправление ссылки на days_active (была days_active_7d) | DONE |
-| TRD-401 | Аудит целостности таблицы trades | IN_PROGRESS |
-| TRD-403 | Верификация поведения settlement (sell vs event resolution) | TODO |
-| TRD-404 | Верификация учёта bankroll (entry/exit updates) | TODO |
-| FIN-401 | Исправление потока virtual bankroll через lifecycle трейда | TODO |
-| TRD-405 | Верификация логики Kelly sizing | DONE |
-| TRD-406 | Исправление zero-size paper trades на open path | TODO |
-| TRD-407 | Исследование execution gap (paper_trades vs trades) | TODO |
-| TRD-408 | Исправление traded_at — использовать API timestamp вместо NOW() | DONE |
-| TRD-409 | Исправление интеграции settlement с VirtualBankroll | DONE |
-| TRD-411 | Аудит обработки whale exit и записи buy/sell событий | DONE |
-| TRD-412 | Создание таблицы whale_trade_roundtrips и логики реконструкции позиций | TODO |
-| ARC-502-B | Fuzzy matching close для short selling (+27 CLOSED) | DONE |
-| TRD-413 | Аудит полноты ingestion whale_trades для tracked китов | TODO |
-| TRD-421 | Аудит whale_trades — Завершён | DONE |
-| BUG-603 | Исправление dedup filter paper_trades→trades + bankroll reset | DONE |
-| BUG-504 | Исправление false счётчика new_trades в whale_detector logs | DONE |
-| TRD-422 | Добавить market_category в whale_trades и унифицировать запись | DONE |
-| TRD-426 | Исправление tier порогов — 97% HOT | DONE |
-| TRD-427 | Исправление: OPEN roundtrips не обновляются settlement (757 stuck) | DONE |
-| TRD-420-A | Per-wallet polling для copy_status='paper' китов | DONE |
-| TRD-420-B | Per-wallet polling для copy_status='tracked' китов (5 мин) | IN_PROGRESS |
-| TRD-430 | Аудит paper trading pipeline: trades → settlement → bankroll | DONE |
-| BUG-601 | Диагностика failure settlement — 0 closed trades с resolved markets | DONE |
-| BUG-601-FIX | Переключение settlement engine с Gamma API на CLOB API | DONE |
-| BUG-604 | Reconciliation bankroll после settlement + исправление event loop | DONE |
-| BUG-801 | Аудит pnl_status UNAVAILABLE в whale_trade_roundtrips | DONE |
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| PIPE-001 | WhaleTradesRepo — единая точка записи whale_trades | | DONE |
+| PIPE-002 | Переключение whale_detector.py на repo | | DONE |
+| PIPE-003 | Переключение whale_tracker.py на repo | | DONE |
+| PIPE-004 | Pipeline Monitor + Telegram алерты | | DONE |
+| PIPE-005 | Финальная верификация Фазы 1 (24ч) | | DONE |
+| PIPE-006 | Аудит: найти все пути записи в whale_trades | | DONE |
+| PIPE-007 | Переключение virtual_bankroll.py на WhaleTradesRepo | | DONE |
+| PIPE-008 | Переключение whale_poller.py на WhaleTradesRepo | | DONE |
+| PIPE-009 | Deprecation whale_trade_writer.py + очистка мёртвых импортов | | DONE |
+| PIPE-010 | Аудит и удаление deprecated whale_trade_writer | | DONE |
+| PIPE-011 | Аудит: найти все пути записи в paper_trades | | DONE |
+| PIPE-012 | Отключение VirtualBankroll paper-trade loop в main.py | | DONE |
+| PIPE-013 | Создание PaperTradesRepo (единая точка записи) | | DONE |
+| PIPE-014 | Переключение модулей на PaperTradesRepo | | DONE |
+| PIPE-015 | Создание DB trigger: whale_trades → paper_trades | | DONE |
+| PIPE-016 | Удаление ручного копирования | | DONE |
+| PIPE-017 | Аудит текущего settlement в roundtrip_builder | | DONE |
+| PIPE-018 | Определить API endpoint для resolution data | | DONE |
+| PIPE-019 | Спроектировать market_resolutions таблицу | | DONE |
+| PIPE-020 | Перенести settlement логику в БД (trigger/procedure) | | DONE |
+| PIPE-021 | Обновить roundtrip_builder.py → использовать БД | | DONE |
+| PIPE-022 | Удалить HTTP settlement из roundtrip_builder | | DONE |
+| PIPE-023 | Верификация end-to-end | | IN_PROGRESS |
+| PIPE-024 | Аудит данных для views (схемы, связи, match rate) | | DONE |
+| PIPE-025 | View: whale_pnl_summary | | DONE |
+| PIPE-026 | View: paper_portfolio_state | | DONE |
+| PIPE-027 | View: paper_simulation_pnl | | DONE |
+| PIPE-028 | Cron refresh views + smoke_test checks | | DONE |
+| PIPE-029 | Dynamic Kelly — trigger берёт bankroll из view | | DONE |
+| PIPE-030 | Финальная верификация Фазы 4 | | DONE |
+| PIPE-031 | Аудит текущего Kelly sizing в trigger | | DONE |
+| PIPE-032 | strategy_config + estimated_capital schema | | DONE |
+| PIPE-033 | Обновление trigger — proportional sizing | | DONE |
+| PIPE-034 | Установка estimated_capital для paper кита | | DONE |
+| PIPE-035 | Верификация полного pipeline | | DONE |
+| PIPE-036 | Roundtrip Builder — создание OPEN roundtrips из BUY событий | | DONE |
+| PIPE-037 | Roundtrip Builder — закрытие позиций через SELL события | | DONE |
+| PIPE-038 | Roundtrip Builder — settlement через CLOB API | | DONE |
+| PIPE-039 | Исправление: whale_trade_roundtrips → whales P&L обновление | | DONE |
+| PIPE-040 | Whale Roundtrip Reconstructor | | DONE |
+| PIPE-041 | Исправление дублирования roundtrip_builder + broken paper_settlement | | DONE |
+| PIPE-042 | Исправление Kelly sizing: минимум $1, максимум 5% bankroll | | DONE |
 
 ---
 
-## EPIC 9 — DATA INTEGRITY
+## EPIC: TRD — Trading Correctness
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| TRD-414 | Backup whales and whale_trades + snapshot report | DONE |
-| TRD-415 | Freeze whale discovery and whale_trades writes before cleanup | DONE |
-| TRD-416 | Reduce whales universe to qualified subset and clean whale_trades | DONE |
-| TRD-417 | Audit API response structure across market types before whales schema redesign | TODO |
-| TRD-418 | Transform whales table schema to approved activity-based structure | DONE |
-| TRD-419 | Migrate whales logic from legacy fields to new activity-based fields | DONE |
-| ARC-503 | Remove legacy fields is_winner and profit_usd from whale_trades | DONE |
-| TRD-420 | Рефакторинг whale discovery: initial history aggregation + tiered polling | IN_PROGRESS |
-| DATA-404 | Reset virtual bankroll for fresh paper trading cycle | DONE |
-| DATA-405 | Cleanup test records from database | DONE |
-
----
-
-## EPIC 10 — ANALYTICS PREPARATION
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| ANA-401 | Расширить таблицу trades категориями рынков | TODO |
-| ANA-402 | Интеграция Polymarket /categories endpoint | TODO |
-| ANA-403 | Анализ поведения китов по категориям | TODO |
-| ANA-404 | Анализ поведения китов по цене входа (≥0.95, ≤0.05) | TODO |
-| ANA-501 | Ежедневный мониторинг Whale Alert (Слой 1) | DONE |
-| ANA-502 | Еженедельный AI анализ — миграция БД (whale_ai_analysis) | DONE |
-| ANA-502-SCRIPT | Реализация скрипта еженедельного AI анализа | IN_PROGRESS |
-| ANA-502-CRON | Еженедельный анализ: test run + cron | DONE |
-| ANA-502-FIX | Исправление recommendations_json + prompt rules | IN_PROGRESS |
-| ANA-502-SQL | SQL-слой: финальные запросы для еженедельного AI-анализа | DONE |
-
----
-
-## EPIC 11 — DATA LIFECYCLE
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| ARC-502-A | Roundtrip Builder — создание OPEN roundtrips из BUY событий | DONE |
-| ARC-502-B | Roundtrip Builder — закрытие позиций через SELL события | DONE |
-| ARC-502-C | Roundtrip Builder — settlement через CLOB API | DONE |
-| ARC-502-D | Исправление: whale_trade_roundtrips → whales P&L обновление | DONE |
-
----
-
-## EPIC 11 — PROPORTIONAL KELLY SIZING (Phase 1.5)
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| PHASE1.5-001 | Аудит текущего Kelly sizing в trigger | DONE |
-| PHASE1.5-002 | strategy_config + estimated_capital schema | DONE |
-| PHASE1.5-003 | Обновление trigger — proportional sizing | DONE |
-| PHASE1.5-004 | Установка estimated_capital для paper кита | DONE |
-| PHASE1.5-005 | Верификация полного pipeline | DONE |
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| TRD-401 | Аудит целостности таблицы trades | | IN_PROGRESS |
+| TRD-402 | Исправление заполнения полей trades в execution pipeline | | TODO |
+| TRD-403 | Верификация поведения settlement (sell vs event resolution) | | TODO |
+| TRD-404 | Верификация учёта bankroll (entry/exit updates) | | TODO |
+| TRD-405 | Верификация логики Kelly sizing | | DONE |
+| TRD-406 | Исправление zero-size paper trades на open path | | TODO |
+| TRD-407 | Исследование execution gap (paper_trades vs trades) | | TODO |
+| TRD-408 | Исправление traded_at — использовать API timestamp вместо NOW() | | DONE |
+| TRD-409 | Исправление интеграции settlement с VirtualBankroll | | DONE |
+| TRD-411 | Аудит обработки whale exit и записи buy/sell событий | | DONE |
+| TRD-412 | Создание таблицы whale_trade_roundtrips и логики реконструкции позиций | | TODO |
+| TRD-413 | Аудит полноты ingestion whale_trades для tracked китов | | TODO |
+| TRD-414 | Backup whales and whale_trades + snapshot report | | DONE |
+| TRD-415 | Freeze whale discovery and whale_trades writes before cleanup | | DONE |
+| TRD-416 | Reduce whales universe to qualified subset and clean whale_trades | | DONE |
+| TRD-417 | Audit API response structure across market types before whales schema redesign | | TODO |
+| TRD-418 | Transform whales table schema to approved activity-based structure | | DONE |
+| TRD-419 | Migrate whales logic from legacy fields to new activity-based fields | | DONE |
+| TRD-420 | Рефакторинг whale discovery: initial history aggregation + tiered polling | | IN_PROGRESS |
+| TRD-420-A | Per-wallet polling для copy_status='paper' китов | | DONE |
+| TRD-420-B | Per-wallet polling для copy_status='tracked' китов (5 мин) | | IN_PROGRESS |
+| TRD-421 | Аудит whale_trades — Завершён | | DONE |
+| TRD-422 | Добавить market_category в whale_trades и унифицировать запись | | DONE |
+| TRD-426 | Исправление tier порогов — 97% HOT | | DONE |
+| TRD-427 | Исправление: OPEN roundtrips не обновляются settlement (757 stuck) | | DONE |
+| TRD-430 | Аудит paper trading pipeline: trades → settlement → bankroll | | DONE |
+| TRD-431 | Исправление потока virtual bankroll через lifecycle трейда | | TODO |
+| TRD-432 | Исправление ссылки на days_active (была days_active_7d) | | DONE |
+| TRD-433 | Исправление dedup filter paper_trades→trades + bankroll reset | | DONE |
+| TRD-434 | Исправление false счётчика new_trades в whale_detector logs | | DONE |
+| TRD-435 | Диагностика failure settlement — 0 closed trades с resolved markets | | DONE |
+| TRD-436 | Переключение settlement engine с Gamma API на CLOB API | | DONE |
+| TRD-437 | Reconciliation bankroll после settlement + исправление event loop | | DONE |
+| TRD-438 | Аудит pnl_status UNAVAILABLE в whale_trade_roundtrips | | DONE |
+| TRD-439 | Запуск paper-trade pipeline для отобранных китов | | READY |
+| TRD-440 | Исправление застрявших roundtrips — 37 OPEN при resolved markets | | DONE |
+| TRD-441 | Классификация и исключение китов | | DONE |
 
 ---
 
-## PHASE 3 — SETTLEMENT В БД
+## EPIC: DATA — Data Integrity
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| PHASE3-001 | Аудит текущего settlement в roundtrip_builder | DONE |
-| PHASE3-002 | Определить API endpoint для resolution data | DONE |
-| PHASE3-003 | Спроектировать market_resolutions таблицу | DONE |
-| PHASE3-004 | Перенести settlement логику в БД (trigger/procedure) | DONE |
-| PHASE3-005 | Обновить roundtrip_builder.py → использовать БД | DONE |
-| PHASE3-006 | Удалить HTTP settlement из roundtrip_builder | DONE |
-| PHASE3-007 | Верификация end-to-end | IN_PROGRESS |
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| DATA-404 | Reset virtual bankroll for fresh paper trading cycle | | DONE |
+| DATA-405 | Cleanup test records from database | | DONE |
+| DATA-406 | Remove legacy fields is_winner and profit_usd from whale_trades | | DONE |
+| DATA-407 | Исправление market_category в whale_trade_roundtrips | | DONE |
 
 ---
 
-## PHASE 4 — MATERIALIZED VIEWS + DYNAMIC KELLY
+## EPIC: ANA — Analytics
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| PHASE4-001 | Аудит данных для views (схемы, связи, match rate) | DONE |
-| PHASE4-002 | View: whale_pnl_summary | DONE |
-| PHASE4-003 | View: paper_portfolio_state | DONE |
-| PHASE4-004 | View: paper_simulation_pnl | DONE |
-| PHASE4-005 | Cron refresh views + smoke_test checks | DONE |
-| PHASE4-006 | Dynamic Kelly — trigger берёт bankroll из view | DONE |
-| PHASE4-007 | Финальная верификация Фазы 4 | DONE |
-
----
-
-## INFRASTRUCTURE
-
-| ID | Задача | Статус |
-|----|--------|--------|
-| INFRA-002-001 | Аудит конфигурации безопасности PostgreSQL и сети (Сервер 1) | DONE |
-| INFRA-002-002 | Создание read-only PostgreSQL user для Grafana | DONE |
-| INFRA-002-003 | Создание PostgreSQL user order_executor для live trading | DONE |
-| INFRA-002-004.1 | Baseline перед INFRA-002-004 retry | DONE |
-| INFRA-002-004.2 | Аудит pg_hba.conf — создание users и настройка trust | DONE |
-| INFRA-002-004.3 | Подготовить новый pg_hba.conf файл (БЕЗ применения) | DONE |
-| INFRA-002-004.4 | Применить pg_hba.conf через docker cp + pg_reload_conf | DONE |
-| INFRA-002-005.1 | Сгенерировать self-signed SSL сертификат для PostgreSQL | DONE |
-| INFRA-002-005.2 | Включить SSL в PostgreSQL через docker-compose | DONE |
-| INFRA-002-005.3 | Заменить host → hostssl в pg_hba.conf | DONE |
-| INFRA-002-006.0a | Pre-flight audit — найти использования POSTGRES_PASSWORD | DONE |
-| INFRA-002-006.0b | Сменить POSTGRES_PASSWORD на сильный | DONE |
-| INFRA-002-006.FIREWALL | Firewall hardening — закрыть порт 5433 для всех кроме 62.60.233.100 | DONE |
-| INFRA-002-006.1b | Firewall persistence — systemd unit для DOCKER-USER правил | DONE |
-| INFRA-002-007 | Тест полного подключения с Сервера 2 | DONE |
-| INFRA-002-008 | Финальный security baseline audit INFRA-002 | DONE |
-| INFRA-002-AUDIT-ORDER-EXEC | Audit order_executor permissions | TODO |
-| INFRA-003 | Backup Policy: automated encrypted DB backups to Backblaze B2 | DONE |
-| SEC-501-HOST-HARDENING | SSH hardening | TODO |
-| postgres-logging-hardening | Enable log_connections/disconnections | TODO |
-| firewall-startup-race-fix | Устранить окно незащищённости между docker start и firewall unit | TODO |
-| user-provisioning-runbook | Runbook для добавления нового DB user | TODO | |
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| ANA-401 | Расширить таблицу trades категориями рынков | | TODO |
+| ANA-402 | Интеграция Polymarket /categories endpoint | | TODO |
+| ANA-403 | Анализ поведения китов по категориям | | TODO |
+| ANA-404 | Анализ поведения китов по цене входа (≥0.95, ≤0.05) | | TODO |
+| ANA-501 | Ежедневный мониторинг Whale Alert (Слой 1) | | DONE |
+| ANA-502 | Еженедельный AI анализ — миграция БД (whale_ai_analysis) | | DONE |
+| ANA-502-CRON | Еженедельный анализ: test run + cron | | DONE |
+| ANA-502-FIX | Исправление recommendations_json + prompt rules | | IN_PROGRESS |
+| ANA-502-SCRIPT | Реализация скрипта еженедельного AI анализа | | IN_PROGRESS |
+| ANA-502-SQL | SQL-слой: финальные запросы для еженедельного AI-анализа | | DONE |
+| ANA-503 | Whale Universe Quality Analysis | | DONE |
 
 ---
 
-## SYSTEM TASKS
+## EPIC: SEC — Security
 
-| ID | Задача | Статус |
-|----|--------|--------|
-| SYS-309 | Daily Data Audit Snapshot (run_data_check.py) | DONE |
-| SYS-322 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | DONE |
-| SYS-501 | Project Filesystem Cleanup (logs, temp, md artifacts) | DONE |
-| SYS-330 | trade_duplicate rate flood investigation | BACKLOG |
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| SEC-401 | Полный Security Audit (порты, env exposure, docker, firewall) | | DONE |
+| SEC-402 | Проверка политики No Public Ports | | DONE |
+| SEC-403 | Сканирование сервера на открытые сервисы и уязвимости | | DONE |
+| SEC-404 | Ограничить Qdrant только localhost | | DONE |
+| SEC-501 | SSH Hardening + проверка инцидента 006.1 | | DONE |
+| SEC-502 | SSH hardening | | TODO |
+| SEC-503 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | | DONE |
+| SEC-504 | Политика хранения логов — journalctl + docker + logrotate | | DONE |
+| SEC-505 | Исправление rsyslog suspend/resume flood | | DONE |
 
 ---
 
-*Обновлено: 2026-04-11*
+## EPIC: INFRA — Infrastructure
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| INFRA-001 | Аудит конфигурации безопасности PostgreSQL и сети (Сервер 1) | | DONE |
+| INFRA-002 | Создание read-only PostgreSQL user для Grafana | | DONE |
+| INFRA-003 | Создание PostgreSQL user order_executor для live trading | | DONE |
+| INFRA-004 | Baseline перед INFRA-002-004 retry | | DONE |
+| INFRA-005 | Аудит pg_hba.conf — создание users и настройка trust | | DONE |
+| INFRA-006 | Подготовить новый pg_hba.conf файл (БЕЗ применения) | | DONE |
+| INFRA-007 | Применить pg_hba.conf через docker cp + pg_reload_conf | | DONE |
+| INFRA-008 | Сгенерировать self-signed SSL сертификат для PostgreSQL | | DONE |
+| INFRA-009 | Включить SSL в PostgreSQL через docker-compose | | DONE |
+| INFRA-010 | Заменить host → hostssl в pg_hba.conf | | DONE |
+| INFRA-011 | Pre-flight audit — найти использования POSTGRES_PASSWORD | | DONE |
+| INFRA-012 | Сменить POSTGRES_PASSWORD на сильный | | DONE |
+| INFRA-013 | Firewall hardening — закрыть порт 5433 для всех кроме 62.60.233.100 | | DONE |
+| INFRA-014 | Firewall persistence — systemd unit для DOCKER-USER правил | | DONE |
+| INFRA-015 | Тест полного подключения с Сервера 2 | | DONE |
+| INFRA-016 | Финальный security baseline audit INFRA-002 | | DONE |
+| INFRA-017 | Audit order_executor permissions | | TODO |
+| INFRA-018 | Backup Policy: automated encrypted DB backups to Backblaze B2 | | DONE |
+| INFRA-019 | Daily Data Audit Snapshot (run_data_check.py) | | DONE |
+| INFRA-020 | trade_duplicate rate flood investigation | | TODO |
+| INFRA-021 | Исправление smoke_test.sh — проверки свежести fetch | | DONE |
+| INFRA-022 | Enable log_connections/disconnections | | TODO |
+| INFRA-023 | Устранить окно незащищённости между docker start и firewall unit | | TODO |
+| INFRA-024 | Runbook для добавления нового DB user | | TODO |
+
+---
+
+## EPIC: HYG — System Hygiene
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| HYG-001 | Очистка проекта (логи, temp файлы, неиспользуемые скрипты) | | READY |
+| HYG-002 | Удалить неиспользуемые docker images и dangling volumes | | TODO |
+| HYG-003 | Проверить permissions .env и обработку секретов | | TODO |
+| HYG-004 | Docker cleanup — images + build cache | | DONE |
+| HYG-005 | Очистка системных логов — journalctl + btmp | | DONE |
+| HYG-006 | Container logs — truncate + настройка ротации | | DONE |
+| HYG-007 | Project cleanup — logs + pycache + backups | | DONE |
+| HYG-008 | Инвентаризация файлов — MD / migrations / Python | | DONE |
+| HYG-009 | Рефакторинг структуры TASK_BOARD.md — унификация эпиков, префиксов, формата | | DONE |
+
+---
+
+## EPIC: DOC — Documentation & Governance
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | | DONE |
+| DOC-602 | Очистка TASK_BOARD и CHANGELOG — унификация формата | | DONE |
+
+---
+
+## EPIC: BUG — Cross-cutting Bugs
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| BUG-607 | Исправление: re-discovery перезаписывает excluded-статус | | DONE |
+
+---
+
+*Обновлено: 2026-04-19*
