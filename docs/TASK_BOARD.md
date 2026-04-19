@@ -96,7 +96,7 @@
 | PIPE-020 | Перенести settlement логику в БД (trigger/procedure) | | DONE |
 | PIPE-021 | Обновить roundtrip_builder.py → использовать БД | | DONE |
 | PIPE-022 | Удалить HTTP settlement из roundtrip_builder | | DONE |
-| PIPE-023 | Верификация end-to-end | | IN_PROGRESS |
+| PIPE-023 | Верификация end-to-end | | DONE |
 | PIPE-024 | Аудит данных для views (схемы, связи, match rate) | | DONE |
 | PIPE-025 | View: whale_pnl_summary | | DONE |
 | PIPE-026 | View: paper_portfolio_state | | DONE |
@@ -116,6 +116,7 @@
 | PIPE-040 | Whale Roundtrip Reconstructor | | DONE |
 | PIPE-041 | Исправление дублирования roundtrip_builder + broken paper_settlement | | DONE |
 | PIPE-042 | Исправление Kelly sizing: минимум $1, максимум 5% bankroll | | DONE |
+| PIPE-043 | Аудит фактического состояния задач нового цикла | AUDIT | DONE |
 
 ---
 
@@ -123,7 +124,7 @@
 
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
-| TRD-401 | Аудит целостности таблицы trades | | IN_PROGRESS |
+| TRD-401 | Аудит целостности таблицы trades | | BACKLOG |
 | TRD-402 | Исправление заполнения полей trades в execution pipeline | | TODO |
 | TRD-403 | Верификация поведения settlement (sell vs event resolution) | | TODO |
 | TRD-404 | Верификация учёта bankroll (entry/exit updates) | | TODO |
@@ -141,9 +142,9 @@
 | TRD-417 | Audit API response structure across market types before whales schema redesign | | TODO |
 | TRD-418 | Transform whales table schema to approved activity-based structure | | DONE |
 | TRD-419 | Migrate whales logic from legacy fields to new activity-based fields | | DONE |
-| TRD-420 | Рефакторинг whale discovery: initial history aggregation + tiered polling | | IN_PROGRESS |
+| TRD-420 | Рефакторинг whale discovery: initial history aggregation + tiered polling | | DONE |
 | TRD-420-A | Per-wallet polling для copy_status='paper' китов | | DONE |
-| TRD-420-B | Per-wallet polling для copy_status='tracked' китов (5 мин) | | IN_PROGRESS |
+| TRD-420-B | Per-wallet polling для copy_status='tracked' китов (5 мин) | | DONE |
 | TRD-421 | Аудит whale_trades — Завершён | | DONE |
 | TRD-422 | Добавить market_category в whale_trades и унифицировать запись | | DONE |
 | TRD-426 | Исправление tier порогов — 97% HOT | | DONE |
@@ -157,7 +158,7 @@
 | TRD-436 | Переключение settlement engine с Gamma API на CLOB API | | DONE |
 | TRD-437 | Reconciliation bankroll после settlement + исправление event loop | | DONE |
 | TRD-438 | Аудит pnl_status UNAVAILABLE в whale_trade_roundtrips | | DONE |
-| TRD-439 | Запуск paper-trade pipeline для отобранных китов | | READY |
+| TRD-439 | Запуск paper-trade pipeline для отобранных китов | | IN_PROGRESS |
 | TRD-440 | Исправление застрявших roundtrips — 37 OPEN при resolved markets | | DONE |
 | TRD-441 | Классификация и исключение китов | | DONE |
 
@@ -185,8 +186,8 @@
 | ANA-501 | Ежедневный мониторинг Whale Alert (Слой 1) | | DONE |
 | ANA-502 | Еженедельный AI анализ — миграция БД (whale_ai_analysis) | | DONE |
 | ANA-502-CRON | Еженедельный анализ: test run + cron | | DONE |
-| ANA-502-FIX | Исправление recommendations_json + prompt rules | | IN_PROGRESS |
-| ANA-502-SCRIPT | Реализация скрипта еженедельного AI анализа | | IN_PROGRESS |
+| ANA-502-FIX | Исправление recommendations_json + prompt rules | | DONE |
+| ANA-502-SCRIPT | Реализация скрипта еженедельного AI анализа | | DONE |
 | ANA-502-SQL | SQL-слой: финальные запросы для еженедельного AI-анализа | | DONE |
 | ANA-503 | Whale Universe Quality Analysis | | DONE |
 
@@ -244,7 +245,7 @@
 
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
-| HYG-001 | Очистка проекта (логи, temp файлы, неиспользуемые скрипты) | | READY |
+| HYG-001 | Очистка проекта (логи, temp файлы, неиспользуемые скрипты) | | DONE |
 | HYG-002 | Удалить неиспользуемые docker images и dangling volumes | | TODO |
 | HYG-003 | Проверить permissions .env и обработку секретов | | TODO |
 | HYG-004 | Docker cleanup — images + build cache | | DONE |
