@@ -265,6 +265,7 @@
 | DOC-602 | Очистка TASK_BOARD и CHANGELOG — унификация формата | | DONE |
 | DOC-GOVERNANCE-UPDATE | Обновить governance-документы под новый формат TASK_BOARD (пункты 6-11) | | DONE |
 | DOC-603 | Актуализация PROJECT_STATE.md + запрет snapshot-данных | | DONE |
+| DOC-WHALE-SPEC | WHALE_STATUS_TRANSITIONS.md governance spec v1.0 | | DONE |
 
 ---
 

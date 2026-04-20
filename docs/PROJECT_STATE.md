@@ -408,6 +408,12 @@ none
   task: 
   note: governance rules
 
+- WHALE_STATUS_TRANSITIONS.md
+  status: ACTIVE
+  updated: 2026-04-20
+  task: WHALE-STATUS-TRANSITION-SPEC
+  note: governance spec v1.0 для copy_status transitions (none ↔ tracked ↔ paper ↔ excluded). Формула estimated_capital: max_daily_volume_30d.
+
 - PROJECT_CHANGELOG.md
   status: OK
   updated: 2026-04-19
