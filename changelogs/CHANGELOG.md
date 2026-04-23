@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-04-22 | DOCS-UPDATE-AUDIT-CYCLE | Docs: CHANGELOG + WHALE_STATUS_TRANSITIONS.md v1.1 + CHAT GOVERNANCE. Excluded whale 82244 (edge_degraded, scale mismatch). Batch promotion none→tracked: 12 whales. 4 candidates rejected for paper after whale_status.sql verification. Audit methodology unreliable: 3/3 spot-checks showed material divergence. Reset 2026-04-05 limits observability to 17d. Tier staleness issue identified. |
 | 2026-04-20 | WHALE-STATUS-TRANSITION-SPEC | docs: WHALE_STATUS_TRANSITIONS.md — governance spec v1.0 для whale copy_status transitions (none ↔ tracked ↔ paper ↔ excluded). Формула estimated_capital: max_daily_volume_30d. |
 | 2026-04-19 | SYNC-TASKBOARD-2026-04-19 | Синхронизация TASK_BOARD с фактическим состоянием по результатам аудита AUDIT-OPEN-TASKS-2026-04-19. Переведены в DONE (10): TRD-402,406,412,417; INFRA-017,020,024; HYG-002,003. Переведены в CANCELLED (8): TRD-407,431; SEC-502; INFRA-022,023; ANA-401,402,403. Переформулированы (2): TRD-403,404 — view-based архитектура. |
 | 2026-04-19 | DOC-GOVERNANCE-UPDATE | CHAT GOVERNANCE дополнен пунктами 6-11 (формат, название, inline-запрет, префиксы эпиков, структура, статусы). task_template Шаг 0 — ссылка на новые правила. |

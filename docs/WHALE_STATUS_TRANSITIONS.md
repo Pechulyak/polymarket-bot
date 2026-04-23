@@ -1,9 +1,10 @@
 # Whale Status Transitions — Governance Spec
 
-**Version:** 1.0 (draft)
+**Version:** 1.1
 **Approved by:** STRATEGY
-**Approved at:** 2026-04-19
-**Revision basis:** WHALE-STATUS-SPEC-DRAFT-v1
+**Approved at:** 2026-04-22
+**Previous version:** 1.0 (2026-04-19)
+**Revision basis:** Whale audit cycle 2026-04-22 — audit methodology reliability issues, reset-observability constraints, tier refresh enforcement
 
 > Документ описывает алгоритм перевода китов между значениями `whales.copy_status`.
 > Все изменения статусов в БД должны соответствовать этому документу.
@@ -53,6 +54,9 @@ WHERE wallet_address = '<addr>'
 
 **Pre-checks:**
 - P&L Gate: WR ≥60%, N≥5 roundtrips, PnL > 0.
+- **Post-reset data adequacy check** (added v1.1): `roundtrips_closed_post_reset ≥ 10` AND `post_reset_wr ≥ 60%`. Prevents promotion based on pre-reset data that does not reflect current whale behavior. Reset timestamp tracked in `strategy_config` or equivalent — verify with `whale_status.sql` section 350.
+- **whale_status.sql verification mandatory** (added v1.1): run `whale_status.sql` and confirm metrics match audit reports within ±5% for WR and ±10% for PnL. If divergence exceeds thresholds, whale_status.sql values are authoritative.
+- **Tier refresh** (clarified v1.1): run `_update_whale_activity` immediately before promotion. Tier must be HOT or WARM at the moment of UPDATE.
 - Рассчитать `estimated_capital` по формуле:
 
 ```sql
@@ -153,12 +157,14 @@ WHERE wallet_address = '<addr>'
 
 ## 6. Open questions
 
-Список вопросов, не решённых в v1:
+Список вопросов, не решённых в текущей версии:
 
 1. Нужен ли периодический пересчёт `estimated_capital` для paper-китов (weekly/monthly)?
 2. Нужно ли добавить поле `copy_status_updated_at` для аудита? (отдельный TRD-тикет)
-3. Fallback метод расчёта `estimated_capital` для китов с <30 дней истории.
+3. Fallback метод расчёта `estimated_capital` для китов с <30 дней истории. **Relevant case**: 2026-04-22 audit universe — all 96 whales have <31 days in DB post-reset.
 4. Retroactive применение `max_daily_volume_30d` к существующим paper-китам с `method='manual'`.
+5. **(added v1.1)** Нужна ли отдельная `exclusion_reason` для случаев "edge exists but incompatible with our sizing" (scale mismatch)? Currently `edge_degraded` used as workaround (cases: 0x32ed, 0xee613b3f, 0x2b3ff45c, 0xacae3c6e). Candidate values: `edge_insufficient_for_sizing`, `scale_mismatch`.
+6. **(added v1.1)** Критерии `paper → live`. Not defined in v1.0 or v1.1. Required before live rollout of `0x479e...`.
 
 ---
 
@@ -688,7 +694,18 @@ SET reviewed_at = NOW(),
 
 **All steps from 11.1 plus:**
 
-5. **P&L Gate verification:**
+5. **whale_status.sql verification** (added v1.1):
+   - Run `whale_status.sql` with whale's wallet_address
+   - Compare §300 (roundtrips metrics) with the source that triggered promotion consideration
+   - If WR divergence > 5pp or PnL divergence > 10% — whale_status.sql values authoritative, re-evaluate against gates
+   - If §350 `post_reset_closed_count < 10` or `post_reset_wr < 60%` — **STOP**, whale's edge is pre-reset-dominant, not currently validated
+
+6. **Tier refresh** (added v1.1):
+   - Run `_update_whale_activity` for the whale
+   - Re-query `whales.tier` — must be HOT or WARM
+   - If COLD despite recent activity — investigate `last_seen_in_feed` staleness before proceeding
+
+7. **P&L Gate verification:**
    - WR ≥ 60%
    - N ≥ 5 closed roundtrips
    - Net PnL > 0
@@ -699,7 +716,7 @@ SET reviewed_at = NOW(),
    FROM whales w WHERE w.wallet_address = '<address>';
    ```
 
-6. **Calculate and set estimated_capital** (see Section 12):
+8. **Calculate and set estimated_capital** (see Section 12):
    ```sql
    UPDATE whales 
    SET estimated_capital = <calculated_value>,
@@ -708,7 +725,7 @@ SET reviewed_at = NOW(),
    WHERE wallet_address = '<address>';
    ```
 
-7. **Document in whale_comment:**
+9. **Document in whale_comment:**
    ```sql
    UPDATE whales 
    SET whale_comment = whale_comment || ' Promotion to paper. estimated_capital=<value> (<method>). P&L Gate: WR=<wr>, RT=<rt>, PnL=<pnl>. ',

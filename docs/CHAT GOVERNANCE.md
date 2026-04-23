@@ -187,6 +187,27 @@ Winrate > 60%
 
 ---
 
+## Whale Promotion Workflow (added 2026-04-22)
+
+Подтверждено циклом аудита 2026-04-22: прямая промоция из отчёта аналитики в paper без whale_status.sql верификации приводит к ложноположительным кандидатам (3/3 spot-checks показали расхождения метрик).
+
+### Обязательный workflow для `tracked → paper` promotion
+
+1. **STRATEGY**: формирует short-list кандидатов на основе отчёта Аналитики
+2. **STRATEGY**: для каждого кандидата запускает `whale_status.sql` лично (инструмент STRATEGY, не Roo)
+3. **STRATEGY**: верифицирует метрики против spec §11.2 — если post-reset данных недостаточно или расхождение с отчётом > порогов, кандидат отклоняется
+4. **STRATEGY**: ставит TASK на Roo с расчётом `estimated_capital = max_daily_volume_30d` и UPDATE
+5. **Roo (через Разработку)**: выполняет `_update_whale_activity` → проверяет tier HOT/WARM → выполняет UPDATE по spec §3.2 → верификация
+
+### Запреты
+
+- Roo **не** выполняет `tracked → paper` UPDATE на основе отчёта аналитики без явного STRATEGY решения и whale_status.sql верификации
+- Roo **не** рассчитывает `estimated_capital` самостоятельно для китов с reset-ограниченной историей (<30 дней post-reset) без STRATEGY подтверждения метода
+- Batch-промоции `none → tracked` допустимы без whale_status.sql верификации каждого кита (tracked не копирует трейды, risk minimal)
+- Batch-промоции `tracked → paper` **не допускаются** — каждый paper-переход требует индивидуальной верификации
+
+---
+
 ## SECURITY POLICY — NETWORK EXPOSURE
 
 External ports are strictly forbidden for the trading infrastructure.
