@@ -117,6 +117,7 @@
 | PIPE-041 | Исправление дублирования roundtrip_builder + broken paper_settlement | | DONE |
 | PIPE-042 | Исправление Kelly sizing: минимум $1, максимум 5% bankroll | | DONE |
 | PIPE-043 | Аудит фактического состояния задач нового цикла | AUDIT | DONE |
+| ARC-608-ROUNDTRIP-V2 | Архитектурный рефакторинг whale_trade_roundtrips: cycle_number + SELL-close в pipeline | feature:roundtrip-v2 | IN_PROGRESS |
 
 ---
 
@@ -126,8 +127,8 @@
 |----|--------|-----|--------|
 | TRD-401 | Аудит целостности таблицы trades | | BACKLOG |
 | TRD-402 | Исправление заполнения полей trades в execution pipeline | | DONE |
-| TRD-403 | Верификация settlement behaviour в portfolio view | | TODO |
-| TRD-404 | Верификация bankroll в portfolio view | | TODO |
+| TRD-403 | Верификация settlement behaviour в portfolio view | | DONE |
+| TRD-404 | Верификация bankroll в portfolio view | | DONE |
 | TRD-405 | Верификация логики Kelly sizing | | DONE |
 | TRD-406 | Исправление zero-size paper trades на open path | | DONE |
 | TRD-407 | Исследование execution gap (paper_trades vs trades) | | CANCELLED |
@@ -182,7 +183,7 @@
 | ANA-401 | Расширить таблицу trades категориями рынков | | CANCELLED |
 | ANA-402 | Интеграция Polymarket /categories endpoint | | CANCELLED |
 | ANA-403 | Анализ поведения китов по категориям | | CANCELLED |
-| ANA-404 | Анализ поведения китов по цене входа (≥0.95, ≤0.05) | | TODO |
+| ANA-404 | Анализ поведения китов по цене входа (≥0.95, ≤0.05) | | BACKLOG |
 | ANA-501 | Ежедневный мониторинг Whale Alert (Слой 1) | | DONE |
 | ANA-502 | Еженедельный AI анализ — миграция БД (whale_ai_analysis) | | DONE |
 | ANA-502-CRON | Еженедельный анализ: test run + cron | | DONE |
@@ -203,9 +204,9 @@
 | SEC-404 | Ограничить Qdrant только localhost | | DONE |
 | SEC-501 | SSH Hardening + проверка инцидента 006.1 | | DONE |
 | SEC-502 | SSH hardening | | CANCELLED |
-| SEC-503 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | | DONE |
-| SEC-504 | Политика хранения логов — journalctl + docker + logrotate | | DONE |
-| SEC-505 | Исправление rsyslog suspend/resume flood | | DONE |
+| SEC-503 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | | TODO |
+| SEC-504 | Политика хранения логов — journalctl + docker + logrotate | | TODO |
+| SEC-505 | Исправление rsyslog suspend/resume flood | | TODO |
 
 ---
 
@@ -274,7 +275,8 @@
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
 | BUG-607 | Исправление: re-discovery перезаписывает excluded-статус | | DONE |
+| BUG-608 | Закрытие позиций roundtrip_builder не выполняется в проде | feature:roundtrip-close | IN_PROGRESS |
 
 ---
 
-*Обновлено: 2026-04-19*
+*Обновлено: 2026-05-09*
