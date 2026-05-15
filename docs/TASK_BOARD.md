@@ -267,6 +267,7 @@
 | DOC-GOVERNANCE-UPDATE | Обновить governance-документы под новый формат TASK_BOARD (пункты 6-11) | | DONE |
 | DOC-603 | Актуализация PROJECT_STATE.md + запрет snapshot-данных | | DONE |
 | DOC-WHALE-SPEC | WHALE_STATUS_TRANSITIONS.md governance spec v1.0 | | DONE |
+| DOC-PIPELINE-MAP | Карта магистрали сделки кита (PIPELINE_MAP) | | DONE |
 
 ---
 
@@ -279,4 +280,4 @@
 
 ---
 
-*Обновлено: 2026-05-09*
+*Обновлено: 2026-05-15*

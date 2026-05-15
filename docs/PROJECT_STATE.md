@@ -392,9 +392,9 @@ none
 
 - PROJECT_STATE.md
   status: OK
-  updated: 2026-04-19
-  task: DOC-603
-  note: updated
+  updated: 2026-05-15
+  task: DOC-PIPELINE-MAP
+  note: добавлен PIPELINE_MAP_INDEX как ключевой документ
 
 - CHAT GOVERNANCE.md
   status: OK
@@ -413,6 +413,12 @@ none
   updated: 2026-04-20
   task: WHALE-STATUS-TRANSITION-SPEC
   note: governance spec v1.0 для copy_status transitions (none ↔ tracked ↔ paper ↔ excluded). Формула estimated_capital: max_daily_volume_30d.
+
+- PIPELINE_MAP_INDEX.md
+  status: ACTIVE
+  updated: 2026-05-15
+  task: DOC-PIPELINE-MAP
+  note: master-карта магистрали сделки кита, 7/7 шагов + 2 sidebar, обязательное первое чтение для pipeline-задач
 
 - PROJECT_CHANGELOG.md
   status: OK

@@ -1,9 +1,16 @@
 # CHANGELOG
 
+## 2026-05
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-05-15 | DOC-PIPELINE-MAP | Карта магистрали сделки кита (PIPELINE_MAP) — 10 документов. 7 шагов магистрали: PIPELINE_MAP_1 (read_api, ACTIVE), 2A (whale_registration, ACTIVE), 2B (whale_trades_write, ACTIVE), 3A (roundtrip_open, ACTIVE), 3B (close_settlement, ACTIVE), 3C (close_sell, DORMANT), 4 (update_whale_pnl, ACTIVE). 2 sidebar: 1B (market_metadata_cache, ACTIVE), 1C (builder_client, DORMANT). PIPELINE_MAP_INDEX.md — master-карта. verified: магистраль 1→2A→2B→3A→{3B|3C}→4. 3C подтверждён как DORMANT (CLI --close нигде не подключён). Конкуренция 3C↔4 по 7 колонкам whales. |
+
 ## 2026-04
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-05-05 | SYNC-TASKBOARD-2026-05-05 | Аудит AUDIT-001 (debug-чат). Закрыты 2 задачи из висевших с 2026-04-19. TRD-404 → DONE: эталоном bankroll-pipeline выбран view-based (paper_portfolio_state materialized view), используется триггером copy_whale_trade_to_paper через kelly_bankroll_source=1 с 2026-04-05. Verification de-facto через эксплуатацию. ANA-404 → BACKLOG: задача нетривиальная по объёму, не критическая, переведена из TODO в backlog для оценки приоритета. TRD-403 эскалирована как BUG-NEW (sell-pipeline в roundtrip_builder не запускается в production) — оформляется отдельно. |
 | 2026-04-22 | DOCS-UPDATE-AUDIT-CYCLE | Docs: CHANGELOG + WHALE_STATUS_TRANSITIONS.md v1.1 + CHAT GOVERNANCE. Excluded whale 82244 (edge_degraded, scale mismatch). Batch promotion none→tracked: 12 whales. 4 candidates rejected for paper after whale_status.sql verification. Audit methodology unreliable: 3/3 spot-checks showed material divergence. Reset 2026-04-05 limits observability to 17d. Tier staleness issue identified. |
 | 2026-04-20 | WHALE-STATUS-TRANSITION-SPEC | docs: WHALE_STATUS_TRANSITIONS.md — governance spec v1.0 для whale copy_status transitions (none ↔ tracked ↔ paper ↔ excluded). Формула estimated_capital: max_daily_volume_30d. |
 | 2026-04-19 | SYNC-TASKBOARD-2026-04-19 | Синхронизация TASK_BOARD с фактическим состоянием по результатам аудита AUDIT-OPEN-TASKS-2026-04-19. Переведены в DONE (10): TRD-402,406,412,417; INFRA-017,020,024; HYG-002,003. Переведены в CANCELLED (8): TRD-407,431; SEC-502; INFRA-022,023; ANA-401,402,403. Переформулированы (2): TRD-403,404 — view-based архитектура. |
@@ -69,6 +76,15 @@
 
 ---
 
+## 2026-05-05
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-05-05 | TRD-403 — DONE | Верификация settlement behaviour в `whale_trade_roundtrips` выполнена. По итогам обнаружен баг развёртывания: `run_close_positions()` (sell-pipeline) никогда не запускался в production — флаг `--close` отсутствует в docker-compose и crontab. За всю историю таблицы (47 087 записей): `close_type = 'SELL'` — 0, `matching_method = 'FLIP'` — 0. Эскалировано как `BUG-608`. Спецификация: `docs/tasks/BUG-608.md`. |
+| 2026-05-05 | BUG-608 — CREATED | Закрытие позиций roundtrip_builder не выполняется в проде. Severity: HIGH. Тег: `feature:roundtrip-close`. Подробная спецификация: `docs/tasks/BUG-608.md`. Статус: TODO. Фикс — отдельный TASK PACK после согласования варианта решения (1/2/3) и стратегии обработки истории (A/B/C) со STRATEGY. |
+
+---
+
 ## 2026-03
 
 | Дата | TASK_ID | Описание |
@@ -93,4 +109,14 @@
 
 ---
 
-*Обновлено: 2026-04-19*
+## 2026-05-06
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-05-06 | BUG-608 — ROLLBACK | Фикс развёртывания (правка docker-compose.yml с добавлением --close) откачен из-за обнаружения неизвестного механизма записи SELL-roundtrips в production (530 записей за 46 дней до фикса, с признаками некорректного fuzzy-матчинга). Эффект нашего фикса оказался минимален (+1 запись). BUG-608 переоткрыт для расследования: что пишет SELL-записи помимо roundtrip_builder, и валидны ли существующие 530 записей. Backup сохранён: backups/BUG-608-20260505-192231/. Container polymarket_roundtrip_builder вернулся к pre-fix конфигурации. |
+
+---
+
+## 2026-05-05
+
+| Дата | TASK_ID | Описание |
