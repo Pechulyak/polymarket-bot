@@ -157,9 +157,15 @@
 
 - roundtrip_builder
   status: OK
-  updated: 2026-04-18
-  task: PIPE-041
-  note: standalone container, healthy, settlement via cron script
+  updated: 2026-05-19
+  task: TRD-443
+  note: standalone container, settlement cron 0 */2 * * *
+
+- roundtrip_builder_close_sell
+  status: ACTIVE
+  updated: 2026-05-19
+  task: TRD-443
+  note: host cron 15 * * * *, exact + fuzzy matching
 
 - paper_settlement
   status: DEPRECATED

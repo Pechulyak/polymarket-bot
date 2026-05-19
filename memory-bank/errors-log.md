@@ -4,6 +4,70 @@
 
 ---
 
+## 2026-05-19 — Подчинённый чат: запрос Roo за project knowledge
+
+Постановщик формирует TASK PACK с шагом "view файла X" в случаях,
+когда X уже доступен через project_knowledge_search. Тратит round-trip
+Roo без необходимости.
+
+**Правило:** перед TASK PACK — прочитать через project_knowledge_search
+все relevant документы. К Roo обращаться только за runtime state
+(`git status`, логи, БД, output команд) и файлами вне knowledge base.
+Закрепить в CHAT GOVERNANCE (DOC-604).
+
+---
+
+## 2026-05-19 — Постановщик: runnable code вместо спецификации
+
+Постановщик пишет в TASK PACK готовые psycopg2 inline scripts,
+bash heredocs, SQL-запросы — вместо описания "что узнать, какой
+ожидаемый результат". Нарушает разделение ролей.
+
+Исключения: destructive verification с BEGIN/ROLLBACK heredoc;
+точные old_str/new_str для str_replace.
+
+**Правило:** TASK PACK содержит спецификацию (filter, ожидаемые keys
+в output). Точный invocation, имена колонок, синтаксис — берёт Roo
+из `\d+` или view файлов.
+
+---
+
+## 2026-05-19 — Threshold tuning для cron-checks
+
+Threshold last_run_age первоначально выставлен 90/180 min (cron interval
+60 min × 1.5/3). Дал false WARNINGs каждые HH:30-HH:14 из-за
+monitor jitter (*/30) + run duration (~50s).
+
+**Правило:** threshold для "last run age" = max(healthy_window) × 2.5,
+где healthy_window = cron_interval + run_duration_p95 + monitor_jitter.
+Для cron 60min, run 50s, jitter 30min: healthy ~92min, threshold 150min.
+
+---
+
+## 2026-05-19 — Bootstrap guards: existence check vs activation date
+
+Bootstrap guard на основе "rows exist in 24h window" корректен только
+до появления первой row. После первой записи guard перестаёт защищать
+от пустых периодов (low-activity или infrastructure failure).
+
+**Правило:** bootstrap guards опираются на factual constant
+(hardcoded activation date) или log-based earliest entry, не на
+existence в DB.
+
+---
+
+## 2026-05-19 — Health-check семантика: "когда сработало" ≠ "когда обработало"
+
+Health-check для cron pipeline опирался на `MAX(closed_at)` в БД.
+`closed_at` = `whale_trades.traded_at` (бизнес-время события), не время
+processing. В low-closure периоды (нет SELL events) check давал false
+WARNING несмотря на корректную работу cron.
+
+**Правило:** "когда последний раз pipeline сработал" определяется
+через log (MAX(START_TS) в cron log), не через бизнес-таймстампы в БД.
+
+---
+
 ## 2026-05-17 — Master Chat: предположения о схеме без верификации
 
 В context transfer ARCH-PAPER-SELL-TRIGGER §2.2 описана структура

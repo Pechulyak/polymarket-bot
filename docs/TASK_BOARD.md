@@ -163,6 +163,7 @@
 | TRD-440 | Исправление застрявших roundtrips — 37 OPEN при resolved markets | | DONE |
 | TRD-441 | Классификация и исключение китов | | DONE |
 | TRD-442 | DB-trigger закрытия paper-позиций на SELL | feature:paper-sell-close | CANCELLED |
+| TRD-443 | Реактивация _close_roundtrips (exact + fuzzy matching) | feature:roundtrip-close | DONE |
 
 ---
 
@@ -269,6 +270,7 @@
 | DOC-603 | Актуализация PROJECT_STATE.md + запрет snapshot-данных | | DONE |
 | DOC-WHALE-SPEC | WHALE_STATUS_TRANSITIONS.md governance spec v1.0 | | DONE |
 | DOC-PIPELINE-MAP | Карта магистрали сделки кита (PIPELINE_MAP) | | DONE |
+| DOC-604 | CHAT GOVERNANCE: правило context-first для Roo dispatch | | TODO |
 
 ---
 
@@ -281,4 +283,4 @@
 
 ---
 
-*Обновлено: 2026-05-17*
+*Обновлено: 2026-05-19*
