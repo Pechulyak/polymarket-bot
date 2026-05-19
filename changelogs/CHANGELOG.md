@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-05-17 | TRD-442 | CANCELLED: архитектурное расхождение между context transfer §2.2 и фактической схемой БД (paper_trades — event log, не position store). Закрытие позиций уже реализовано через whale_trade_roundtrips + ARCH-3BC-PIPELINE. Synchronous trigger создавал бы race с cron. Baseline forensics передан в ARCH-3BC-PIPELINE. Artifacts: backups/baseline_*_2026-05-17. |
 | 2026-05-15 | DOC-PIPELINE-MAP | Карта магистрали сделки кита (PIPELINE_MAP) — 10 документов. 7 шагов магистрали: PIPELINE_MAP_1 (read_api, ACTIVE), 2A (whale_registration, ACTIVE), 2B (whale_trades_write, ACTIVE), 3A (roundtrip_open, ACTIVE), 3B (close_settlement, ACTIVE), 3C (close_sell, DORMANT), 4 (update_whale_pnl, ACTIVE). 2 sidebar: 1B (market_metadata_cache, ACTIVE), 1C (builder_client, DORMANT). PIPELINE_MAP_INDEX.md — master-карта. verified: магистраль 1→2A→2B→3A→{3B|3C}→4. 3C подтверждён как DORMANT (CLI --close нигде не подключён). Конкуренция 3C↔4 по 7 колонкам whales. |
 
 ## 2026-04
