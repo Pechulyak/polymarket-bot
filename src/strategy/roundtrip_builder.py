@@ -350,80 +350,147 @@ class RoundtripBuilder:
         
         return grouped
     
-    def _close_roundtrips(self, grouped_sells: Dict[str, Dict]) -> Tuple[List[Dict], int, int]:
+    def _close_roundtrips(self, grouped_sells: Dict[str, Dict], sentinel_method: str | None = None) -> Tuple[List[Dict], int, int, int]:
         """Close OPEN roundtrips based on SELL events.
         
         Args:
             grouped_sells: Dict of aggregated SELL data by position_key
-            
+            sentinel_method: Override matching_method for dry-run sentinel mode
+        
         Returns:
-            Tuple of (closed_roundtrips list, closed_count, skipped_count)
+            Tuple of (closed_roundtrips list, direct_count, fuzzy_count, skipped_count)
         """
         closed_roundtrips = []
-        closed_count = 0
+        direct_count = 0
+        fuzzy_count = 0
         skipped_count = 0
-        skipped_keys = []
         
+        # RF-003: Use CTE with ROW_NUMBER() for temporal ordering instead of MAX(wt.id)
+        # RF-001: Add temporal filter wt.traded_at > rt.opened_at
         for position_key, close_data in grouped_sells.items():
-            # Find OPEN roundtrips for this position_key
-            # First try exact match
-            query = text("""
+            # Find OPEN roundtrips for this position_key using ROW_NUMBER() for exact match
+            # Query consolidation: all 9 fields in single CTE, no separate rt_query/rt_pnl_query
+            ranked_query = text("""
+                WITH ranked_sells AS (
+                    SELECT 
+                        rt.id              AS roundtrip_id,
+                        rt.whale_id        AS whale_id,
+                        rt.outcome         AS open_outcome,
+                        rt.open_price      AS open_price,
+                        rt.open_size_usd   AS open_size_usd,
+                        wt.id              AS sell_trade_id,
+                        wt.traded_at       AS sell_traded_at,
+                        wt.price           AS sell_price,
+                        wt.size_usd        AS sell_size_usd,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY rt.id 
+                            ORDER BY wt.traded_at DESC, wt.id DESC
+                        ) AS rn
+                    FROM whale_trade_roundtrips rt
+                    JOIN whale_trades wt 
+                        ON wt.market_id      = rt.market_id
+                       AND wt.outcome        = rt.outcome
+                       AND wt.wallet_address = rt.wallet_address
+                       AND wt.side           = 'sell'
+                       AND wt.traded_at      > rt.opened_at
+                    WHERE rt.position_key = :position_key
+                      AND rt.close_type IS NULL
+                      AND rt.opened_at IS NOT NULL
+                )
                 SELECT 
-                    id, whale_id, open_price, open_size_usd, status, outcome
-                FROM whale_trade_roundtrips
-                WHERE position_key = :position_key AND status = 'OPEN'
-                LIMIT 1
+                    roundtrip_id, whale_id, open_outcome, open_price, open_size_usd,
+                    sell_trade_id, sell_traded_at, sell_price, sell_size_usd
+                FROM ranked_sells 
+                WHERE rn = 1
             """)
             
             with self._engine.connect() as conn:
-                result = conn.execute(query, {"position_key": position_key})
+                result = conn.execute(ranked_query, {"position_key": position_key})
                 row = result.fetchone()
             
-            if not row:
-                # No exact match - try fuzzy matching for short selling (sell before buy)
-                # Look for any OPEN roundtrip for same wallet + market (different outcome)
-                wallet_address = close_data['wallet_address']
-                market_id = close_data['market_id']
-                
+            # RF-012: Fuzzy fallback per §16.2 C2.b
+            if row is None:
                 fuzzy_query = text("""
+                    WITH ranked_fuzzy_sells AS (
+                        SELECT 
+                            rt.id              AS roundtrip_id,
+                            rt.whale_id        AS whale_id,
+                            rt.outcome         AS open_outcome,
+                            rt.open_price      AS open_price,
+                            rt.open_size_usd   AS open_size_usd,
+                            wt.id              AS sell_trade_id,
+                            wt.traded_at       AS sell_traded_at,
+                            wt.price           AS sell_price,
+                            wt.size_usd        AS sell_size_usd,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY rt.id 
+                                ORDER BY wt.traded_at DESC, wt.id DESC
+                            ) AS rn
+                        FROM whale_trade_roundtrips rt
+                        JOIN whale_trades wt 
+                            ON wt.market_id      = rt.market_id
+                           AND wt.outcome        = rt.outcome
+                           AND wt.wallet_address = rt.wallet_address
+                           AND wt.side           = 'sell'
+                           AND wt.traded_at      > rt.opened_at
+                        WHERE rt.wallet_address = :wallet_address
+                          AND rt.market_id      = :market_id
+                          AND rt.outcome        = :outcome
+                          AND rt.close_type IS NULL
+                          AND rt.opened_at IS NOT NULL
+                    )
                     SELECT 
-                        id, whale_id, open_price, open_size_usd, status, outcome
-                    FROM whale_trade_roundtrips
-                    WHERE wallet_address = :wallet_address 
-                        AND market_id = :market_id 
-                        AND status = 'OPEN'
-                    ORDER BY opened_at DESC
+                        roundtrip_id, whale_id, open_outcome, open_price, open_size_usd,
+                        sell_trade_id, sell_traded_at, sell_price, sell_size_usd
+                    FROM ranked_fuzzy_sells
+                    ORDER BY sell_traded_at DESC
                     LIMIT 1
                 """)
-                
                 with self._engine.connect() as conn:
-                    result = conn.execute(fuzzy_query, {
-                        "wallet_address": wallet_address,
-                        "market_id": market_id
+                    fuzzy_result = conn.execute(fuzzy_query, {
+                        "wallet_address": close_data['wallet_address'],
+                        "market_id": close_data['market_id'],
+                        "outcome": close_data['outcome'],
                     })
-                    row = result.fetchone()
+                    row = fuzzy_result.fetchone()
+                matched_via_fuzzy = (row is not None)
+            else:
+                matched_via_fuzzy = False
             
-            if not row:
-                skipped_keys.append(position_key)
+            if row is None:
+                # No matching OPEN roundtrip
+                logger(f"INFO: close_match_skipped: position_key={position_key} reason='no matching OPEN roundtrip'")
                 skipped_count += 1
                 continue
             
-            roundtrip_id, whale_id, open_price, open_size_usd, status, open_outcome = row
+            # All 9 fields from consolidated query
+            (roundtrip_id, whale_id, open_outcome, open_price, open_size_usd,
+             close_trade_id, closed_at, close_price, close_size) = row
+            
+            if matched_via_fuzzy:
+                fuzzy_count += 1
+                logger(f"WARNING: close_match_fuzzy: position_key={position_key} roundtrip_id={roundtrip_id} sell_trade_id={close_trade_id} reason='exact match failed'")
+            else:
+                direct_count += 1
+                logger(f"INFO: close_match_direct: position_key={position_key} roundtrip_id={roundtrip_id} sell_trade_id={close_trade_id}")
             
             # Calculate P&L
-            close_price = close_data['close_price']
-            close_size = close_data['close_size_usd']
-            
             # gross_pnl = (close_price - open_price) * close_size
             # Note: prices are in 0-1 range (e.g., 0.65 for 65%)
-            gross_pnl = (close_price - open_price) * close_size
+            if open_price is not None and open_size_usd is not None:
+                gross_pnl = (float(close_price) - float(open_price)) * float(close_size)
+            else:
+                gross_pnl = 0
             fees_usd = 0  # No fee data available
             net_pnl = gross_pnl - fees_usd
             
-            # Determine P&L status
-            pnl_status = 'CONFIRMED'
+            # RF-012: Ternary labels per spec
+            # sentinel_method overrides the default DIRECT_SELL/FUZZY_FLIP literals for dry-run
+            matching_method = sentinel_method if sentinel_method else ('FUZZY_FLIP' if matched_via_fuzzy else 'DIRECT_SELL')
+            matching_confidence = 'LOW' if matched_via_fuzzy else 'HIGH'
+            pnl_status = 'ESTIMATED' if matched_via_fuzzy else 'EXACT'
             
-            # Update roundtrip
+            # Update roundtrip - RF-004: Fill close_trade_id, close_side, close_size_usd, fees_usd
             update_query = text("""
                 UPDATE whale_trade_roundtrips SET
                     close_trade_id = :close_trade_id,
@@ -437,22 +504,24 @@ class RoundtripBuilder:
                     fees_usd = :fees_usd,
                     net_pnl_usd = :net_pnl_usd,
                     pnl_status = :pnl_status,
-                    matching_method = 'FLIP',
-                    matching_confidence = 'MEDIUM',
+                    matching_method = :matching_method,
+                    matching_confidence = :matching_confidence,
                     updated_at = NOW()
-                WHERE id = :id AND status = 'OPEN'
+                WHERE id = :id
             """)
             
             with self._engine.connect() as conn:
                 result = conn.execute(update_query, {
-                    'close_trade_id': close_data['close_trade_id'],
+                    'close_trade_id': close_trade_id,
                     'close_price': close_price,
                     'close_size_usd': close_size,
-                    'closed_at': close_data['closed_at'],
+                    'closed_at': closed_at,
                     'gross_pnl_usd': gross_pnl,
                     'fees_usd': fees_usd,
                     'net_pnl_usd': net_pnl,
                     'pnl_status': pnl_status,
+                    'matching_method': matching_method,
+                    'matching_confidence': matching_confidence,
                     'id': roundtrip_id
                 })
                 conn.commit()
@@ -465,112 +534,17 @@ class RoundtripBuilder:
                     'position_key': position_key,
                     'net_pnl_usd': net_pnl,
                 })
-                closed_count += 1
         
-        return closed_roundtrips, closed_count, skipped_count
-    
-    def _update_whales_pnl(self, closed_roundtrips: List[Dict]) -> int:
-        """Update whales P&L based on closed roundtrips.
+        # RF-012: Summary logging
+        logger(
+            f"INFO: close_roundtrips_summary: "
+            f"total_groups={len(grouped_sells)} "
+            f"direct={direct_count} "
+            f"fuzzy={fuzzy_count} "
+            f"skipped={skipped_count}"
+        )
         
-        Args:
-            closed_roundtrips: List of closed roundtrip records with P&L
-            
-        Returns:
-            Number of whales updated
-        """
-        if not closed_roundtrips:
-            return 0
-        
-        
-        # Group by wallet_address instead of whale_id
-        whale_updates = {}
-        for rt in closed_roundtrips:
-            wallet_address = rt['wallet_address']
-            if wallet_address not in whale_updates:
-                whale_updates[wallet_address] = {
-                    'wallet_address': wallet_address,
-                    'wins': 0,
-                    'losses': 0,
-                    'roundtrips': 0,
-                    'total_pnl': Decimal('0')
-                }
-            
-            whale_updates[wallet_address]['roundtrips'] += 1
-            whale_updates[wallet_address]['total_pnl'] += rt['net_pnl_usd']
-            
-            if rt['net_pnl_usd'] > 0:
-                whale_updates[wallet_address]['wins'] += 1
-            else:
-                whale_updates[wallet_address]['losses'] += 1
-        
-        # Update each whale
-        updated_count = 0
-        for wallet_address, data in whale_updates.items():
-            # Calculate new values
-            query = text("""
-                SELECT 
-                    win_count, 
-                    loss_count, 
-                    total_roundtrips, 
-                    total_pnl_usd
-                FROM whales
-                WHERE LOWER(wallet_address) = LOWER(:wallet_address)
-            """)
-            
-            with self._engine.connect() as conn:
-                result = conn.execute(query, {"wallet_address": wallet_address})
-                row = result.fetchone()
-            
-            if not row:
-                continue
-            
-            current_win_count = row[0] or 0
-            current_loss_count = row[1] or 0
-            current_total_roundtrips = row[2] or 0
-            current_total_pnl = row[3] or Decimal('0')
-            
-            new_win_count = current_win_count + data['wins']
-            new_loss_count = current_loss_count + data['losses']
-            new_total_roundtrips = current_total_roundtrips + data['roundtrips']
-            new_total_pnl = current_total_pnl + data['total_pnl']
-            
-            # Calculate avg_pnl and win_rate
-            if new_total_roundtrips > 0:
-                new_avg_pnl = new_total_pnl / new_total_roundtrips
-                new_win_rate = Decimal(str(new_win_count)) / Decimal(str(new_total_roundtrips))
-            else:
-                new_avg_pnl = Decimal('0')
-                new_win_rate = Decimal('0')
-            
-            update_query = text("""
-                UPDATE whales SET
-                    win_count = :win_count,
-                    loss_count = :loss_count,
-                    total_roundtrips = :total_roundtrips,
-                    total_pnl_usd = :total_pnl_usd,
-                    avg_pnl_usd = :avg_pnl_usd,
-                    win_rate_confirmed = :win_rate_confirmed,
-                    last_pnl_updated = NOW(),
-                    updated_at = NOW()
-                WHERE LOWER(wallet_address) = LOWER(:wallet_address)
-            """)
-            
-            with self._engine.connect() as conn:
-                result = conn.execute(update_query, {
-                    'win_count': new_win_count,
-                    'loss_count': new_loss_count,
-                    'total_roundtrips': new_total_roundtrips,
-                    'total_pnl_usd': new_total_pnl,
-                    'avg_pnl_usd': new_avg_pnl,
-                    'win_rate_confirmed': new_win_rate,
-                    'wallet_address': wallet_address
-                })
-                conn.commit()
-            
-            if result.rowcount > 0:
-                updated_count += 1
-        
-        return updated_count
+        return closed_roundtrips, direct_count, fuzzy_count, skipped_count
     
     def _get_outcome_index(self, outcome: str) -> Optional[int]:
         """Map outcome to index in outcome_prices array.
@@ -706,7 +680,7 @@ class RoundtripBuilder:
             }
         
         # Step 2: Fetch resolution data for each unique market
-        logger("[2/5] Fetching market resolutions from Gamma API...")
+        logger("[2/4] Fetching market resolutions from Gamma API...")
         
         session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
         market_resolutions = {}
@@ -724,7 +698,7 @@ class RoundtripBuilder:
         logger(f"      Fetched {len(market_resolutions)} market resolutions")
         
         # Step 3: Process each roundtrip for settlement
-        logger("[3/5] Processing settlements...")
+        logger("[3/4] Processing settlements...")
         
         settled_roundtrips = []
         closed_markets = 0
@@ -852,14 +826,8 @@ class RoundtripBuilder:
         logger(f"      Settled: {len(settled_roundtrips)}, Closed markets: {closed_markets}")
         logger(f"      Open markets: {open_markets}, Errors: {errors}, Skipped (unknown outcome): {skipped_unknown_outcome}")
         
-        # Step 4: Update whales P&L statistics
-        logger("[4/5] Updating whales P&L statistics...")
-        
-        whales_updated = self._update_whales_pnl(settled_roundtrips)
-        logger(f"      Whales updated: {whales_updated}")
-        
-        # Step 5: Get final statistics
-        logger("[5/5] Getting final statistics...")
+        # Step 4: Get final statistics
+        logger("[4/4] Getting final statistics...")
         
         stats = self._get_statistics()
         
@@ -873,7 +841,6 @@ class RoundtripBuilder:
         logger(f"  - Markets still open: {open_markets}")
         logger(f"  - Roundtrips settled: {len(settled_roundtrips)}")
         logger(f"  - Errors: {errors}")
-        logger(f"  - Whales updated: {whales_updated}")
         logger(f"  - Database stats: {stats}")
         logger("=" * 60)
         
@@ -885,14 +852,17 @@ class RoundtripBuilder:
             'open_markets': open_markets,
             'errors': errors,
             'skipped_unknown_outcome': skipped_unknown_outcome,
-            'whales_updated': whales_updated,
             'stats': stats
         }
     
-    def run_close_positions(self) -> Dict:
+    def run_close_positions(self, sentinel_method: str | None = None) -> Dict:
         """Run SELL → CLOSED pipeline.
         
         Processes SELL events to close OPEN roundtrips and update whale P&L.
+        
+        Args:
+            sentinel_method: Override matching_method for dry-run sentinel mode.
+                           If set, uses this value instead of 'DIRECT_SELL' or 'FUZZY_FLIP'.
         
         Returns:
             Dict with processing statistics
@@ -902,19 +872,14 @@ class RoundtripBuilder:
         logger("=" * 60)
         
         # Step 1: Fetch and group SELL events
-        logger("[1/3] Fetching and grouping SELL events from whale_trades...")
+        logger("[1/2] Fetching and grouping SELL events...")
         grouped_sells = self._fetch_and_group_sell_trades()
         logger(f"      Found {len(grouped_sells)} unique position groups with SELL events")
         
         # Step 2: Close OPEN roundtrips
-        logger("[2/3] Closing OPEN roundtrips based on SELL events...")
-        closed_roundtrips, closed_count, skipped_count = self._close_roundtrips(grouped_sells)
-        logger(f"      Closed: {closed_count}, Skipped (no OPEN): {skipped_count}")
-        
-        # Step 3: Update whales P&L
-        logger("[3/3] Updating whales P&L statistics...")
-        whales_updated = self._update_whales_pnl(closed_roundtrips)
-        logger(f"      Whales updated: {whales_updated}")
+        logger("[2/2] Closing OPEN roundtrips based on SELL events...")
+        closed_roundtrips, direct_count, fuzzy_count, skipped_count = self._close_roundtrips(grouped_sells, sentinel_method=sentinel_method)
+        logger(f"      Closed: {direct_count} (direct={direct_count}, fuzzy={fuzzy_count}), Skipped (no OPEN): {skipped_count}")
         
         # Get final statistics
         stats = self._get_statistics()
@@ -924,17 +889,17 @@ class RoundtripBuilder:
         logger("=" * 60)
         logger(f"Results:")
         logger(f"  - SELL groups processed: {len(grouped_sells)}")
-        logger(f"  - Roundtrips CLOSED: {closed_count}")
+        logger(f"  - Roundtrips CLOSED: {direct_count + fuzzy_count} (direct={direct_count}, fuzzy={fuzzy_count})")
         logger(f"  - Roundtrips skipped: {skipped_count}")
-        logger(f"  - Whales updated: {whales_updated}")
         logger(f"  - Database stats: {stats}")
         logger("=" * 60)
         
         return {
             'sell_groups': len(grouped_sells),
-            'closed': closed_count,
+            'closed': direct_count + fuzzy_count,
+            'closed_direct': direct_count,
+            'closed_fuzzy': fuzzy_count,
             'skipped': skipped_count,
-            'whales_updated': whales_updated,
             'stats': stats
         }
     
@@ -1017,7 +982,13 @@ def main():
                         help='Process SELL events to close OPEN roundtrips')
     parser.add_argument('--settle', action='store_true',
                         help='Settle OPEN roundtrips via Gamma API market resolution')
+    parser.add_argument('--sentinel-method', type=str, default=None,
+                        help='Override matching_method for dry-run (use MANUAL_RUN_TRD443)')
     args = parser.parse_args()
+    
+    # Validate sentinel_method if provided
+    if args.sentinel_method is not None and args.sentinel_method != 'MANUAL_RUN_TRD443':
+        sys.exit(1)
     
     database_url = get_database_url()
     builder = RoundtripBuilder(database_url=database_url)
@@ -1025,7 +996,7 @@ def main():
     if args.settle:
         result = asyncio.run(builder.settle_roundtrips_via_gamma())
     elif args.close:
-        result = builder.run_close_positions()
+        result = builder.run_close_positions(sentinel_method=args.sentinel_method)
     else:
         result = builder.run(rebuild=args.rebuild)
     
