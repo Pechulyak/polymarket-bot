@@ -6,6 +6,7 @@ Cron: */30 * * * * cd /root/polymarket-bot && python3 scripts/pipeline_monitor.p
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -172,6 +173,190 @@ def check_market_category_unknown_count():
     return result if result else 0
 
 
+def check_close_sell_last_run_age():
+    """Check age of last close_sell START entry from log (not SQL MAX(closed_at)).
+    
+    Uses _parse_close_sell_log_entries() helper — parses close_sell_cron.log.
+    Finds MAX(START_TS) among all entries in file (not filtered by window).
+    If log file absent or no START entries → CRITICAL.
+    
+    Thresholds (after FIX-1 calibration):
+    OK: <= 150 minutes
+    WARNING: <= 240 minutes
+    CRITICAL: > 240 minutes
+    """
+    entries, err, _, _ = _parse_close_sell_log_entries(window_hours=24)
+    if err:
+        return None  # File missing — CRITICAL, handled by determine_status
+    
+    # Find all START entries across entire file (unfiltered for bootstrap)
+    # Re-read without window filter to get MAX(START) regardless of age
+    if not os.path.exists(LOG_FILE):
+        return None
+    
+    start_entries = []
+    with open(LOG_FILE, 'r') as f:
+        for line in f:
+            m = re.match(_LOG_PATTERN, line)
+            if m and m.group(2) == "START":
+                ts_str = m.group(1)
+                ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                start_entries.append(ts)
+    
+    if not start_entries:
+        return None  # No START entries ever — CRITICAL
+    
+    last_start = max(start_entries)
+    age_min = (datetime.utcnow() - last_start).total_seconds() / 60
+    return round(age_min, 1)
+
+
+# =============================================================================
+# Close-sell log parsing helpers
+# =============================================================================
+
+LOG_FILE = "/root/polymarket-bot/logs/close_sell_cron.log"
+# Regex: [run_close_sell] 2026-05-19 11:40:21 — START/DONE (exit N)
+_LOG_PATTERN = r'\[run_close_sell\] (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) — (START|DONE)(?: \(exit (\d+)\))?'
+
+
+def _parse_close_sell_log_entries(window_hours=24):
+    """Parse close_sell log and return list of {ts, type, exit_code} for last window_hours.
+    
+    Returns (entries, error_msg):
+      - entries: list of dicts sorted by ts ascending
+      - error_msg: None on success, string on error (file missing etc.)
+    
+    Bootstrap info: also returns (earliest_ts, latest_ts) for bootstrap guards.
+    """
+    if not os.path.exists(LOG_FILE):
+        return None, f"Log file not found: {LOG_FILE}", None, None
+    
+    entries = []
+    earliest_ts = None
+    latest_ts = None
+    cutoff = datetime.utcnow() - timedelta(hours=window_hours)
+    
+    try:
+        with open(LOG_FILE, 'r') as f:
+            for line in f:
+                m = re.match(_LOG_PATTERN, line)
+                if not m:
+                    continue
+                ts_str, entry_type, exit_code = m.groups()
+                ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                if earliest_ts is None or ts < earliest_ts:
+                    earliest_ts = ts
+                if latest_ts is None or ts > latest_ts:
+                    latest_ts = ts
+                # Filter by window only for DONE entries used in checks
+                if ts >= cutoff:
+                    entries.append({
+                        "ts": ts,
+                        "type": entry_type,
+                        "exit_code": int(exit_code) if exit_code is not None else None
+                    })
+    except Exception as e:
+        return None, f"Error reading log: {e}", None, None
+    
+    # Sort by ts ascending
+    entries.sort(key=lambda x: x["ts"])
+    return entries, None, earliest_ts, latest_ts
+
+
+def check_close_sell_runs_24h():
+    """Count DONE (exit N) entries in last 24h from log.
+    
+    OK: >= 22 runs
+    WARNING: 18-21 runs
+    CRITICAL: < 18 runs
+    Bootstrap guard: if earliest START in file < 24h ago — INFO (not WARN/CRITICAL)
+    If log file absent — CRITICAL
+    """
+    entries, err, earliest_ts, latest_ts = _parse_close_sell_log_entries(window_hours=24)
+    if err:
+        # File missing
+        return {"value": None, "status": "critical", "reason": err}
+    
+    done_count = sum(1 for e in entries if e["type"] == "DONE")
+    
+    # Bootstrap: if earliest START < 24h ago, we're in bootstrap
+    now = datetime.utcnow()
+    if earliest_ts is not None and (now - earliest_ts).total_seconds() < 86400:
+        return {"value": done_count, "status": "info", "reason": "bootstrap"}
+    
+    if done_count >= 22:
+        status = "ok"
+    elif done_count >= 18:
+        status = "warning"
+    else:
+        status = "critical"
+    
+    return {"value": done_count, "status": status}
+
+
+def check_close_sell_exit_codes_24h():
+    """Count DONE entries with non-zero exit code in last 24h.
+    
+    OK: 0 failures
+    CRITICAL: >= 1 failures
+    If log file absent — CRITICAL
+    """
+    entries, err, _, _ = _parse_close_sell_log_entries(window_hours=24)
+    if err:
+        return {"value": None, "status": "critical", "reason": err}
+    
+    failures = sum(1 for e in entries if e["type"] == "DONE" and e["exit_code"] != 0)
+    return {"value": failures, "status": "critical" if failures > 0 else "ok"}
+
+
+def check_close_sell_duration_p95_24h():
+    """Compute P95 duration from START→DONE pairs in last 24h.
+    
+    Duration = DONE.ts - START.ts per run.
+    OK: P95 <= 90s
+    WARNING: P95 90-300s
+    CRITICAL: P95 > 300s
+    Bootstrap: < 5 runs in window → INFO
+    If log file absent → CRITICAL
+    """
+    entries, err, _, _ = _parse_close_sell_log_entries(window_hours=24)
+    if err:
+        return {"value": None, "status": "critical", "reason": err}
+    
+    # Match START/DONE pairs
+    durations = []
+    starts = {}  # ts_key -> ts
+    for e in entries:
+        if e["type"] == "START":
+            starts[e["ts"]] = e["ts"]
+        elif e["type"] == "DONE":
+            # Find matching START (same hour key)
+            key = (e["ts"].year, e["ts"].month, e["ts"].day, e["ts"].hour, e["ts"].minute // 15)
+            # Simple: find nearest START before this DONE
+            matching = [s for s in starts if s <= e["ts"]]
+            if matching:
+                best_start = max(matching)
+                dur = (e["ts"] - best_start).total_seconds()
+                durations.append(dur)
+    
+    if len(durations) < 5:
+        return {"value": None, "status": "info", "reason": f"only {len(durations)} runs"}
+    
+    durations.sort()
+    p95_idx = int(len(durations) * 0.95)
+    p95 = durations[p95_idx]
+    
+    if p95 <= 90:
+        status = "ok"
+    elif p95 <= 300:
+        status = "warning"
+    else:
+        status = "critical"
+    
+    return {"value": round(p95, 1), "status": status}
+
+
 # =============================================================================
 # Telegram alerts
 # =============================================================================
@@ -305,6 +490,18 @@ def run_pipeline_checks():
     # Check 7: market_category unknown %
     results["market_category_unknown_count"] = check_market_category_unknown_count()
 
+    # Check 8: age of last close_sell row (minutes)
+    results["close_sell_last_run_age_minutes"] = check_close_sell_last_run_age()
+
+    # Check 9: close_sell runs count in last 24h (from log)
+    results["close_sell_runs_24h"] = check_close_sell_runs_24h()
+
+    # Check 10: close_sell exit failures in last 24h (from log)
+    results["close_sell_exit_failures_24h"] = check_close_sell_exit_codes_24h()
+
+    # Check 11: close_sell P95 duration in last 24h (from log)
+    results["close_sell_duration_p95_seconds"] = check_close_sell_duration_p95_24h()
+
     # Determine status based on results
     status, warnings, criticals = determine_status(results)
     results["status"] = status
@@ -357,6 +554,42 @@ def determine_status(results: dict) -> tuple:
     # Ожидаемо 1523+ без категоризации, пока background task не починен
     # Не учитывать при определении статуса
     # unknown_count = results.get("market_category_unknown_count", 0)
+
+    # Check 8: close_sell last run age
+    age_min = results.get("close_sell_last_run_age_minutes")
+    if age_min is not None:
+        if age_min > 240:
+            criticals.append(f"close_sell_last_run_age: {age_min:.0f}min (> 240) (CRITICAL)")
+        elif age_min > 150:
+            warnings.append(f"close_sell_last_run_age: {age_min:.0f}min (> 150)")
+    else:
+        # No close_sell rows ever — cron never produced results
+        criticals.append("close_sell_last_run_age: no rows ever (CRITICAL)")
+
+    # Check 9: close_sell runs 24h (from log)
+    runs_result = results.get("close_sell_runs_24h")
+    if runs_result:
+        if runs_result["status"] == "critical":
+            criticals.append(f"close_sell_runs_24h: {runs_result['value']} (< 18) (CRITICAL)")
+        elif runs_result["status"] == "warning":
+            criticals.append(f"close_sell_runs_24h: {runs_result['value']} (< 22)")
+        # info (bootstrap) — skip
+
+    # Check 10: close_sell exit failures 24h (from log)
+    failures_result = results.get("close_sell_exit_failures_24h")
+    if failures_result:
+        if failures_result["status"] == "critical":
+            criticals.append(f"close_sell_exit_failures_24h: {failures_result['value']} (CRITICAL)")
+        # ok — nothing added
+
+    # Check 11: close_sell duration P95 24h (from log)
+    p95_result = results.get("close_sell_duration_p95_seconds")
+    if p95_result:
+        if p95_result["status"] == "critical":
+            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 300) (CRITICAL)")
+        elif p95_result["status"] == "warning":
+            warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 90)")
+        # info (bootstrap) — skip
 
     if criticals:
         return "CRITICAL", warnings, criticals
