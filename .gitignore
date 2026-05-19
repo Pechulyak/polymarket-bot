@@ -83,3 +83,4 @@ baseline_*/
 *.backup.*
 config/*.backup.*
 docker-compose.yml.backup.*
+backups/
