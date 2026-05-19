@@ -7,7 +7,7 @@ inserted row id for chaining.
 NOTE: This file contains ONLY utility functions — no tests.
 Tests live in TASK 2-D-2 files.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy import text
@@ -54,7 +54,7 @@ def insert_open_roundtrip(
     Position_key auto-generated as 'wallet:market:outcome' if not provided.
     """
     if opened_at is None:
-        opened_at = datetime.utcnow() - timedelta(hours=1)
+        opened_at = datetime.now(timezone.utc) - timedelta(hours=1)
     if position_key is None:
         position_key = f"{wallet_address}:{market_id}:{outcome or 'unknown'}"
 
@@ -102,7 +102,7 @@ def insert_whale_trade(
     Defaults: traded_at = NOW(), price=0.60, size_usd=80.
     """
     if traded_at is None:
-        traded_at = datetime.utcnow()
+        traded_at = datetime.now(timezone.utc)
 
     with engine.connect() as conn:
         result = conn.execute(text("""

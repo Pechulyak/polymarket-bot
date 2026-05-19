@@ -30,6 +30,7 @@ SCHEMA_FILES = [
     PROJECT_ROOT / "scripts" / "init_db.sql",
     PROJECT_ROOT / "scripts" / "migration_whale_trade_roundtrips.sql",
     PROJECT_ROOT / "scripts" / "migration_phase3_007_extend_checks.sql",
+    PROJECT_ROOT / "scripts" / "migration_phase3_007a_pnl_status_legacy.sql",
 ]
 
 # Structural delta from migration_phase3_006_legacy_mark.sql.

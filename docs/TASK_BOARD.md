@@ -164,6 +164,7 @@
 | TRD-441 | Классификация и исключение китов | | DONE |
 | TRD-442 | DB-trigger закрытия paper-позиций на SELL | feature:paper-sell-close | CANCELLED |
 | TRD-443 | Реактивация _close_roundtrips (exact + fuzzy matching) | feature:roundtrip-close | DONE |
+| TRD-445 | Hardening тестовой инфраструктуры roundtrip_builder | | DONE |
 
 ---
 

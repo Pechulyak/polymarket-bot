@@ -5,7 +5,7 @@ Tests use the real ephemeral postgres fixture from conftest.py.
 Each test seeds data via _helpers, runs run_close_positions(), and asserts
 on the resulting database state.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -50,8 +50,8 @@ def test_t1_exact_match_closes_roundtrip(test_engine, clean_tables):
     wallet = "0xtest_t1"
     market = "0xmarket_t1"
     outcome = "Yes"
-    opened_at = datetime.utcnow() - timedelta(hours=2)
-    traded_at = datetime.utcnow() - timedelta(hours=1)
+    opened_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    traded_at = datetime.now(timezone.utc) - timedelta(hours=1)
 
     # Seed
     whale_id = insert_whale(test_engine, wallet_address=wallet)
@@ -118,7 +118,7 @@ def test_t2_no_match_skips(test_engine, clean_tables):
     """
     wallet = "0xtest_t2"
     market = "0xmarket_t2"
-    opened_at = datetime.utcnow() - timedelta(hours=2)
+    opened_at = datetime.now(timezone.utc) - timedelta(hours=2)
 
     whale_id = insert_whale(test_engine, wallet_address=wallet)
     roundtrip_id = insert_open_roundtrip(
@@ -162,8 +162,8 @@ def test_t3_fuzzy_match_via_outcome_keys(test_engine, clean_tables):
     wallet = "0xtest_t3"
     market = "0xmarket_t3"
     outcome = "Yes"
-    opened_at = datetime.utcnow() - timedelta(hours=2)
-    traded_at = datetime.utcnow() - timedelta(hours=1)
+    opened_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    traded_at = datetime.now(timezone.utc) - timedelta(hours=1)
 
     whale_id = insert_whale(test_engine, wallet_address=wallet)
     # INTENTIONALLY mismatched position_key — what _fetch_and_group_sell_trades
