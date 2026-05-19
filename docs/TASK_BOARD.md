@@ -162,7 +162,7 @@
 | TRD-439 | Запуск paper-trade pipeline для отобранных китов | | IN_PROGRESS |
 | TRD-440 | Исправление застрявших roundtrips — 37 OPEN при resolved markets | | DONE |
 | TRD-441 | Классификация и исключение китов | | DONE |
-| TRD-442 | DB-trigger закрытия paper-позиций на SELL | feature:paper-sell-close | IN_PROGRESS |
+| TRD-442 | DB-trigger закрытия paper-позиций на SELL | feature:paper-sell-close | CANCELLED |
 
 ---
 
@@ -281,4 +281,4 @@
 
 ---
 
-*Обновлено: 2026-05-15*
+*Обновлено: 2026-05-17*

@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-05-17 — Master Chat: предположения о схеме без верификации
+
+В context transfer ARCH-PAPER-SELL-TRIGGER §2.2 описана структура
+paper_trades с полями status/close_type/close_price/closed_at/net_pnl_usd,
+которых в реальной схеме нет. paper_trades — event log, эти поля живут
+в whale_trade_roundtrips.
+
+Это третий случай за handoff, когда master-чат принимает архитектурное
+решение, опираясь на устаревшую/неверифицированную ментальную модель
+БД вместо реальной схемы. Первые два — BUG-608 (530 SELL roundtrips)
+и SELL-close в run_settlement.sh (2-часовая задержка для paper).
+
+**Правило:** ЛЮБОЙ context transfer с упоминанием конкретных колонок/таблиц
+обязан содержать секцию "Verified against DB" со ссылкой на дату
+проверки. Без этого dev-чат имеет право вернуть context transfer
+без работы.
+
+---
+
 ### [2026-04-17] BUG-801: pnl_status = UNAVAILABLE после CLOSED в whale_trade_roundtrips
 
 - **Симптом:** 10,056 CLOSED roundtrips в whale_trade_roundtrips имели pnl_status = 'UNAVAILABLE' при наличии заполненного net_pnl_usd.
