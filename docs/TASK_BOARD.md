@@ -165,6 +165,9 @@
 | TRD-442 | DB-trigger закрытия paper-позиций на SELL | feature:paper-sell-close | CANCELLED |
 | TRD-443 | Реактивация _close_roundtrips (exact + fuzzy matching) | feature:roundtrip-close | DONE |
 | TRD-445 | Hardening тестовой инфраструктуры roundtrip_builder | | DONE |
+| TRD-444 | Очистка roundtrip_builder: удаление мёртвого кода post-TRD-443 | | TODO | Покрывает HYG-NNN-1, HYG-NNN-3, HYG-NNN-5, HYG-NNN-15. Blast radius: средний (production код). |
+| TRD-446 | split миграции 006 на 006a (schema) + 006b (data); стратегия для ~87% OPEN с outcome=NULL; cleanup dead WARNING в rollback 007a | | TODO | Покрывает HYG-NNN-2, HYG-NNN-8, HYG-NNN-11. Blast radius: высокий (DDL на prod). |
+| TRD-447 | Исправление rate-limit bug в _fetch_and_group_sell_trades + _close_roundtrips | feature:roundtrip-close | CANCELLED | False flag from DIAG-TRD443-RATE-LIMIT-{01,02,03,04}. Hypothesis disproven through API reconciliation on 2 sample whales. Pipeline OPEN/CLOSE sides correct, 23 DIRECT_SELL/24h is natural sparsity (majority of closures via SETTLEMENT, not direct SELL). |
 
 ---
 
@@ -194,6 +197,7 @@
 | ANA-502-SCRIPT | Реализация скрипта еженедельного AI анализа | | DONE |
 | ANA-502-SQL | SQL-слой: финальные запросы для еженедельного AI-анализа | | DONE |
 | ANA-503 | Whale Universe Quality Analysis | | DONE |
+| ANA-505 | Tracking coverage metric: измерение доли SELL events с предшествующим matching OPEN roundtrip'ом в close_sell pipeline | | TODO | Связано с RED FLAG #1. Покрывает HYG-NNN-27. Blast radius: низкий (новый read-only artifact). |
 
 ---
 
@@ -242,6 +246,9 @@
 | INFRA-023 | Устранить окно незащищённости между docker start и firewall unit | | CANCELLED |
 | INFRA-024 | Runbook для добавления нового DB user | | DONE |
 | INFRA-TASKBOARD-HTML | Обновить генератор TASK_BOARD.html под новый формат (LANE + EPIC, колонка Тег, фильтр DONE) | | DONE |
+| INFRA-025 | Pipeline monitor dry-run + alerts: интеграция dry-run режима в pipeline_monitor.py | | TODO | Покрывает HYG-NNN-24, HYG-NNN-25. Blast radius: низкий (scripts/pipeline_monitor.py). |
+| INFRA-026 | Cron/build/backup hygiene: обёртка cron, image rebuild, backup verification | | TODO | Покрывает HYG-NNN-26, HYG-NNN-14, HYG-NNN-21. Blast radius: средний (cron wrapper, image rebuild). |
+| INFRA-027 | Host DB tooling + dedicated writer user: DB-тулинг на хосте + выделенный writer user | | TODO | Покрывает HYG-NNN-18, HYG-NNN-20, HYG-NNN-17. Blast radius: высокий (GRANT/REVOKE prod). |
 
 ---
 
@@ -272,6 +279,7 @@
 | DOC-WHALE-SPEC | WHALE_STATUS_TRANSITIONS.md governance spec v1.0 | | DONE |
 | DOC-PIPELINE-MAP | Карта магистрали сделки кита (PIPELINE_MAP) | | DONE |
 | DOC-604 | CHAT GOVERNANCE: правило context-first для Roo dispatch | | TODO |
+| DOC-PIPELINE-MAP-3C-UPDATE | PIPELINE_MAP_3C_close_sell.md: переработка от DORMANT-state к deployed-state + RED FLAG #1 как Known Limitation | | TODO | Покрывает переработку документации pipeline map 3C close sell. |
 
 ---
 
