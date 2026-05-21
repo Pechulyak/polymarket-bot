@@ -165,7 +165,7 @@
 | TRD-442 | DB-trigger закрытия paper-позиций на SELL | feature:paper-sell-close | CANCELLED |
 | TRD-443 | Реактивация _close_roundtrips (exact + fuzzy matching) | feature:roundtrip-close | DONE |
 | TRD-445 | Hardening тестовой инфраструктуры roundtrip_builder | | DONE |
-| TRD-444 | Очистка roundtrip_builder: удаление мёртвого кода post-TRD-443 | | TODO | Покрывает HYG-NNN-1, HYG-NNN-3, HYG-NNN-5, HYG-NNN-15. Blast radius: средний (production код). |
+| TRD-444 | Cleanup roundtrip_builder: удаление мёртвого кода post-TRD-443 | | IN_PROGRESS | Покрывает HYG-NNN-1, HYG-NNN-3, HYG-NNN-5, HYG-NNN-15. Blast radius: средний (production код). |
 | TRD-446 | split миграции 006 на 006a (schema) + 006b (data); стратегия для ~87% OPEN с outcome=NULL; cleanup dead WARNING в rollback 007a | | TODO | Покрывает HYG-NNN-2, HYG-NNN-8, HYG-NNN-11. Blast radius: высокий (DDL на prod). |
 | TRD-447 | Исправление rate-limit bug в _fetch_and_group_sell_trades + _close_roundtrips | feature:roundtrip-close | CANCELLED | False flag from DIAG-TRD443-RATE-LIMIT-{01,02,03,04}. Hypothesis disproven through API reconciliation on 2 sample whales. Pipeline OPEN/CLOSE sides correct, 23 DIRECT_SELL/24h is natural sparsity (majority of closures via SETTLEMENT, not direct SELL). |
 
