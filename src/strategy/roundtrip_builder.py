@@ -983,7 +983,7 @@ def main():
     parser.add_argument('--settle', action='store_true',
                         help='Settle OPEN roundtrips via Gamma API market resolution')
     parser.add_argument('--sentinel-method', type=str, default=None,
-                        help='Override matching_method for dry-run (use MANUAL_RUN_TRD443)')
+                        help='Force matching_method tag on closures (forensics/backfill only, e.g. MANUAL_RUN_TRD443). Production should not set this.')
     args = parser.parse_args()
     
     # Validate sentinel_method if provided
