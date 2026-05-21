@@ -265,6 +265,7 @@
 | HYG-007 | Project cleanup — logs + pycache + backups | | DONE |
 | HYG-008 | Инвентаризация файлов — MD / migrations / Python | | DONE |
 | HYG-009 | Рефакторинг структуры TASK_BOARD.md — унификация эпиков, префиксов, формата | | DONE |
+| HYG-010 | Docker cleanup post-TRD-443: образы, build cache, dangling volumes | | DONE |
 
 ---
 
