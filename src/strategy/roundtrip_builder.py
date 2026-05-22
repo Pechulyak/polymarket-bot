@@ -337,15 +337,10 @@ class RoundtripBuilder:
                 # Row indices: 0=wallet_address, 1=market_id, 2=outcome, 
                 # 3=close_size_usd, 4=close_price, 5=closed_at, 6=close_trade_id, 7=whale_id
                 grouped[position_key] = {
-                    'whale_id': row[7],
                     'wallet_address': row[0],
                     'position_key': position_key,
                     'market_id': row[1],
                     'outcome': row[2],
-                    'close_size_usd': row[3],
-                    'close_price': row[4],
-                    'closed_at': row[5],
-                    'close_trade_id': row[6],
                 }
         
         return grouped
