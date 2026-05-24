@@ -273,9 +273,9 @@
 
 - settlement pipeline
   status: OK
-  updated: 2026-04-05
-  task: PIPE-023
-  note: settlement via cron script, resolved markets closed automatically
+  updated: 2026-05-23
+  task: TRD-444
+  note: close_size_usd populated for all SETTLEMENT rows
 
 - smoke_test.sh
   status: OK
