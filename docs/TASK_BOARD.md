@@ -179,6 +179,7 @@
 | DATA-405 | Cleanup test records from database | | DONE |
 | DATA-406 | Remove legacy fields is_winner and profit_usd from whale_trades | | DONE |
 | DATA-407 | Исправление market_category в whale_trade_roundtrips | | DONE |
+| DATA-408 | Идемпотентность whale_trades: partial UNIQUE + ON CONFLICT | feature:data-integrity | READY |
 
 ---
 

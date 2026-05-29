@@ -289,10 +289,10 @@
                     <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
                 </tr>
                 <tr>
-                    <td class="task-id">TRD-442</td>
-                    <td>DB-trigger закрытия paper-позиций на SELL</td>
-                    <td><span class="task-tag">feature:paper-sell-close</span></td>
-                    <td><span class="status-badge status-IN_PROGRESS">IN_PROGRESS</span></td>
+                    <td class="task-id">TRD-446</td>
+                    <td>split миграции 006 на 006a (schema) + 006b (data); стратегия для ~87% OPEN с outcome=NULL; cleanup dead WARNING в rollback 007a</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
             </tbody>
         </table>
@@ -301,7 +301,24 @@
 
     <div class="epic-card">
         <h2><span class="section-label label-epic">EPIC</span>DATA — Data Integrity</h2>
-        <p class="empty-message">Все задачи выполнены</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Задача</th>
+                    <th>Тег</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="task-id">DATA-408</td>
+                    <td>Идемпотентность whale_trades: partial UNIQUE + ON CONFLICT</td>
+                    <td><span class="task-tag">feature:data-integrity</span></td>
+                    <td><span class="status-badge status-READY">READY</span></td>
+                </tr>
+            </tbody>
+        </table>
 
     </div>
 
@@ -322,6 +339,12 @@
                     <td>Анализ поведения китов по цене входа (≥0.95, ≤0.05)</td>
                     <td></td>
                     <td><span class="status-badge status-BACKLOG">BACKLOG</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">ANA-505</td>
+                    <td>Tracking coverage metric: измерение доли SELL events с предшествующим matching OPEN roundtrip'ом в close_sell pipeline</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
                 </tr>
             </tbody>
         </table>
@@ -365,19 +388,94 @@
 
     <div class="epic-card">
         <h2><span class="section-label label-epic">EPIC</span>INFRA — Infrastructure</h2>
-        <p class="empty-message">Все задачи выполнены</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Задача</th>
+                    <th>Тег</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="task-id">INFRA-025</td>
+                    <td>Pipeline monitor dry-run + alerts: интеграция dry-run режима в pipeline_monitor.py</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">INFRA-026</td>
+                    <td>Cron/build/backup hygiene: обёртка cron, image rebuild, backup verification</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">INFRA-027</td>
+                    <td>Host DB tooling + dedicated writer user: DB-тулинг на хосте + выделенный writer user</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+            </tbody>
+        </table>
 
     </div>
 
     <div class="epic-card">
         <h2><span class="section-label label-epic">EPIC</span>HYG — System Hygiene</h2>
-        <p class="empty-message">Все задачи выполнены</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Задача</th>
+                    <th>Тег</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="task-id">HYG-014</td>
+                    <td>Удаление deprecated Python SETTLEMENT path в roundtrip_builder.py:759-803 (SQL settle_resolved_positions() — source of truth)</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">HYG-015</td>
+                    <td>Документировать семантику open_trade_id в whale_trade_roundtrips (= last fill of multi-fill order, не first)</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+            </tbody>
+        </table>
 
     </div>
 
     <div class="epic-card">
         <h2><span class="section-label label-epic">EPIC</span>DOC — Documentation & Governance</h2>
-        <p class="empty-message">Все задачи выполнены</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Задача</th>
+                    <th>Тег</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="task-id">DOC-604</td>
+                    <td>CHAT GOVERNANCE: правило context-first для Roo dispatch</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+                <tr>
+                    <td class="task-id">DOC-PIPELINE-MAP-3C-UPDATE</td>
+                    <td>PIPELINE_MAP_3C_close_sell.md: переработка от DORMANT-state к deployed-state + RED FLAG #1 как Known Limitation</td>
+                    <td></td>
+                    <td><span class="status-badge status-TODO">TODO</span></td>
+                </tr>
+            </tbody>
+        </table>
 
     </div>
 
@@ -414,7 +512,7 @@
     </div>
 
     <div class="footer">
-        <p>Обновлено: 2026-05-15</p>
+        <p>Обновлено: 2026-05-22</p>
         <p class="generated">HTML сгенерирован автоматически из docs/TASK_BOARD.md</p>
     </div>
 </body>

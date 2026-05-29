@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-05-29 | DATA-408 | partial UNIQUE INDEX idx_whale_trades_tx_hash_unique на whale_trades(tx_hash) WHERE NOT NULL AND <> ''. ON CONFLICT с предикатом в whale_trades_repo.py. TOCTOU-SELECT сохранён как доп. слой. Деплой: rebuild whale_detector. Верифицировано: INSERT 0 0 на дубле, paper_trades не затронут. |
 | 2026-05-23 | TRD-444 | close_size_usd backfill: 52,364 SETTLEMENT rows заполнены (Formula A), forward fix в settle_resolved_positions() deployed |
 | 2026-05-21 | TRD-444 | Cleanup roundtrip_builder part 1: HYG-NNN-15 (улучшен help text для --sentinel-method), HYG-NNN-5 (удалён whale_roundtrip_reconstructor.py, 814 строк, 0 active callers). HYG-NNN-3 закрыт как false positive — dead fields не обнаружены. HYG-NNN-1 (close_* fields в SETTLEMENT) перенесён на следующий dev-чат. pytest 12/12 PASSED. |
 | 2026-05-20 | HYG-010 | Docker cleanup post-TRD-443. Удалены: контейнер cool_booth (hello-world Exited 3mo), image polymarket-bot-roundtrip_builder:pre-trd443-d9e1b0e30ad8 (rollback artifact), 26 dangling anonymous volumes (~1.26GB, test postgres от pytest TRD-445), build cache старше 24h (1.64GB, дубли pip/apt от параллельных builds). Disk: 75%→65% (-3GB used, +2.8GB avail). Production volumes/images/контейнеры не затронуты. |
