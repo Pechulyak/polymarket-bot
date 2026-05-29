@@ -17,6 +17,27 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = structlog.get_logger(__name__)
 
+# SQL для строк БЕЗ tx_hash (null/empty) — без ON CONFLICT
+_INSERT_PLAIN = """
+    INSERT INTO whale_trades
+        (whale_id, wallet_address, market_id, market_title, side,
+         size_usd, price, outcome, market_category, traded_at, tx_hash, source)
+    VALUES
+        (:whale_id, :wallet_address, :market_id, :market_title, :side,
+         :size_usd, :price, :outcome, :market_category, :traded_at, :tx_hash, :source)
+"""
+
+# SQL для строк С tx_hash — partial unique index (tx_hash IS NOT NULL AND tx_hash <> '')
+_INSERT_ON_CONFLICT = """
+    INSERT INTO whale_trades
+        (whale_id, wallet_address, market_id, market_title, side,
+         size_usd, price, outcome, market_category, traded_at, tx_hash, source)
+    VALUES
+        (:whale_id, :wallet_address, :market_id, :market_title, :side,
+         :size_usd, :price, :outcome, :market_category, :traded_at, :tx_hash, :source)
+    ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL AND tx_hash <> '' DO NOTHING
+"""
+
 
 class WhaleTradesRepo:
     """
@@ -147,19 +168,11 @@ class WhaleTradesRepo:
                         )
                         return "duplicate"
                 
-                # INSERT
+                # Выбор SQL в зависимости от наличия tx_hash
+                tx_hash_val = tx_hash.strip() if tx_hash and tx_hash.strip() else None
+                sql = _INSERT_ON_CONFLICT if tx_hash_val else _INSERT_PLAIN
                 session.execute(
-                    text("""
-                        INSERT INTO whale_trades (
-                            whale_id, wallet_address, market_id, market_title,
-                            side, size_usd, price, outcome, market_category,
-                            traded_at, tx_hash, source
-                        ) VALUES (
-                            :whale_id, :wallet_address, :market_id, :market_title,
-                            :side, :size_usd, :price, :outcome, :market_category,
-                            :traded_at, :tx_hash, :source
-                        )
-                    """),
+                    text(sql),
                     {
                         "whale_id": whale_id,
                         "wallet_address": wallet_address,
@@ -171,7 +184,7 @@ class WhaleTradesRepo:
                         "outcome": outcome,
                         "market_category": market_category,
                         "traded_at": traded_at,
-                        "tx_hash": tx_hash.strip() if tx_hash else None,
+                        "tx_hash": tx_hash_val,
                         "source": source,
                     }
                 )
