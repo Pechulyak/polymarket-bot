@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-05-29 | DATA-409 | Миграция fetch_trader_trades на /activity?type=TRADE за фича-Флагом use_activity_endpoint (bool, default=False). usdcSize используется если присутствует, fallback size*price. Верифицировано: endpoint возвращает type=TRADE, usdcSize валиден. Флаг выключен — прод на /trades до явного включения. |
 | 2026-05-29 | DATA-408 | partial UNIQUE INDEX idx_whale_trades_tx_hash_unique на whale_trades(tx_hash) WHERE NOT NULL AND <> ''. ON CONFLICT с предикатом в whale_trades_repo.py. TOCTOU-SELECT сохранён как доп. слой. Деплой: rebuild whale_detector. Верифицировано: INSERT 0 0 на дубле, paper_trades не затронут. |
 | 2026-05-23 | TRD-444 | close_size_usd backfill: 52,364 SETTLEMENT rows заполнены (Formula A), forward fix в settle_resolved_positions() deployed |
 | 2026-05-21 | TRD-444 | Cleanup roundtrip_builder part 1: HYG-NNN-15 (улучшен help text для --sentinel-method), HYG-NNN-5 (удалён whale_roundtrip_reconstructor.py, 814 строк, 0 active callers). HYG-NNN-3 закрыт как false positive — dead fields не обнаружены. HYG-NNN-1 (close_* fields в SETTLEMENT) перенесён на следующий dev-чат. pytest 12/12 PASSED. |
