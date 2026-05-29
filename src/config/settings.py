@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     telegram_alert_bot_token: Optional[str] = None
     sentry_dsn: Optional[str] = None
     debug: bool = False
+    use_activity_endpoint: bool = False
     environment: str = "development"
     log_level: str = "INFO"
 

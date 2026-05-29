@@ -121,6 +121,7 @@ class PolymarketDataClient:
         """
         self.api_key = api_key or settings.polymarket_api_key
         self.timeout = ClientTimeout(total=timeout)
+        self.use_activity_endpoint = settings.use_activity_endpoint
         self._session: Optional[aiohttp.ClientSession] = None
 
         logger.info("polymarket_data_client_initialized")
@@ -218,7 +219,12 @@ class PolymarketDataClient:
 
                 size = Decimal(size_str) if size_str else Decimal("0")
                 price = Decimal(price_str) if price_str else Decimal("0")
-                size_usd = size * price
+                usdc_size_str = item.get("usdcSize")
+                size_usd = (
+                    Decimal(str(usdc_size_str))
+                    if usdc_size_str is not None
+                    else size * price
+                )
 
                 trade = TradeWithAddress(
                     trader=trader.lower(),
@@ -262,6 +268,13 @@ class PolymarketDataClient:
             "user": trader_address.lower(),
             "limit": limit,
         }
+        if self.use_activity_endpoint:
+            url = f"{self.BASE_URL}/activity"
+            params = {
+                "user": trader_address.lower(),
+                "limit": limit,
+                "type": "TRADE",
+            }
 
         headers = {}
         if self.api_key:
