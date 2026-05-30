@@ -9,7 +9,7 @@ except Exception:
         pass
 
 
-from typing import Optional
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     sentry_dsn: Optional[str] = None
     debug: bool = False
     use_activity_endpoint: bool = False
+    activity_endpoint_whitelist: List[str] = []
     environment: str = "development"
     log_level: str = "INFO"
 

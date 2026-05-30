@@ -268,7 +268,12 @@ class PolymarketDataClient:
             "user": trader_address.lower(),
             "limit": limit,
         }
-        if self.use_activity_endpoint:
+        whitelist = [a.lower() for a in settings.activity_endpoint_whitelist]
+        use_activity = (
+            self.use_activity_endpoint
+            or (whitelist and trader_address.lower() in whitelist)
+        )
+        if use_activity:
             url = f"{self.BASE_URL}/activity"
             params = {
                 "user": trader_address.lower(),
