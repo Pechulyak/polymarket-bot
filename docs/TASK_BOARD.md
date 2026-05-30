@@ -181,6 +181,7 @@
 | DATA-407 | Исправление market_category в whale_trade_roundtrips | | DONE |
 | DATA-408 | Идемпотентность whale_trades: partial UNIQUE + ON CONFLICT | feature:data-integrity | READY |
 | DATA-409 | Миграция fetch_trader_trades на /activity endpoint | feature:activity-endpoint | READY |
+| DATA-410 | Whitelist для точечного включения /activity endpoint | feature:activity-endpoint | DONE |
 
 ---
 
