@@ -313,8 +313,8 @@ def check_close_sell_exit_codes_24h():
 def check_close_sell_duration_p95_24h():
     """Check close_sell duration based on recent runs.
 
-    Logic: CRITICAL if last run > 300s OR >=2 of last 5 runs > 300s.
-           WARNING  if last run > 90s  OR >=2 of last 5 runs > 90s.
+    Logic: CRITICAL if last run > 600s OR >=2 of last 5 runs > 600s.
+           WARNING  if last run > 300s OR >=2 of last 5 runs > 300s.
            Bootstrap: < 2 runs available → INFO.
     If log file absent → CRITICAL.
     """
@@ -342,12 +342,12 @@ def check_close_sell_duration_p95_24h():
     last = durations[-1]
     last5 = durations[-5:]
 
+    over_600 = sum(1 for d in last5 if d > 600)
     over_300 = sum(1 for d in last5 if d > 300)
-    over_90  = sum(1 for d in last5 if d > 90)
 
-    if last > 300 or over_300 >= 2:
+    if last > 600 or over_600 >= 2:
         status = "critical"
-    elif last > 90 or over_90 >= 2:
+    elif last > 300 or over_300 >= 2:
         status = "warning"
     else:
         status = "ok"
