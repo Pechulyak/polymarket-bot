@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-06
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-06-01 | INFRA-032 | Fix query bloat in _fetch_and_group_buy_trades и _fetch_and_group_sell_trades: добавлен фильтр traded_at > NOW() - 30 days и исключение excluded-китов. Duration 480s→210s, SELL groups 23K→8.5K |
+
 ## 2026-05
 
 | Дата | TASK_ID | Описание |

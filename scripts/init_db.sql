@@ -245,10 +245,7 @@ CREATE TABLE IF NOT EXISTS whale_trades (
     source VARCHAR(32) NOT NULL DEFAULT 'BACKFILL' CHECK (source IN ('realtime', 'backfill', 'unknown', 'BACKFILL', 'TRIGGER_TEST', 'POLLER', 'PAPER_TRACK', 'PAPER', 'TRACKED'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_whale_trades_whale ON whale_trades(whale_id, traded_at);
-CREATE INDEX IF NOT EXISTS idx_whale_trades_market ON whale_trades(market_id, traded_at);
-CREATE INDEX IF NOT EXISTS idx_whale_trades_wallet ON whale_trades(wallet_address, traded_at);
-CREATE INDEX IF NOT EXISTS idx_whale_trades_tx_hash ON whale_trades(tx_hash) WHERE tx_hash IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whale_trades_tx_hash ON whale_trades(tx_hash) WHERE tx_hash IS NOT NULL AND tx_hash <> '';
 -- INFRA-DIAG: fix close_sell Seq Scan degradation (1638s→92s)
 CREATE INDEX IF NOT EXISTS idx_whale_trades_sell_match ON whale_trades(wallet_address, market_id, outcome, side, traded_at);
 
