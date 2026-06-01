@@ -311,50 +311,49 @@ def check_close_sell_exit_codes_24h():
 
 
 def check_close_sell_duration_p95_24h():
-    """Compute P95 duration from START→DONE pairs in last 24h.
-    
-    Duration = DONE.ts - START.ts per run.
-    OK: P95 <= 90s
-    WARNING: P95 90-300s
-    CRITICAL: P95 > 300s
-    Bootstrap: < 5 runs in window → INFO
-    If log file absent → CRITICAL
+    """Check close_sell duration based on recent runs.
+
+    Logic: CRITICAL if last run > 300s OR >=2 of last 5 runs > 300s.
+           WARNING  if last run > 90s  OR >=2 of last 5 runs > 90s.
+           Bootstrap: < 2 runs available → INFO.
+    If log file absent → CRITICAL.
     """
     entries, err, _, _ = _parse_close_sell_log_entries(window_hours=24)
     if err:
         return {"value": None, "status": "critical", "reason": err}
-    
-    # Match START/DONE pairs
+
+    # Build durations list from START→DONE pairs, chronological
     durations = []
-    starts = {}  # ts_key -> ts
+    starts = {}
     for e in entries:
         if e["type"] == "START":
             starts[e["ts"]] = e["ts"]
         elif e["type"] == "DONE":
-            # Find matching START (same hour key)
-            key = (e["ts"].year, e["ts"].month, e["ts"].day, e["ts"].hour, e["ts"].minute // 15)
-            # Simple: find nearest START before this DONE
             matching = [s for s in starts if s <= e["ts"]]
             if matching:
                 best_start = max(matching)
                 dur = (e["ts"] - best_start).total_seconds()
                 durations.append(dur)
-    
-    if len(durations) < 5:
-        return {"value": None, "status": "info", "reason": f"only {len(durations)} runs"}
-    
-    durations.sort()
-    p95_idx = int(len(durations) * 0.95)
-    p95 = durations[p95_idx]
-    
-    if p95 <= 90:
-        status = "ok"
-    elif p95 <= 300:
+
+    if len(durations) < 2:
+        return {"value": None, "status": "info",
+                "reason": f"only {len(durations)} runs"}
+
+    last = durations[-1]
+    last5 = durations[-5:]
+
+    over_300 = sum(1 for d in last5 if d > 300)
+    over_90  = sum(1 for d in last5 if d > 90)
+
+    if last > 300 or over_300 >= 2:
+        status = "critical"
+    elif last > 90 or over_90 >= 2:
         status = "warning"
     else:
-        status = "critical"
-    
-    return {"value": round(p95, 1), "status": status}
+        status = "ok"
+
+    return {"value": round(last, 1), "status": status,
+            "last5_max": round(max(last5), 1)}
 
 
 # =============================================================================
