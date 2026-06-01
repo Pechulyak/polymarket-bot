@@ -70,10 +70,10 @@
   note: activity schema
 
 - Таблица whale_trades
-  status: OK
-  updated: 2026-03-27
-  task: DATA-406
-  note: legacy fields removed
+  status: OK (monolithic, partitioning rejected INFRA-029)
+  updated: 2026-05-31
+  task: INFRA-029, INFRA-030
+  note: retention planned (INFRA-030, 90d horizon), no partitioning
 
 - Таблица paper_trades
   status: OK
@@ -163,9 +163,9 @@
 
 - roundtrip_builder_close_sell
   status: ACTIVE
-  updated: 2026-05-19
-  task: TRD-443
-  note: host cron 15 * * * *, exact + fuzzy matching
+  updated: 2026-05-31
+  task: TRD-443, INFRA-DIAG
+  note: host cron 15 * * * *, exact + fuzzy matching. idx_whale_trades_sell_match added, Seq Scan eliminated, close duration 1638s→~70s
 
 - paper_settlement
   status: DEPRECATED

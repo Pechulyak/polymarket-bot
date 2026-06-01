@@ -253,6 +253,11 @@
 | INFRA-025 | Pipeline monitor dry-run + alerts: интеграция dry-run режима в pipeline_monitor.py | | TODO | Покрывает HYG-NNN-24, HYG-NNN-25. Blast radius: низкий (scripts/pipeline_monitor.py). |
 | INFRA-026 | Cron/build/backup hygiene: обёртка cron, image rebuild, backup verification | | TODO | Покрывает HYG-NNN-26, HYG-NNN-14, HYG-NNN-21. Blast radius: средний (cron wrapper, image rebuild). |
 | INFRA-027 | Host DB tooling + dedicated writer user: DB-тулинг на хосте + выделенный writer user | | TODO | Покрывает HYG-NNN-18, HYG-NNN-20, HYG-NNN-17. Blast radius: высокий (GRANT/REVOKE prod). |
+| INFRA-028 | Партиционирование whale_trades по месяцам | | CANCELLED |
+| INFRA-029 | Анализ партиционирования (ON CONFLICT compatibility) | | CANCELLED |
+| INFRA-030 | Retention whale_trades (архив + cron) | | TODO | |
+| INFRA-031 | Выравнивание индексов whale_trades repo ↔ live | | IN_PROGRESS |
+| INFRA-032 | Фикс деградации _fetch_and_group_sell_trades() — фильтры по времени и copy_status | | TODO |
 
 ---
 
@@ -275,6 +280,7 @@
 | HYG-013 | Удаление dead fields из close_data dict | | DONE |
 | HYG-014 | Удаление deprecated Python SETTLEMENT path в roundtrip_builder.py:759-803 (SQL settle_resolved_positions() — source of truth) |  | TODO |
 | HYG-015 | Документировать семантику open_trade_id в whale_trade_roundtrips (= last fill of multi-fill order, не first) |  | TODO |
+| HYG-016 | Удаление whale_trades_legacy | | DONE |
 
 ---
 
