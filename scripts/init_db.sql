@@ -249,6 +249,8 @@ CREATE INDEX IF NOT EXISTS idx_whale_trades_whale ON whale_trades(whale_id, trad
 CREATE INDEX IF NOT EXISTS idx_whale_trades_market ON whale_trades(market_id, traded_at);
 CREATE INDEX IF NOT EXISTS idx_whale_trades_wallet ON whale_trades(wallet_address, traded_at);
 CREATE INDEX IF NOT EXISTS idx_whale_trades_tx_hash ON whale_trades(tx_hash) WHERE tx_hash IS NOT NULL;
+-- INFRA-DIAG: fix close_sell Seq Scan degradation (1638s→92s)
+CREATE INDEX IF NOT EXISTS idx_whale_trades_sell_match ON whale_trades(wallet_address, market_id, outcome, side, traded_at);
 
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
