@@ -256,7 +256,7 @@
 | INFRA-028 | Партиционирование whale_trades по месяцам | | CANCELLED |
 | INFRA-029 | Анализ партиционирования (ON CONFLICT compatibility) | | CANCELLED |
 | INFRA-030 | Retention whale_trades (архив + cron) | | TODO | |
-| INFRA-031 | Выравнивание индексов whale_trades repo ↔ live | | IN_PROGRESS |
+| INFRA-031 | Выравнивание индексов whale_trades repo ↔ live | 12.7s→4.0s | DONE |
 | INFRA-032 | Фикс деградации _fetch_and_group_sell_trades() — фильтры по времени и copy_status | | TODO |
 
 ---
