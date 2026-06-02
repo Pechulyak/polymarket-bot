@@ -84,3 +84,4 @@ baseline_*/
 config/*.backup.*
 docker-compose.yml.backup.*
 backups/
+.alert_env

@@ -257,10 +257,11 @@
 | INFRA-029 | Анализ партиционирования (ON CONFLICT compatibility) | | CANCELLED |
 | INFRA-030 | Retention whale_trades (архив + cron) | | TODO | |
 | INFRA-031 | Выравнивание индексов whale_trades repo ↔ live | 12.7s→4.0s | DONE |
-| INFRA-032 | Фикс деградации _fetch_and_group_sell_trades() — фильтры по времени и copy_status | | TODO |
+| INFRA-032 | Фикс деградации _fetch_and_group_sell_trades() — фильтры по времени и copy_status | | DONE |
 | INFRA-033 | Заменить p95_24h на last+recent логику в pipeline_monitor | | DONE |
-| INFRA-034 | Фикс sell-запроса (remove LOWER, add partial index) | 3249ms→1870ms | DONE |
+| INFRA-034 | Фикс sell-запроса (remove LOWER, add partial index) | | DONE |
 | INFRA-035 | Обновить пороги duration (900/480s) + WARNING cooldown | | DONE |
+| INFRA-036 | Фикс backup .env path + emergency alert bus | | DONE |
 
 ---
 

@@ -364,9 +364,9 @@
 
 - Backups
   status: OK
-  updated: 2026-04-12
-  task: INFRA-018
-  note: daily encrypted B2, retention 7d, Telegram alert
+  updated: 2026-06-02
+  task: INFRA-036
+  note: daily encrypted B2, retention 7d, Telegram alert (success+failure), emergency alert bus via .alert_env, cron 03:00 UTC verified 2026-06-02
 
 - .env доступ
   status: OK

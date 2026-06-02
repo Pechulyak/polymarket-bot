@@ -33,6 +33,24 @@ scripts/backup_db.sh, scripts/backup_restore_test.sh, crontab, pipeline_monitor,
 
 ---
 
+### INFRA-036 — Backup Fix: .env path resolution + emergency alert bus
+
+**Дата:** 2026-06-02
+
+**Описание:**  
+cron-бэкап не отрабатывал с 2026-04-12 — относительный путь к .env не резолвился из cron cwd; passphrase не читался, error_exit срабатывал до pg_dump. Telegram-алерт обесточен той же поломкой (creds из того же .env). 50 дней без рабочего бэкапа, незамеченно.
+
+**До:**  
+backup_db.sh читал ./.env (относительный); алерт только на failure, creds из .env; последний валидный дамп 2026-04-12
+
+**После:**  
+абсолютный путь ($SCRIPT_DIR/../.env); .alert_env как независимая аварийная шина для Telegram; success-heartbeat с размером дампа; ⚠️ на пустой размер. Верифицировано: 4a normal, 4b emergency bus, cron 06:00 UTC
+
+**Влияние:**  
+scripts/backup_db.sh, .gitignore, .alert_env (placeholder, ignored)
+
+---
+
 ## ФОРМАТ ЗАПИСИ
 
 ### <TASK_ID> — <Краткое название>
