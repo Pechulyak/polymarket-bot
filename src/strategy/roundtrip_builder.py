@@ -321,7 +321,7 @@ class RoundtripBuilder:
                 -- Get whale_id only from matched whale
                 w.id as whale_id
             FROM whale_trades wt
-            LEFT JOIN whales w ON LOWER(w.wallet_address) = LOWER(wt.wallet_address)
+            LEFT JOIN whales w ON w.wallet_address = wt.wallet_address
             WHERE wt.side = 'sell'
               AND wt.traded_at > NOW() - INTERVAL '30 days'
               AND (w.copy_status IS NULL OR w.copy_status != 'excluded')

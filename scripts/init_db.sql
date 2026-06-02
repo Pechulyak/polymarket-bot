@@ -250,6 +250,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_whale_trades_tx_hash ON whale_trades(tx_ha
 CREATE INDEX IF NOT EXISTS idx_whale_trades_sell_match ON whale_trades(wallet_address, market_id, outcome, side, traded_at);
 -- INFRA-031: fix buy query 12.7s→4.0s
 CREATE INDEX IF NOT EXISTS idx_whale_trades_buy_match ON whale_trades(wallet_address, market_id, outcome, traded_at) WHERE side = 'buy';
+-- INFRA-034: fix sell query (removed LOWER, added partial index)
+CREATE INDEX IF NOT EXISTS idx_whale_trades_sell_partial ON whale_trades(wallet_address, market_id, outcome, traded_at) WHERE side = 'sell';
 
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
