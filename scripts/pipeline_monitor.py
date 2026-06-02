@@ -313,8 +313,8 @@ def check_close_sell_exit_codes_24h():
 def check_close_sell_duration_p95_24h():
     """Check close_sell duration based on recent runs.
 
-    Logic: CRITICAL if last run > 600s OR >=2 of last 5 runs > 600s.
-           WARNING  if last run > 300s OR >=2 of last 5 runs > 300s.
+    Logic: CRITICAL if last run > 900s OR >=2 of last 5 runs > 900s.
+           WARNING  if last run > 480s OR >=2 of last 5 runs > 480s.
            Bootstrap: < 2 runs available → INFO.
     If log file absent → CRITICAL.
     """
@@ -342,12 +342,12 @@ def check_close_sell_duration_p95_24h():
     last = durations[-1]
     last5 = durations[-5:]
 
-    over_600 = sum(1 for d in last5 if d > 600)
-    over_300 = sum(1 for d in last5 if d > 300)
+    over_900 = sum(1 for d in last5 if d > 900)
+    over_480 = sum(1 for d in last5 if d > 480)
 
-    if last > 600 or over_600 >= 2:
+    if last > 900 or over_900 >= 2:
         status = "critical"
-    elif last > 300 or over_300 >= 2:
+    elif last > 480 or over_480 >= 2:
         status = "warning"
     else:
         status = "ok"
@@ -409,6 +409,33 @@ def load_last_ok_time():
         with open(LAST_OK_FILE) as f:
             return datetime.fromisoformat(f.read().strip())
     return None
+
+
+# =============================================================================
+# WARNING cooldown
+# =============================================================================
+
+WARNING_COOLDOWN_FILE = "/tmp/pipeline_monitor_warning_cooldown"
+WARNING_COOLDOWN_HOURS = 2
+
+
+def _warning_cooldown_active() -> bool:
+    """Return True if WARNING cooldown is active (sent within last 2h)."""
+    if not os.path.exists(WARNING_COOLDOWN_FILE):
+        return False
+    try:
+        mtime = datetime.fromtimestamp(os.path.getmtime(WARNING_COOLDOWN_FILE))
+        return datetime.now() - mtime < timedelta(hours=WARNING_COOLDOWN_HOURS)
+    except OSError:
+        return False
+
+
+def _set_warning_cooldown():
+    """Touch cooldown file to start 2h cooldown."""
+    try:
+        open(WARNING_COOLDOWN_FILE, 'w').close()
+    except OSError:
+        pass
 
 
 def save_last_ok_time(dt: datetime):
@@ -585,9 +612,9 @@ def determine_status(results: dict) -> tuple:
     p95_result = results.get("close_sell_duration_p95_seconds")
     if p95_result:
         if p95_result["status"] == "critical":
-            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 600) (CRITICAL)")
+            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 900) (CRITICAL)")
         elif p95_result["status"] == "warning":
-            warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 300)")
+            warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 480)")
         # info (bootstrap) — skip
 
     if criticals:
@@ -694,12 +721,18 @@ def main():
                 hours_since_last_ok = (now - last_ok).total_seconds() / 3600
                 print(f"OK, skip telegram (last OK sent {hours_since_last_ok:.1f}h ago)")
         else:
-            # WARNING/CRITICAL - always send
-            success = send_telegram_message(message)
-            if success:
-                print(f"{status} alert sent to Telegram")
+            # CRITICAL - always send
+            # WARNING - only if cooldown not active
+            if status == "CRITICAL" or not _warning_cooldown_active():
+                success = send_telegram_message(message)
+                if success:
+                    if status == "WARNING":
+                        _set_warning_cooldown()
+                    print(f"{status} alert sent to Telegram")
+                else:
+                    print(f"Failed to send {status} alert")
             else:
-                print(f"Failed to send {status} alert")
+                print(f"WARNING, skip telegram (cooldown active)")
 
         # Log to database
         log_pipeline_health(status, results)
