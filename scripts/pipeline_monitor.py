@@ -585,9 +585,9 @@ def determine_status(results: dict) -> tuple:
     p95_result = results.get("close_sell_duration_p95_seconds")
     if p95_result:
         if p95_result["status"] == "critical":
-            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 300) (CRITICAL)")
+            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 600) (CRITICAL)")
         elif p95_result["status"] == "warning":
-            warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 90)")
+            warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 300)")
         # info (bootstrap) — skip
 
     if criticals:
