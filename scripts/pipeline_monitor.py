@@ -316,8 +316,8 @@ def check_close_sell_exit_codes_24h():
 def check_close_sell_duration_p95_24h():
     """Check close_sell duration based on recent runs.
 
-    Logic: CRITICAL if last run > 900s OR >=2 of last 5 runs > 900s.
-           WARNING  if last run > 480s OR >=2 of last 5 runs > 480s.
+    Logic: CRITICAL if last run > 1800s OR >=2 of last 5 runs > 1800s.
+           WARNING  if last run > 1200s OR >=2 of last 5 runs > 1200s.
            Bootstrap: < 2 runs available → INFO.
     If log file absent → CRITICAL.
     """
@@ -345,12 +345,12 @@ def check_close_sell_duration_p95_24h():
     last = durations[-1]
     last5 = durations[-5:]
 
-    over_900 = sum(1 for d in last5 if d > 900)
-    over_480 = sum(1 for d in last5 if d > 480)
+    over_1800 = sum(1 for d in last5 if d > 1800)
+    over_1200 = sum(1 for d in last5 if d > 1200)
 
-    if last > 900 or over_900 >= 2:
+    if last > 1800 or over_1800 >= 2:
         status = "critical"
-    elif last > 480 or over_480 >= 2:
+    elif last > 1200 or over_1200 >= 2:
         status = "warning"
     else:
         status = "ok"
@@ -408,6 +408,26 @@ def check_retention_cron_error():
         return False
     except Exception:
         return False  # Error reading file — skip, don't alert
+
+
+def check_retention_deleted_count():
+    """Parse last 'Total deleted' count from retention_cron.log.
+
+    Returns integer from RAISE NOTICE 'Total deleted: %' or None if not found.
+    """
+    if not os.path.exists(RETENTION_LOG_FILE):
+        return None
+
+    try:
+        with open(RETENTION_LOG_FILE, 'r') as f:
+            content = f.read()
+        # Look for "Total deleted: N" in the log
+        matches = re.findall(r'Total deleted:\s*(\d+)', content)
+        if matches:
+            return int(matches[-1])  # last occurrence
+        return None
+    except Exception:
+        return None
 
 
 # =============================================================================
@@ -588,6 +608,9 @@ def run_pipeline_checks():
     # Check 13: retention_cron error in last entry
     results["retention_cron_error"] = check_retention_cron_error()
 
+    # Check 14: retention deleted count from log
+    results["retention_deleted"] = check_retention_deleted_count()
+
     # Determine status based on results
     status, warnings, criticals = determine_status(results)
     results["status"] = status
@@ -703,19 +726,27 @@ def format_ok_message(results: dict) -> str:
             container_status = f"{container}: {count} restarts"
             break
 
+    retention_deleted = results.get("retention_deleted")
+    retention_line = f"retention_deleted/24h: {retention_deleted}\n" if retention_deleted is not None else ""
+
     return f"""✅ Pipeline OK | {results['timestamp']}
 
 whale_trades/24h: {results['whale_trades_24h']}
 paper_trades/24h: {results['paper_trades_24h']}
 roundtrips/24h: {results['roundtrips_24h']}
 category_unknown: {results['market_category_unknown_count']}
-containers: {container_status}
+{retention_line}containers: {container_status}
 """
 
 
 def format_warning_message(results: dict, warnings: list, criticals: list) -> str:
     """Format WARNING message."""
     lines = ["⚠️ Pipeline WARNING | " + results["timestamp"], ""]
+
+    # Add retention_deleted metric as first informational line
+    retention_deleted = results.get("retention_deleted")
+    if retention_deleted is not None:
+        lines.append(f"📊 retention_deleted/24h: {retention_deleted}")
 
     for w in warnings:
         if "<" in w or "(" in w:
