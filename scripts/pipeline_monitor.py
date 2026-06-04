@@ -672,9 +672,9 @@ def determine_status(results: dict) -> tuple:
     p95_result = results.get("close_sell_duration_p95_seconds")
     if p95_result:
         if p95_result["status"] == "critical":
-            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 900) (CRITICAL)")
+            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 1800) (CRITICAL) — process may be hung, check close_sell_cron.log")
         elif p95_result["status"] == "warning":
-            warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 480)")
+            warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 1200) — normal at current table size (~500k rows)")
         # info (bootstrap) — skip
 
     # Check 12: retention_cron last run age (> 25h → ALERT)

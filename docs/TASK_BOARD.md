@@ -260,7 +260,7 @@
 | INFRA-032 | Фикс деградации _fetch_and_group_sell_trades() — фильтры по времени и copy_status | | DONE |
 | INFRA-033 | Заменить p95_24h на last+recent логику в pipeline_monitor | | DONE |
 | INFRA-034 | Фикс sell-запроса (remove LOWER, add partial index) | | DONE |
-| INFRA-035 | Обновить пороги duration (900/480s) + WARNING cooldown | | DONE |
+| INFRA-035 | Обновить пороги duration: WARNING=1200s, CRITICAL=1800s + context messages | | DONE |
 | INFRA-036 | Фикс backup .env path + emergency alert bus | | DONE |
 
 ---
