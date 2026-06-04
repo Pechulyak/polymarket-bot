@@ -253,6 +253,12 @@ CREATE INDEX IF NOT EXISTS idx_whale_trades_buy_match ON whale_trades(wallet_add
 -- INFRA-034: fix sell query (removed LOWER, added partial index)
 CREATE INDEX IF NOT EXISTS idx_whale_trades_sell_partial ON whale_trades(wallet_address, market_id, outcome, traded_at) WHERE side = 'sell';
 
+-- INFRA-030 / A1b: retention indexes for whale_trade_roundtrips
+-- Required by retention_whale_trades() procedure for NOT EXISTS lookups
+CREATE INDEX IF NOT EXISTS idx_rt_open_trade_id ON whale_trade_roundtrips(open_trade_id);
+CREATE INDEX IF NOT EXISTS idx_rt_close_trade_id ON whale_trade_roundtrips(close_trade_id) WHERE close_trade_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_rt_open_position_lookup ON whale_trade_roundtrips(wallet_address, market_id, outcome) WHERE status = 'OPEN';
+
 -- Insert initial bankroll record
 INSERT INTO bankroll (total_capital, allocated, available, daily_pnl, daily_drawdown)
 VALUES (100.00, 0, 100.00, 0, 0);
@@ -325,3 +331,78 @@ CREATE TABLE IF NOT EXISTS strategy_config (
 -- PHASE1.5-002: Whale capital estimation columns
 ALTER TABLE whales ADD COLUMN IF NOT EXISTS estimated_capital DECIMAL(20, 8);
 ALTER TABLE whales ADD COLUMN IF NOT EXISTS capital_estimation_method VARCHAR(20) DEFAULT 'manual';
+
+-- =============================================================================
+-- INFRA-030 / A3: retention_whale_trades procedure
+-- Call: CALL retention_whale_trades(30, 10000);
+-- Variant A (asymmetric): BUY older than p_days deletable even at OPEN;
+-- SELL protected while an OPEN roundtrip exists on same wallet+market+outcome.
+-- PROCEDURE (not function) — needs COMMIT inside loop.
+-- Live NOT EXISTS each batch (no snapshot) — safe against concurrent 3B/3C.
+-- Indexes A1b cover all three NOT EXISTS (Index Only Scan).
+-- =============================================================================
+
+CREATE OR REPLACE PROCEDURE public.retention_whale_trades(
+    IN p_days  integer DEFAULT 30,
+    IN p_batch integer DEFAULT 10000
+)
+LANGUAGE plpgsql
+AS $procedure$
+DECLARE
+    v_batch_num      INT := 0;
+    v_deleted_total  BIGINT := 0;
+    v_rowcount       INT := 1;
+BEGIN
+    IF p_days < 1 OR p_batch < 1 THEN
+        RAISE NOTICE 'Invalid parameters: p_days=%, p_batch=%. Must be >= 1.', p_days, p_batch;
+        RETURN;
+    END IF;
+
+    RAISE NOTICE 'Starting retention_whale_trades: p_days=%, p_batch=%', p_days, p_batch;
+
+    WHILE v_rowcount > 0 LOOP
+        v_batch_num := v_batch_num + 1;
+
+        DELETE FROM whale_trades wt
+        WHERE wt.id IN (
+            SELECT wt2.id
+            FROM whale_trades wt2
+            WHERE wt2.traded_at < NOW() - make_interval(days => p_days)
+              -- anchor BUY protected (FK open_trade_id)
+              AND NOT EXISTS (
+                  SELECT 1 FROM whale_trade_roundtrips rt
+                  WHERE rt.open_trade_id = wt2.id
+              )
+              -- close-referenced protected (FK close_trade_id)
+              AND NOT EXISTS (
+                  SELECT 1 FROM whale_trade_roundtrips rt
+                  WHERE rt.close_trade_id = wt2.id
+              )
+              -- Variant A asymmetry:
+              -- BUY always deletable (no reader of old unreferenced BUY);
+              -- SELL kept while OPEN exists (3C needs it to close the position).
+              AND (
+                  wt2.side = 'buy'
+                  OR NOT EXISTS (
+                      SELECT 1 FROM whale_trade_roundtrips rt
+                      WHERE rt.wallet_address = wt2.wallet_address
+                        AND rt.market_id      = wt2.market_id
+                        AND (rt.outcome = wt2.outcome
+                             OR (rt.outcome IS NULL AND wt2.outcome IS NULL))
+                        AND rt.status = 'OPEN'
+                  )
+              )
+            LIMIT p_batch
+        );
+
+        GET DIAGNOSTICS v_rowcount = ROW_COUNT;
+        v_deleted_total := v_deleted_total + v_rowcount;
+
+        RAISE NOTICE 'Batch %: deleted %, total %', v_batch_num, v_rowcount, v_deleted_total;
+
+        COMMIT;
+    END LOOP;
+
+    RAISE NOTICE 'Retention complete. Batches: %, Total deleted: %', v_batch_num, v_deleted_total;
+END;
+$procedure$;

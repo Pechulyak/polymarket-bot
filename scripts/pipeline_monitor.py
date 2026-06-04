@@ -219,6 +219,9 @@ LOG_FILE = "/root/polymarket-bot/logs/close_sell_cron.log"
 # Regex: [run_close_sell] 2026-05-19 11:40:21 — START/DONE (exit N)
 _LOG_PATTERN = r'\[run_close_sell\] (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) — (START|DONE)(?: \(exit (\d+)\))?'
 
+RETENTION_LOG_FILE = "/root/polymarket-bot/logs/retention_cron.log"
+_RETENTION_LOG_PREFIX = "[run_retention]"
+
 
 def _parse_close_sell_log_entries(window_hours=24):
     """Parse close_sell log and return list of {ts, type, exit_code} for last window_hours.
@@ -354,6 +357,57 @@ def check_close_sell_duration_p95_24h():
 
     return {"value": round(last, 1), "status": status,
             "last5_max": round(max(last5), 1)}
+
+
+def check_retention_cron_last_run_age():
+    """Check age of last retention_cron log entry (START or DONE).
+
+    Log format: [run_retention] 2026-06-04 04:00:01 — START/DONE
+    Threshold: 25 hours (retention runs at 04:00 daily, monitor runs every 30 min).
+    If file absent or no entries → CRITICAL.
+    If file has ERROR in last entry → WARNING (not CRITICAL, unlike close_sell).
+    """
+    if not os.path.exists(RETENTION_LOG_FILE):
+        return None  # CRITICAL — handled by determine_status
+
+    try:
+        mtime = os.path.getmtime(RETENTION_LOG_FILE)
+        age_seconds = time.time() - mtime
+        age_hours = age_seconds / 3600
+
+        if age_hours > 25:
+            return round(age_hours, 1)  # ALERT
+
+        # Check last entry for ERROR
+        with open(RETENTION_LOG_FILE, 'r') as f:
+            lines = f.readlines()
+            if lines:
+                last_line = lines[-1].strip()
+                if 'ERROR' in last_line:
+                    return None  # WARNING handled separately
+        return None  # OK
+    except Exception:
+        return None  # CRITICAL on error
+
+
+def check_retention_cron_error():
+    """Check for ERROR in last entry of retention_cron.log.
+
+    WARNING if ERROR found, OK otherwise.
+    File absent → OK (cron just hasn't run yet, not an error).
+    """
+    if not os.path.exists(RETENTION_LOG_FILE):
+        return False
+
+    try:
+        with open(RETENTION_LOG_FILE, 'r') as f:
+            lines = f.readlines()
+            if lines:
+                last_line = lines[-1].strip()
+                return 'ERROR' in last_line
+        return False
+    except Exception:
+        return False  # Error reading file — skip, don't alert
 
 
 # =============================================================================
@@ -528,6 +582,12 @@ def run_pipeline_checks():
     # Check 11: close_sell P95 duration in last 24h (from log)
     results["close_sell_duration_p95_seconds"] = check_close_sell_duration_p95_24h()
 
+    # Check 12: retention_cron last run age
+    results["retention_cron_last_run_age_hours"] = check_retention_cron_last_run_age()
+
+    # Check 13: retention_cron error in last entry
+    results["retention_cron_error"] = check_retention_cron_error()
+
     # Determine status based on results
     status, warnings, criticals = determine_status(results)
     results["status"] = status
@@ -616,6 +676,15 @@ def determine_status(results: dict) -> tuple:
         elif p95_result["status"] == "warning":
             warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 480)")
         # info (bootstrap) — skip
+
+    # Check 12: retention_cron last run age (> 25h → ALERT)
+    retention_age = results.get("retention_cron_last_run_age_hours")
+    if retention_age is not None and retention_age > 25:
+        warnings.append(f"retention_cron: no run in {retention_age:.0f}h (> 25h)")
+
+    # Check 13: retention_cron ERROR in last entry → WARNING
+    if results.get("retention_cron_error"):
+        warnings.append("retention_cron: ERROR in last entry")
 
     if criticals:
         return "CRITICAL", warnings, criticals

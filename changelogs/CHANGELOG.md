@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| | 2026-06-04 | INFRA-030 | Retention whale_trades: процедура retention_whale_trades(p_days=30, p_batch=10000), батчевый DELETE с живым NOT EXISTS, cron 04:00 UTC daily. Боевой прогон A5: удалено 120,000 строк, OPEN-инвариант цел, защищённые SELL=19. Индексы idx_rt_* в init_db.sql. logrotate + pipeline_monitor (last_run_age 25h, error check). |
 | 2026-06-01 | INFRA-032 | Fix query bloat in _fetch_and_group_buy_trades и _fetch_and_group_sell_trades: добавлен фильтр traded_at > NOW() - 30 days и исключение excluded-китов. Duration 480s→210s, SELL groups 23K→8.5K |
 
 ## 2026-05

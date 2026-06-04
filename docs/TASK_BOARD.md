@@ -255,7 +255,7 @@
 | INFRA-027 | Host DB tooling + dedicated writer user: DB-тулинг на хосте + выделенный writer user | | TODO | Покрывает HYG-NNN-18, HYG-NNN-20, HYG-NNN-17. Blast radius: высокий (GRANT/REVOKE prod). |
 | INFRA-028 | Партиционирование whale_trades по месяцам | | CANCELLED |
 | INFRA-029 | Анализ партиционирования (ON CONFLICT compatibility) | | CANCELLED |
-| INFRA-030 | Retention whale_trades (архив + cron) | | TODO | |
+| INFRA-030 | Retention whale_trades (архив + cron) | | DONE | |
 | INFRA-031 | Выравнивание индексов whale_trades repo ↔ live | 12.7s→4.0s | DONE |
 | INFRA-032 | Фикс деградации _fetch_and_group_sell_trades() — фильтры по времени и copy_status | | DONE |
 | INFRA-033 | Заменить p95_24h на last+recent логику в pipeline_monitor | | DONE |

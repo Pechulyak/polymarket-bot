@@ -71,9 +71,9 @@
 
 - Таблица whale_trades
   status: OK (monolithic, partitioning rejected INFRA-029)
-  updated: 2026-05-31
-  task: INFRA-029, INFRA-030
-  note: retention planned (INFRA-030, 90d horizon), no partitioning
+  updated: 2026-06-04
+  task: INFRA-030
+  note: retention active, cron 04:00 UTC daily, 30d horizon, procedure in init_db.sql
 
 - Таблица paper_trades
   status: OK
