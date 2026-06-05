@@ -294,12 +294,12 @@
 |----|--------|-----|--------|
 | DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | | DONE |
 | DOC-602 | Очистка TASK_BOARD и CHANGELOG — унификация формата | | DONE |
-| DOC-GOVERNANCE-UPDATE | Обновить governance-документы под новый формат TASK_BOARD (пункты 6-11) | | DONE |
 | DOC-603 | Актуализация PROJECT_STATE.md + запрет snapshot-данных | | DONE |
-| DOC-WHALE-SPEC | WHALE_STATUS_TRANSITIONS.md governance spec v1.0 | | DONE |
-| DOC-PIPELINE-MAP | Карта магистрали сделки кита (PIPELINE_MAP) | | DONE |
 | DOC-604 | CHAT GOVERNANCE: правило context-first для Roo dispatch | | TODO |
-| DOC-PIPELINE-MAP-3C-UPDATE | PIPELINE_MAP_3C_close_sell.md: переработка от DORMANT-state к deployed-state + RED FLAG #1 как Known Limitation | | TODO | Покрывает переработку документации pipeline map 3C close sell. |
+| DOC-605 | Обновить governance-документы под новый формат TASK_BOARD (пункты 6-11) | | DONE |
+| DOC-606 | WHALE_STATUS_TRANSITIONS.md governance spec v1.0 | | DONE |
+| DOC-607 | Карта магистрали сделки кита (PIPELINE_MAP) | | DONE |
+| DOC-608 | PIPELINE_MAP_3C_close_sell.md: переработка от DORMANT к deployed-state | | DONE |
 
 ---
 
@@ -308,8 +308,8 @@
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
 | BUG-607 | Исправление: re-discovery перезаписывает excluded-статус | | DONE |
-| BUG-608 | Закрытие позиций roundtrip_builder не выполняется в проде | feature:roundtrip-close | IN_PROGRESS |
+| BUG-608 | Закрытие позиций roundtrip_builder не выполняется в проде | | DONE |
 
 ---
 
-*Обновлено: 2026-05-22*
+*Обновлено: 2026-06-05*
