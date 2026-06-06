@@ -230,6 +230,8 @@ Indexes — `migration_whale_trade_roundtrips.sql:88–105` (8 индексов,
 | 26 | `matching_confidence` | уверенность матчинга закрытия | `NULL` |
 | 27 | `created_at` / `updated_at` | служебные timestamp-ы записи | `NOW()` в SQL |
 
+**Примечание по `open_trade_id`:** значение равно `MIN(whale_trades.id)` по группе — это числовой первичный ключ записи в `whale_trades`, не UUID roundtrip-а. `MIN(id)` и `MIN(traded_at)` агрегируются независимо: в теории могут указывать на разные строки при коллизии timestamp-ов, хотя на практике совпадают. Поле заполняется однократно при INSERT и не обновляется при добавлении новых BUY-сделок в ту же позицию (`ON CONFLICT DO NOTHING`).
+
 ### 9.4 Сценарий UPDATE для существующего position_key
 
 Не применяется. `ON CONFLICT (position_key) DO NOTHING` — никакого UPDATE на стадии 3A не происходит. При наличии записи (любого status) новый INSERT молча отбрасывается; счётчик `len(roundtrips)` врёт о фактически вставленных (RF1, RF3).

@@ -106,7 +106,7 @@ CREATE INDEX IF NOT EXISTS idx_roundtrips_whale_id ON whale_trade_roundtrips(wha
 
 -- Comments for documentation
 COMMENT ON TABLE whale_trade_roundtrips IS 'Whale position reconstruction table - aggregates whale_trades events into roundtrip positions';
-COMMENT ON COLUMN whale_trade_roundtrips.position_key IS 'Deterministic key: hash(wallet_address + market_id + outcome + open_trade_id)';
+COMMENT ON COLUMN whale_trade_roundtrips.position_key IS 'Deterministic key: plain string "{wallet_address}:{market_id}:{outcome}" (no hash, open_trade_id not included)';
 COMMENT ON COLUMN whale_trade_roundtrips.close_type IS 'Type of close: SELL (direct), SETTLEMENT_WIN/LOSS, FLIP (Yes/No switch), PARTIAL (partial close)';
 COMMENT ON COLUMN whale_trade_roundtrips.status IS 'Position status: OPEN (no close yet), CLOSED (full close), PARTIAL, FLIPPED, UNRESOLVED';
 COMMENT ON COLUMN whale_trade_roundtrips.pnl_status IS 'P&L confidence: CONFIRMED (full data), ESTIMATE (partial), UNAVAILABLE';

@@ -282,7 +282,7 @@
 | HYG-012 | Улучшение help text --sentinel-method | | DONE |
 | HYG-013 | Удаление dead fields из close_data dict | | DONE |
 | HYG-014 | Удаление deprecated Python SETTLEMENT path в roundtrip_builder.py | | DONE |
-| HYG-015 | Документировать семантику open_trade_id в whale_trade_roundtrips (= last fill of multi-fill order, не first) |  | TODO |
+| HYG-015 | Документировать семантику open_trade_id в whale_trade_roundtrips (= last fill of multi-fill order, не first) | | DONE |
 | HYG-016 | Удаление whale_trades_legacy | | DONE |
 
 ---
