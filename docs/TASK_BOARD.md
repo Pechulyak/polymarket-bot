@@ -117,7 +117,7 @@
 | PIPE-041 | Исправление дублирования roundtrip_builder + broken paper_settlement | | DONE |
 | PIPE-042 | Исправление Kelly sizing: минимум $1, максимум 5% bankroll | | DONE |
 | PIPE-043 | Аудит фактического состояния задач нового цикла | AUDIT | DONE |
-| ARC-608-ROUNDTRIP-V2 | Архитектурный рефакторинг whale_trade_roundtrips: cycle_number + SELL-close в pipeline | feature:roundtrip-v2 | IN_PROGRESS |
+| PIPE-044 | Архитектурный рефакторинг whale_trade_roundtrips: cycle_number + SELL-close в pipeline | | BACKLOG |
 
 ---
 
@@ -249,9 +249,8 @@
 | INFRA-022 | Enable log_connections/disconnections | | CANCELLED |
 | INFRA-023 | Устранить окно незащищённости между docker start и firewall unit | | CANCELLED |
 | INFRA-024 | Runbook для добавления нового DB user | | DONE |
-| INFRA-TASKBOARD-HTML | Обновить генератор TASK_BOARD.html под новый формат (LANE + EPIC, колонка Тег, фильтр DONE) | | DONE |
 | INFRA-025 | Pipeline monitor dry-run + alerts: интеграция dry-run режима в pipeline_monitor.py | | TODO | Покрывает HYG-NNN-24, HYG-NNN-25. Blast radius: низкий (scripts/pipeline_monitor.py). |
-| INFRA-026 | Cron/build/backup hygiene: обёртка cron, image rebuild, backup verification | | TODO | Покрывает HYG-NNN-26, HYG-NNN-14, HYG-NNN-21. Blast radius: средний (cron wrapper, image rebuild). |
+| INFRA-026 | Cron/build/backup hygiene: обёртка cron, image rebuild, backup verification | | DONE |
 | INFRA-027 | Host DB tooling + dedicated writer user: DB-тулинг на хосте + выделенный writer user | | TODO | Покрывает HYG-NNN-18, HYG-NNN-20, HYG-NNN-17. Blast radius: высокий (GRANT/REVOKE prod). |
 | INFRA-028 | Партиционирование whale_trades по месяцам | | CANCELLED |
 | INFRA-029 | Анализ партиционирования (ON CONFLICT compatibility) | | CANCELLED |
