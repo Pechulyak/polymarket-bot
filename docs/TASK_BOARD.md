@@ -294,7 +294,7 @@
 | DOC-601 | Аудит PROJECT_STATE.md на соответствие governance | | DONE |
 | DOC-602 | Очистка TASK_BOARD и CHANGELOG — унификация формата | | DONE |
 | DOC-603 | Актуализация PROJECT_STATE.md + запрет snapshot-данных | | DONE |
-| DOC-604 | CHAT GOVERNANCE: правило context-first для Roo dispatch | | TODO |
+| DOC-604 | CHAT GOVERNANCE: правило context-first для Roo dispatch | | DONE |
 | DOC-605 | Обновить governance-документы под новый формат TASK_BOARD (пункты 6-11) | | DONE |
 | DOC-606 | WHALE_STATUS_TRANSITIONS.md governance spec v1.0 | | DONE |
 | DOC-607 | Карта магистрали сделки кита (PIPELINE_MAP) | | DONE |

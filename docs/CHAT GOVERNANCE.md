@@ -103,6 +103,19 @@ Smart Money → Roo
 Arbitrage → Roo
 Analytical → Roo
 
+
+---
+
+## 3.1 Правило context-first для постановщиков задач Roo
+
+Перед формированием TASK PACK постановщик (любой чат, ставящий задачи Roo) обязан:
+
+1. Прочитать релевантные документы через `project_knowledge_search` самостоятельно.
+2. К Roo обращаться только за runtime state: логи, вывод команд, состояние БД, файлы вне knowledge base.
+
+**Запрещено** включать в TASK PACK шаги вида «прочитай файл X» или «посмотри документ Y», если X/Y доступны через project knowledge. Это создаёт лишний round-trip Roo без необходимости.
+
+**Исключения**: деструктивные операции с BEGIN/ROLLBACK, точные old_str/new_str для str_replace, runtime-проверки (grep по живому коду, SELECT к БД).
 4. Приоритет стратегий
 Primary Execution Lane:
 Whale Copy
