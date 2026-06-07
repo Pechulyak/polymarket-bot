@@ -261,6 +261,7 @@
 | INFRA-034 | Фикс sell-запроса (remove LOWER, add partial index) | | DONE |
 | INFRA-035 | Обновить пороги duration: WARNING=1200s, CRITICAL=1800s + context messages | | DONE |
 | INFRA-036 | Фикс backup .env path + emergency alert bus | | DONE |
+| INFRA-037 | Tune work_mem + swappiness for close_sell spill | | DONE |
 
 ---
 
@@ -308,7 +309,8 @@
 |----|--------|-----|--------|
 | BUG-607 | Исправление: re-discovery перезаписывает excluded-статус | | DONE |
 | BUG-608 | Закрытие позиций roundtrip_builder не выполняется в проде | | DONE |
+| BUG-609 | False CRITICAL in pipeline_monitor (last vs breaching value) | | DONE |
 
 ---
 
-*Обновлено: 2026-06-06*
+*Обновлено: 2026-06-07*
