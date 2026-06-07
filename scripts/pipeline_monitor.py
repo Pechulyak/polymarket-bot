@@ -345,17 +345,28 @@ def check_close_sell_duration_p95_24h():
     last = durations[-1]
     last5 = durations[-5:]
 
+    # Track max value that exceeded each threshold (for alert message)
+    max_over_1800 = max((d for d in last5 if d > 1800), default=None)
+    max_over_1200 = max((d for d in last5 if d > 1200), default=None)
+
+    # Count runs exceeding thresholds
     over_1800 = sum(1 for d in last5 if d > 1800)
     over_1200 = sum(1 for d in last5 if d > 1200)
 
+    # CRITICAL: current run exceeds 1800s OR >=2 of last 5 runs > 1800s
+    # WARNING: current run exceeds 1200s OR >=2 of last 5 runs > 1200s
     if last > 1800 or over_1800 >= 2:
         status = "critical"
+        alert_value = max_over_1800 if max_over_1800 else last
     elif last > 1200 or over_1200 >= 2:
         status = "warning"
+        alert_value = max_over_1200 if max_over_1200 else last
     else:
         status = "ok"
+        alert_value = None
 
     return {"value": round(last, 1), "status": status,
+            "alert_value": round(alert_value, 1) if alert_value else None,
             "last5_max": round(max(last5), 1)}
 
 
@@ -695,7 +706,9 @@ def determine_status(results: dict) -> tuple:
     p95_result = results.get("close_sell_duration_p95_seconds")
     if p95_result:
         if p95_result["status"] == "critical":
-            criticals.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 1800) (CRITICAL) — process may be hung, check close_sell_cron.log")
+            # Use alert_value (actual value that exceeded threshold) not last value
+            alert_val = p95_result.get('alert_value') or p95_result['value']
+            criticals.append(f"close_sell_duration_p95: {alert_val:.0f}s (> 1800) (CRITICAL) — process may be hung, check close_sell_cron.log")
         elif p95_result["status"] == "warning":
             warnings.append(f"close_sell_duration_p95: {p95_result['value']:.0f}s (> 1200) — normal at current table size (~500k rows)")
         # info (bootstrap) — skip
