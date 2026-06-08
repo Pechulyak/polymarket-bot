@@ -261,6 +261,7 @@
 | INFRA-035 | Обновить пороги duration: WARNING=1200s, CRITICAL=1800s + context messages | | DONE |
 | INFRA-036 | Фикс backup .env path + emergency alert bus | | DONE |
 | INFRA-037 | Tune work_mem + swappiness for close_sell spill | | DONE |
+| INFRA-038 | Защита whale_trades от бёрст-загрязнения | | DONE |
 
 ---
 
