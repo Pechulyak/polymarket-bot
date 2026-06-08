@@ -121,7 +121,7 @@ async def insert_trade(conn: asyncpg.Connection, trade: dict, wallet: str) -> No
         wallet,
         trade.get("transactionHash"),
         trade.get("conditionId"),
-        trade.get("title"),  # outcome from activity API
+        trade.get("outcome"),  # Yes/No from activity API
         trade.get("side"),
         size_usd,
         trade.get("price"),
@@ -189,6 +189,14 @@ async def fetch_trades_paginated(
             ACTIVITY_API,
             {"type": "TRADE", "user": wallet, "limit": 500, "offset": offset},
         )
+        if not data:
+            break
+
+        # Filter out trades older than 90 days
+        cutoff = datetime.utcnow().timestamp() - (90 * 24 * 3600)
+        data = [t for t in data if t.get("timestamp", 0) >= cutoff]
+        if not data:
+            break
         if not data:
             break
 
@@ -395,7 +403,7 @@ async def main() -> None:
     leaderboard_data = await fetch_json(
         None,
         LEADERBOARD_API,
-        {"timePeriod": "ALL", "limit": 50},
+        {"timePeriod": "MONTH", "limit": 50},
     )
     if not leaderboard_data:
         print("[leaderboard] ERROR: No data from leaderboard API")

@@ -119,6 +119,7 @@
 | PIPE-043 | Аудит фактического состояния задач нового цикла | AUDIT | DONE |
 | PIPE-044 | DDL таблицы leaderboard-воронки кандидатов | | DONE |
 | PIPE-045 | Скрипт fetch кандидатов + LP/HFT-фильтры | | DONE |
+| PIPE-046 | Скрипт roundtrip scoring + settlement кандидатов | | DONE |
 
 ---
 
