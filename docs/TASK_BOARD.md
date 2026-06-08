@@ -117,7 +117,7 @@
 | PIPE-041 | Исправление дублирования roundtrip_builder + broken paper_settlement | | DONE |
 | PIPE-042 | Исправление Kelly sizing: минимум $1, максимум 5% bankroll | | DONE |
 | PIPE-043 | Аудит фактического состояния задач нового цикла | AUDIT | DONE |
-| PIPE-044 | Архитектурный рефакторинг whale_trade_roundtrips: cycle_number + SELL-close в pipeline | | BACKLOG |
+| PIPE-044 | DDL таблицы leaderboard-воронки кандидатов | | DONE |
 
 ---
 
@@ -202,10 +202,7 @@
 | ANA-502-SQL | SQL-слой: финальные запросы для еженедельного AI-анализа | | DONE |
 | ANA-503 | Whale Universe Quality Analysis | | DONE |
 | ANA-505 | Tracking coverage metric: измерение доли SELL events с предшествующим matching OPEN roundtrip'ом в close_sell pipeline | | TODO | Связано с RED FLAG #1. Покрывает HYG-NNN-27. Blast radius: низкий (новый read-only artifact). |
-
----
-
-## EPIC: SEC — Security
+| ANA-510 | Отбор 3 китов из public leaderboard | ANA | DONE |
 
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
