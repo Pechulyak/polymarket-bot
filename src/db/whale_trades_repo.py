@@ -133,9 +133,10 @@ class WhaleTradesRepo:
             )
             return "rejected"
         
-        # 4. Burst detection
-        now = datetime.utcnow()
-        if self._check_burst(wallet_address, market_id, size_usd, now):
+        # 4. Burst detection (только для свежих сделок < 2 часов)
+        trade_time = traded_at if traded_at is not None else datetime.utcnow()
+        is_recent = (datetime.utcnow() - trade_time).total_seconds() < 7200
+        if is_recent and self._check_burst(wallet_address, market_id, size_usd, trade_time):
             self._burst_blocked_count += 1
             logger.warning(
                 "trade_burst_blocked",
