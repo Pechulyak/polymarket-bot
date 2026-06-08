@@ -7,6 +7,7 @@ WhaleTradesRepo — единая точка записи в таблицу whale
 - Автоматический lookup whale_id из таблицы whales
 - Счётчики saved/rejected/duplicates
 """
+from collections import deque
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -54,6 +55,24 @@ class WhaleTradesRepo:
         self._session_factory = session_factory
         self._stats = {"saved": 0, "rejected": 0, "duplicates": 0}
         self._category_missing_count = 0
+        self._burst_window_seconds: int = 900
+        self._burst_threshold: int = 30
+        self._burst_min_size_usd: Decimal = Decimal("50")
+        self._burst_counters: dict[str, deque] = {}
+        self._burst_blocked_count: int = 0
+    
+    def _check_burst(self, wallet_address: str, market_id: str, size_usd: Decimal, now: datetime) -> bool:
+        if size_usd >= self._burst_min_size_usd:
+            return False
+        key = f"{wallet_address}:{market_id}"
+        if key not in self._burst_counters:
+            self._burst_counters[key] = deque()
+        window = self._burst_counters[key]
+        cutoff = now.timestamp() - self._burst_window_seconds
+        while window and window[0] < cutoff:
+            window.popleft()
+        window.append(now.timestamp())
+        return len(window) > self._burst_threshold
     
     def save_trade(
         self,
@@ -73,7 +92,7 @@ class WhaleTradesRepo:
         Единственная точка записи в whale_trades.
         
         Returns:
-            "saved" | "rejected" | "duplicate"
+            "saved" | "rejected" | "duplicate" | "burst_blocked"
         """
         # === ВАЛИДАЦИЯ ===
         
@@ -114,7 +133,20 @@ class WhaleTradesRepo:
             )
             return "rejected"
         
-        # 4. market_category — если None/empty, установить 'unknown'
+        # 4. Burst detection
+        now = datetime.utcnow()
+        if self._check_burst(wallet_address, market_id, size_usd, now):
+            self._burst_blocked_count += 1
+            logger.warning(
+                "trade_burst_blocked",
+                wallet=wallet_address,
+                market_id=market_id,
+                size_usd=str(size_usd),
+                burst_blocked_total=self._burst_blocked_count,
+            )
+            return "burst_blocked"
+        
+        # 5. market_category — если None/empty, установить 'unknown'
         if not market_category or not market_category.strip():
             market_category = "unknown"
             self._category_missing_count += 1
@@ -127,7 +159,7 @@ class WhaleTradesRepo:
                     occurrence=self._category_missing_count,
                 )
         
-        # 5. outcome — предупреждение, но НЕ отклонять
+        # 6. outcome — предупреждение, но НЕ отклонять
         if not outcome or not outcome.strip():
             logger.warning(
                 "outcome_missing",
@@ -241,11 +273,12 @@ class WhaleTradesRepo:
     
     def get_stats(self) -> dict:
         """Вернуть копию текущих счётчиков."""
-        return dict(self._stats)
+        return {**self._stats, "burst_blocked": self._burst_blocked_count}
     
     def reset_stats(self) -> dict:
         """Сбросить счётчики, вернуть значения до сброса."""
-        old = dict(self._stats)
+        old = {**self._stats, "burst_blocked": self._burst_blocked_count}
         self._stats = {"saved": 0, "rejected": 0, "duplicates": 0}
         self._category_missing_count = 0
+        self._burst_blocked_count = 0
         return old

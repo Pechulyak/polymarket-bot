@@ -108,8 +108,71 @@ print(f"✅ Test 6 PASS: stats correct: {stats}")
 # Test 7: Reset stats
 old_stats = repo.reset_stats()
 new_stats = repo.get_stats()
-assert new_stats == {"saved": 0, "rejected": 0, "duplicates": 0}, f"Test 7 FAIL: stats not reset"
-print("✅ Test 7 PASS: stats reset")
+assert new_stats["saved"] == 0, f"Test 7 FAIL: saved not reset"
+assert new_stats["rejected"] == 0, f"Test 7 FAIL: rejected not reset"
+assert new_stats["duplicates"] == 0, f"Test 7 FAIL: duplicates not reset"
+assert new_stats["burst_blocked"] == 0, f"Test 7 FAIL: burst_blocked not reset"
+print(f"✅ Test 7 PASS: stats reset: {new_stats}")
+
+# Test 8: Burst detection blocks small trades
+def test_burst_detection_blocks_small_trades():
+    """31-я мелкая сделка в одном маркете за 15 минут блокируется."""
+    repo = WhaleTradesRepo(session_factory=Session)
+
+    wallet = "0xtest000000000000000000000000000000000001"
+    market = "0xmarket0000000000000000000000000000000001"
+    small_size = Decimal("10")  # < 50, попадает под фильтр
+
+    # первые 30 — должны пройти burst check (но не писаться в БД — mock)
+    for i in range(30):
+        result = repo._check_burst(wallet, market, small_size, datetime.utcnow())
+        assert result is False, f"Сделка {i+1} не должна блокироваться"
+
+    # 31-я — должна быть заблокирована
+    result = repo._check_burst(wallet, market, small_size, datetime.utcnow())
+    assert result is True, "31-я сделка должна быть заблокирована"
+
+# Test 9: Burst detection passes large trades
+def test_burst_detection_passes_large_trades():
+    """Крупные сделки (>= $50) никогда не блокируются независимо от счётчика."""
+    repo = WhaleTradesRepo(session_factory=Session)
+
+    wallet = "0xtest000000000000000000000000000000000002"
+    market = "0xmarket0000000000000000000000000000000002"
+    large_size = Decimal("50")  # >= 50, не блокируется
+
+    # прогнать 100 крупных сделок — ни одна не должна блокироваться
+    for i in range(100):
+        result = repo._check_burst(wallet, market, large_size, datetime.utcnow())
+        assert result is False, f"Крупная сделка {i+1} не должна блокироваться"
+
+# Test 10: Burst detection independent per market
+def test_burst_detection_independent_per_market():
+    """Счётчик бёрста независим для каждого маркета."""
+    repo = WhaleTradesRepo(session_factory=Session)
+
+    wallet = "0xtest000000000000000000000000000000000003"
+    market_a = "0xmarket000000000000000000000000000000000a"
+    market_b = "0xmarket000000000000000000000000000000000b"
+    small_size = Decimal("10")
+
+    # 31 сделка в маркете A — последняя блокируется
+    for _ in range(30):
+        repo._check_burst(wallet, market_a, small_size, datetime.utcnow())
+    assert repo._check_burst(wallet, market_a, small_size, datetime.utcnow()) is True
+
+    # маркет B — счётчик чистый, первая сделка проходит
+    assert repo._check_burst(wallet, market_b, small_size, datetime.utcnow()) is False
+
+# Run burst tests
+test_burst_detection_blocks_small_trades()
+print("✅ Test 8 PASS: burst blocks 31st small trade")
+
+test_burst_detection_passes_large_trades()
+print("✅ Test 9 PASS: large trades never blocked")
+
+test_burst_detection_independent_per_market()
+print("✅ Test 10 PASS: burst counters independent per market")
 
 # Cleanup: удалить тестовые записи
 session = Session()
