@@ -118,6 +118,7 @@
 | PIPE-042 | Исправление Kelly sizing: минимум $1, максимум 5% bankroll | | DONE |
 | PIPE-043 | Аудит фактического состояния задач нового цикла | AUDIT | DONE |
 | PIPE-044 | DDL таблицы leaderboard-воронки кандидатов | | DONE |
+| PIPE-045 | Скрипт fetch кандидатов + LP/HFT-фильтры | | DONE |
 
 ---
 
