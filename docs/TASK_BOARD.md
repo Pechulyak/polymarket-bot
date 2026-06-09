@@ -262,7 +262,7 @@
 | INFRA-036 | Фикс backup .env path + emergency alert bus | | DONE |
 | INFRA-037 | Tune work_mem + swappiness for close_sell spill | | DONE |
 | INFRA-038 | Защита whale_trades от бёрст-загрязнения | | DONE |
-| INFRA-039 | Детект остановки записи whale_trades: столбец inserted_at + проба свежести в pipeline_monitor | | IN_PROGRESS |
+| INFRA-039 | Детект остановки записи whale_trades: столбец inserted_at + проба свежести в pipeline_monitor | | DONE |
 
 ---
 

@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| | 2026-06-09 | INFRA-039 | Data-freshness probe: столбец inserted_at (timestamptz DEFAULT now()) в whale_trades + check_whale_trades_write_freshness() в pipeline_monitor. thresholds: WARNING>35min, CRITICAL>45min. Ловит остановку записи независимо от рыночной активности. DDL: ALTER TABLE, backup-schema, transactional (BEGIN/COMMIT). |
 | | 2026-06-08 | INFRA-038 | Burst detection filter в WhaleTradesRepo: блокировка мелких HFT-сделок (< $50) при превышении 30 сделок в одном маркете за 15 минут. In-memory sliding window (deque), нулевая нагрузка на БД. Крупные сделки (>= $50) не блокируются. Покрыто 3 unit-тестами. |
 | | 2026-06-06 | HYG-014 | Удалён deprecated Python settlement path из roundtrip_builder.py: метод `settle_roundtrips_via_gamma()`, `_get_market_resolution()`, `_get_outcome_index()`, константы `GAMMA_API`, `CLOB_API`, импорты `aiohttp`, `asyncio`. Заменён SQL-механизмом `settle_resolved_positions()` (run_settlement.sh, PHASE3-006). −310 строк. Smoke 24/24. |
 | | 2026-06-07 | INFRA-037 | Tune work_mem 4MB→32MB (ALTER SYSTEM, postgresql.auto.conf) + vm.swappiness 60→10 (sysctl.conf). Root cause: дисковый спилл сортировки close_sell при work_mem=4MB → выброс 2851s @ 06:15 при конкуренции за I/O. RAM достаточна (OOM нет), swap/RAM не расширялись. |
