@@ -82,6 +82,25 @@ def check_whale_trades_24h():
     return execute_query(query)
 
 
+def check_whale_trades_write_freshness():
+    """INFRA-039: возраст последней ЗАПИСИ в whale_trades (inserted_at).
+    Ловит остановку записи независимо от рыночной активности.
+    NULL (нет ни одной новой записи после миграции) → не алертить."""
+    age_min = execute_query(
+        "SELECT EXTRACT(EPOCH FROM (NOW() - MAX(inserted_at)))/60 FROM whale_trades"
+    )
+    if age_min is None:
+        return {"value": None, "status": "info", "reason": "no inserted_at rows yet"}
+    age_min = float(age_min)
+    if age_min > 45:
+        status = "critical"
+    elif age_min > 35:
+        status = "warning"
+    else:
+        status = "ok"
+    return {"value": round(age_min, 1), "status": status, "reason": f"write_age={round(age_min,1)}min"}
+
+
 def check_market_category_null_pct():
     """Check percentage of NULL/empty market_category in last 24 hours."""
     query = """
@@ -582,6 +601,9 @@ def run_pipeline_checks():
     # Check 1: whale_trades/24h
     results["whale_trades_24h"] = check_whale_trades_24h()
 
+    # Check 1B: INFRA-039 whale_trades write freshness (inserted_at)
+    results["whale_write_freshness"] = check_whale_trades_write_freshness()
+
     # Check 2: market_category NULL %
     results["market_category_null_pct"] = check_market_category_null_pct()
 
@@ -721,6 +743,14 @@ def determine_status(results: dict) -> tuple:
     # Check 13: retention_cron ERROR in last entry → WARNING
     if results.get("retention_cron_error"):
         warnings.append("retention_cron: ERROR in last entry")
+
+    # Check 14: INFRA-039 whale_trades write freshness (inserted_at)
+    wf = results.get("whale_write_freshness")
+    if wf and wf["status"] == "critical":
+        criticals.append(f"whale_trades запись остановлена: {wf['reason']}")
+    elif wf and wf["status"] == "warning":
+        warnings.append(f"whale_trades запись отстаёт: {wf['reason']}")
+    # status == "info"/"ok" → молчим
 
     if criticals:
         return "CRITICAL", warnings, criticals
