@@ -311,7 +311,8 @@
 | BUG-607 | Исправление: re-discovery перезаписывает excluded-статус | | DONE |
 | BUG-608 | Закрытие позиций roundtrip_builder не выполняется в проде | | DONE |
 | BUG-609 | False CRITICAL in pipeline_monitor (last vs breaching value) | | DONE |
+| BUG-610 | Защита пула соединений whale_detector: pool_pre_ping + statement_timeout против заморозки event loop | | DONE |
 
 ---
 
-*Обновлено: 2026-06-07*
+*Обновлено: 2026-06-09*
