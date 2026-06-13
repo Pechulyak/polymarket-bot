@@ -93,6 +93,12 @@
   task: PIPE-038
   note: settlement via CLOB API working
 
+- Таблица live_orders
+  status: OK (new)
+  updated: 2026-06-13
+  task: INFRA-043
+  note: pull-модель для live-исполнения, executor (Сервер 2) читает intent-ордера. Схема есть, executor L1 и trigger — отдельная задача.
+
 - Таблица bankroll
   status: OK
   updated: 2026-03-29

@@ -267,6 +267,7 @@
 | INFRA-040 | Heartbeat от paper-polling: detection заморозки (single writer + healthcheck -mmin -3) | | DONE |
 | INFRA-041 | Recovery автоперезапуск whale-detector (autoheal) | | FROZEN |
 | INFRA-042 | Alert при unhealthy/устаревшем heartbeat (Telegram) | | TODO |
+| INFRA-043 | Схема live_orders + grant order_executor | feature:live-execution | DONE |
 
 ---
 
