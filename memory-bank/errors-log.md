@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-06-10 — [INFRA-040] Recovery: SIGSTOP-репро заморозил прод, autoheal не доказан
+
+Симптом: Repro recovery (unhealthy→autoheal→restart) не сработал. SIGSTOP whale-detector заморозил прод на ~15 мин (14:12–14:28 UTC), контейнер остался healthy, autoheal не рестартнул. Бэкап не снимался.
+Причина: SIGSTOP PID 1 замораживает и сам healthcheck (CMD-SHELL exec форкается от контейнера) → unhealthy не наступает → autoheal без триггера. Реальный сценарий (busy-spin, PID 1 жив) так не воспроизводится. STRATEGY не просчитал это до прогона; бэкап не предусмотрен в паке.
+Решение: SIGCONT разморозил, данные целостны (потеряно окно опроса CLOB ~15 мин). Recovery → INFRA-041. Detection не затронут, в проде.
+Правило: (1) Зависание процесса НЕ репродить через SIGSTOP — ломает healthcheck; имитировать busy-spin (живой процесс). (2) Пак с экспериментом, способным остановить прод, обязан начинаться с pg_dump + cleanup-rollback. (3) uptime/StartedAt — не доказательство recovery; только строка в логе autoheal + событие health_status.
+
+---
+
 ## 2026-05-31 — [HYG-016 технический] whale_trades_legacy удалена, phantom trigger в pg_depend
 
 whale_trades_legacy удалена. DROP упал на phantom trigger 16544

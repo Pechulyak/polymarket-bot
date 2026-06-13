@@ -120,6 +120,7 @@
 | PIPE-044 | DDL таблицы leaderboard-воронки кандидатов | | DONE |
 | PIPE-045 | Скрипт fetch кандидатов + LP/HFT-фильтры | | DONE |
 | PIPE-046 | Скрипт roundtrip scoring + settlement кандидатов | | DONE |
+| PIPE-047 | Fix outcome mismatch в paper P&L views | | DONE |
 
 ---
 
@@ -263,6 +264,9 @@
 | INFRA-037 | Tune work_mem + swappiness for close_sell spill | | DONE |
 | INFRA-038 | Защита whale_trades от бёрст-загрязнения | | DONE |
 | INFRA-039 | Детект остановки записи whale_trades: столбец inserted_at + проба свежести в pipeline_monitor | | DONE |
+| INFRA-040 | Heartbeat от paper-polling: detection заморозки (single writer + healthcheck -mmin -3) | | DONE |
+| INFRA-041 | Recovery автоперезапуск whale-detector (autoheal) | | FROZEN |
+| INFRA-042 | Alert при unhealthy/устаревшем heartbeat (Telegram) | | TODO |
 
 ---
 
@@ -315,4 +319,4 @@
 
 ---
 
-*Обновлено: 2026-06-09*
+*Обновлено: 2026-06-10*

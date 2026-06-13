@@ -111,15 +111,15 @@
 
 ### paper_portfolio_state (materialized)
 - status: OK
-- updated: 2026-04-05
-- task: PIPE-030
-- note: dynamic filter via bankroll_reset_at
+- updated: 2026-06-13
+- task: PIPE-047
+- note: outcome добавлен в JOIN-условие (fix mismatch), current_balance/realized_pnl пересчитаны от bankroll_reset_at=2026-04-05
 
 ### paper_simulation_pnl (materialized)
 - status: OK
-- updated: 2026-04-05
-- task: PIPE-030
-- note: trade-by-trade paper P&L
+- updated: 2026-06-13
+- task: PIPE-047
+- note: outcome добавлен в JOIN-условие, см. CHANGELOG PIPE-047
 
 ---
 
