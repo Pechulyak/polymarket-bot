@@ -398,6 +398,10 @@ async def main() -> None:
     # Connect to DB
     conn = await asyncpg.connect(DATABASE_URL)
 
+    # Обнуляем leaderboard_rank для непроверенных кандидатов перед новым прогоном
+    await conn.execute("UPDATE leaderboard_candidates SET leaderboard_rank = NULL WHERE reviewed_at IS NULL")
+    print("[leaderboard] Сброшены leaderboard_rank для непроверенных кандидатов")
+
     # Fetch leaderboard
     print("[leaderboard] Fetching top 20 traders from leaderboard...")
     leaderboard_data = await fetch_json(
