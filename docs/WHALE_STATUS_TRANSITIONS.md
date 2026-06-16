@@ -1,10 +1,10 @@
 # Whale Status Transitions — Governance Spec
 
-**Version:** 1.1
+**Version:** 1.2
 **Approved by:** STRATEGY
-**Approved at:** 2026-04-22
-**Previous version:** 1.0 (2026-04-19)
-**Revision basis:** Whale audit cycle 2026-04-22 — audit methodology reliability issues, reset-observability constraints, tier refresh enforcement
+**Approved at:** 2026-06-16
+**Previous version:** 1.1 (2026-04-22)
+**Revision basis:** v1.2 (2026-06-16) — tracking_source field introduced; estimated_capital calculation moved from tracked→paper to none→tracked (breaks chicken-and-egg sampling bias); p99_trade_20x reliability warning added; whale_comment metric standard defined.
 
 > Документ описывает алгоритм перевода китов между значениями `whales.copy_status`.
 > Все изменения статусов в БД должны соответствовать этому документу.
@@ -36,14 +36,20 @@
 
 **Pre-actions:**
 - Актуализировать tier через `_update_whale_activity`.
-- Записать причину в `whale_comment`.
+- Определить `tracking_source`: если кит присутствует в `leaderboard_candidates` → `'leaderboard'`, иначе → `'discovery'` (см. §11.1).
+- Рассчитать `estimated_capital` и `capital_estimation_method` (методы — §12.3). **Перенесено из §3.2 начиная с v1.2** — расчёт капитала выполняется уже на стадии tracked, что устраняет sampling bias при последующем решении о paper.
+- Записать обоснование с метриками в `whale_comment` (стандарт — §11.1).
 
 **SQL:**
 ```sql
 UPDATE whales 
 SET copy_status = 'tracked',
+    tracking_source = '<leaderboard|discovery>',
+    estimated_capital = <computed_value>,
+    capital_estimation_method = '<method>',
     reviewed_at = NOW(),
-    updated_at = NOW()
+    updated_at = NOW(),
+    whale_comment = COALESCE(whale_comment,'') || '<reason with metrics>'
 WHERE wallet_address = '<addr>' 
   AND copy_status = 'none';
 ```
@@ -71,10 +77,13 @@ SELECT MAX(daily_volume_usd) FROM (
 
 **SQL:**
 ```sql
+-- estimated_capital уже заполнен на стадии tracked (v1.2).
+-- Пересчёт ОПЦИОНАЛЕН: только если значение устарело (>30д с расчёта
+-- или история кита материально выросла). Иначе блок estimated_capital опустить.
 UPDATE whales 
 SET copy_status = 'paper',
-    estimated_capital = <computed_value>,
-    capital_estimation_method = 'max_daily_volume_30d',
+    -- estimated_capital = <recomputed_value>,           -- опционально, если stale
+    -- capital_estimation_method = 'max_daily_volume_30d', -- опционально
     reviewed_at = NOW(),
     updated_at = NOW()
 WHERE wallet_address = '<addr>' 
@@ -667,23 +676,34 @@ SET reviewed_at = NOW(),
 
 **Obligatory steps:**
 
-1. **Run tier refresh** — call `_update_whale_activity` or equivalent to ensure `tier` is current:
-   ```sql
-   -- Manual refresh via WhaleDetector (if running):
-   -- await whale_detector._update_whale_activity(wallet_address)
-   ```
+1. **Run tier refresh** — call `_update_whale_activity` or equivalent to ensure `tier` is current.
 
 2. **Verify tier:** `SELECT tier FROM whales WHERE wallet_address = '<address>';`
    - Tier should be HOT or WARM
    - If COLD — explicitly document reason in `whale_comment` before proceeding
 
-3. **Log promotion reason in whale_comment:**
+3. **Determine tracking_source** (added v1.2):
    ```sql
-   UPDATE whales SET whale_comment = 'Promotion to tracked. Reason: <reason>. Tier: <tier>. ', 
+   SELECT EXISTS(SELECT 1 FROM leaderboard_candidates WHERE wallet_address = '<address>') AS in_leaderboard;
+   ```
+   - `TRUE` → `tracking_source = 'leaderboard'`
+   - `FALSE` → `tracking_source = 'discovery'`
+   - Критерий — присутствие в `leaderboard_candidates` (не `approved_for_tracking`). Гибриды (discovery-кит, позже всплывший в Leaderboard) классифицируются как `leaderboard`.
+
+4. **Calculate estimated_capital** (added v1.2, moved from §11.2):
+   - История ≥30д → метод `max_daily_volume_30d` (формула — §12.3).
+   - История <30д → max_daily_volume за доступное окно, метод `manual`, пояснение в `whale_comment`. **НЕ использовать `p99_trade_20x` при малой выборке или крупных единичных сделках** (см. §12.3 warning).
+
+5. **Log promotion reason in whale_comment** (metric standard, added v1.2):
+   - Фиксировать конкретные метрики на момент решения: `WR=<%>`, `<N> closed roundtrips` (с пометкой post-reset если применимо), `calc_pnl=<value>`, `leaderboard_rank=<N>` (если из leaderboard).
+   - **НЕ дублировать** источник (теперь в `tracking_source`) и tier (живое поле, мгновенно устаревает в тексте comment).
+   - Пример: `none->tracked 2026-06-16: WR=63.5% (52 RT post-reset), calc_pnl=+$19665, leaderboard_rank=7. `
+   ```sql
+   UPDATE whales SET whale_comment = COALESCE(whale_comment,'') || '<formatted reason>'
    WHERE wallet_address = '<address>';
    ```
 
-4. **For excluded → tracked:** clear exclusion_reason:
+6. **For excluded → tracked:** clear exclusion_reason:
    ```sql
    UPDATE whales SET exclusion_reason = NULL WHERE wallet_address = '<address>';
    ```
@@ -716,12 +736,15 @@ SET reviewed_at = NOW(),
    FROM whales w WHERE w.wallet_address = '<address>';
    ```
 
-8. **Calculate and set estimated_capital** (see Section 12):
+8. **Verify estimated_capital is current** (changed v1.2):
+   - `estimated_capital` уже заполнен на стадии tracked (§11.1 step 4).
+   - Пересчёт требуется **только если значение устарело**: прошло >30д с расчёта ИЛИ история кита материально выросла.
+   - Если актуально — оставить как есть, на переходе в paper не трогать.
    ```sql
+   -- Только при stale:
    UPDATE whales 
-   SET estimated_capital = <calculated_value>,
-       capital_estimation_method = '<method>',
-       ...
+   SET estimated_capital = <recalculated_value>,
+       capital_estimation_method = '<method>'
    WHERE wallet_address = '<address>';
    ```
 
@@ -820,6 +843,8 @@ Based on forensic analysis, the following methods are defined:
 | `p99_trade_20x` | p99_trade_size × 20 | Short history (<30d), need conservative estimate | Fallback method |
 | `peak_exposure_2x` | Peak concurrent open position × 2 | Whales with >100 roundtrips, complex positions | Requires roundtrip analysis |
 | `manual` | STRATEGY sets directly | Edge cases, insider info, external sources | Use only when formula methods insufficient |
+
+**⚠️ p99_trade_20x reliability warning (added v1.2):** Метод ненадёжен при малой выборке (n<100) или наличии крупных единичных сделок — p99 вырождается в максимум, множитель ×20 раздувает оценку до нереалистичных значений (наблюдалось: est_capital $18–21M при реальном порядке $1–3M). При короткой истории (<30д) предпочесть max_daily_volume за доступное окно с методом `manual`.
 
 **Rejected methods:**
 - `max_trade_10x` — too aggressive, outliers distort
