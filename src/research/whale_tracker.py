@@ -30,6 +30,13 @@ from sqlalchemy.orm import sessionmaker
 from src.data.storage.market_category_cache import get_market_category
 from src.db.whale_trades_repo import WhaleTradesRepo
 
+# BUG-612: engine hardening (same as BUG-610 in whale_detector.py).
+_ENGINE_KWARGS = dict(
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    connect_args={"connect_timeout": 10, "options": "-c statement_timeout=30000"},
+)
+
 logger = structlog.get_logger(__name__)
 
 
@@ -218,7 +225,7 @@ class WhaleTracker:
             database_url: PostgreSQL connection URL
         """
         self.database_url = database_url
-        self._engine = create_engine(database_url)
+        self._engine = create_engine(database_url, **_ENGINE_KWARGS)
         self._Session = sessionmaker(bind=self._engine)
         self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
         logger.info("whale_tracker_database_configured", url=_mask_database_url(database_url))
@@ -230,7 +237,7 @@ class WhaleTracker:
             return
 
         if not self._engine:
-            self._engine = create_engine(self.database_url)
+            self._engine = create_engine(self.database_url, **_ENGINE_KWARGS)
             self._Session = sessionmaker(bind=self._engine)
         
         if not self._whale_trades_repo and self._Session:

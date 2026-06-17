@@ -255,7 +255,15 @@ class WhaleDetector:
     def set_database(self, database_url: str) -> None:
         """Set database URL and initialize connection."""
         self.database_url = database_url
-        self._engine = create_engine(database_url)
+        self._engine = create_engine(
+            database_url,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+            connect_args={
+                "connect_timeout": 10,
+                "options": "-c statement_timeout=30000",
+            },
+        )
         self._Session = sessionmaker(bind=self._engine)
         self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
         logger.info("whale_detector_database_configured")
@@ -266,7 +274,15 @@ class WhaleDetector:
         if not self.database_url:
             return
         if not self._engine:
-            self._engine = create_engine(self.database_url)
+            self._engine = create_engine(
+                self.database_url,
+                pool_pre_ping=True,
+                pool_recycle=1800,
+                connect_args={
+                    "connect_timeout": 10,
+                    "options": "-c statement_timeout=30000",
+                },
+            )
             self._Session = sessionmaker(bind=self._engine)
         if not self._whale_trades_repo:
             self._whale_trades_repo = WhaleTradesRepo(session_factory=self._Session)
@@ -1398,6 +1414,14 @@ class WhaleDetector:
                 if self._whale_trades_repo:
                     repo_stats = self._whale_trades_repo.get_stats()
                     logger.info("whale_trades_repo_stats", **repo_stats)
+                # INFRA-040: heartbeat from paper-polling loop.
+                # Freeze of this loop (busy-spin under GIL) → whole process stalls →
+                # stale heartbeat → unhealthy → autoheal restart.
+                try:
+                    with open("/tmp/heartbeat", "w") as f:
+                        f.write(datetime.now().isoformat())
+                except Exception:
+                    pass  # non-critical
             except asyncio.TimeoutError:
                 logger.error("paper_fetch_timeout", timeout_sec=120)
             except Exception as e:
