@@ -105,7 +105,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits:
@@ -145,7 +145,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
-    restart: unless-stopped
+    restart: always
     labels:
       - autoheal=true
     networks:
@@ -207,7 +207,7 @@ services:
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: polymarket_autoheal
-    restart: unless-stopped
+    restart: always
     environment:
       - AUTOHEAL_CONTAINER_LABEL=autoheal
       - AUTOHEAL_INTERVAL=30
