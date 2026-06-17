@@ -140,12 +140,14 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "test -f /tmp/heartbeat && find /tmp/heartbeat -mmin -10"]
+      test: ["CMD-SHELL", "test -f /tmp/heartbeat && find /tmp/heartbeat -mmin -3"]
       interval: 120s
       timeout: 5s
       retries: 3
       start_period: 60s
     restart: unless-stopped
+    labels:
+      - autoheal=true
     networks:
       - polymarket_network
 
@@ -201,6 +203,17 @@ services:
     restart: always
     networks:
       - polymarket_network
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: polymarket_autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   postgres_data:
