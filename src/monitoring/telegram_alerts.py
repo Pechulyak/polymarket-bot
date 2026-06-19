@@ -79,7 +79,8 @@ class TelegramAlerts:
                         )
                         return True
                     else:
-                        logger.error("telegram_send_failed", status=resp.status)
+                        resp_text = await resp.text()
+                        logger.error("telegram_send_failed", status=resp.status, response_body=resp_text)
                         return False
         except Exception as e:
             logger.error("telegram_send_error", error=str(e))
@@ -314,6 +315,13 @@ class TelegramAlerts:
 """
         await self._send_message(message)
 
+    @staticmethod
+    def _html_escape(text: str) -> str:
+        """Escape HTML special characters in user-provided text."""
+        if text is None:
+            return ""
+        return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
     async def send_paper_trade_notification(
         self,
         whale_address: str,
@@ -328,7 +336,10 @@ class TelegramAlerts:
         created_at: datetime,
         market_title: str = None,
         outcome: str = None,
-    ) -> None:
+        whale_name: str = None,
+        url: str = None,
+        group_item_title: str = None,
+    ) -> bool:
         """Send paper trade created notification.
 
         Args:
@@ -344,6 +355,12 @@ class TelegramAlerts:
             created_at: When trade was created
             market_title: Market title (optional, will fetch from DB if not provided)
             outcome: Trade outcome (YES/NO) - optional
+            whale_name: Whale name from whales.notes (optional)
+            url: Polymarket URL for the market (optional)
+            group_item_title: Group/item title for the market tab (optional)
+
+        Returns:
+            True if sent successfully, False otherwise.
         """
         from datetime import timezone, timedelta
 
@@ -354,7 +371,6 @@ class TelegramAlerts:
         if created_at.tzinfo:
             created_utc3 = created_at.replace(tzinfo=timezone.utc).astimezone(utc_plus_3)
         else:
-            # Assume UTC if no timezone info
             created_utc3 = created_at.replace(tzinfo=timezone.utc).astimezone(utc_plus_3)
 
         source_emoji = "⚡" if source == "realtime" else "📚"
@@ -364,31 +380,47 @@ class TelegramAlerts:
         if not market_title:
             market_title = await self._fetch_market_title(market_id)
 
-        # Use market_title if available, otherwise fallback to truncated market_id
-        if market_title:
-            market_display = market_title
-        else:
-            market_display = f"`{market_id[:12]}...{market_id[-8:]}`"
+        # Escape all user-provided fields
+        market_title_esc = self._html_escape(market_title)
+        whale_name_esc = self._html_escape(whale_name)
+        outcome_esc = self._html_escape(outcome)
+        source_esc = self._html_escape(source)
+        group_item_title_esc = self._html_escape(group_item_title)
+        url_esc = self._html_escape(url) if url else ""
 
-        outcome_str = f"*{outcome.upper()}*" if outcome else ""
-        if outcome_str:
-            outcome_line = f"\n*Outcome:* {outcome_str}"
+        # Use market_title if available, otherwise fallback to truncated market_id
+        if market_title_esc:
+            market_display = market_title_esc
         else:
-            outcome_line = ""
+            market_display = f"{self._html_escape(market_id[:12])}...{self._html_escape(market_id[-8:])}"
+
+        outcome_str = f"<b>{outcome_esc.upper()}</b>" if outcome_esc else ""
+        outcome_line = f"\n<b>Outcome:</b> {outcome_str}" if outcome_str else ""
+
+        # Whale name: include if whale_name is not empty
+        if whale_name_esc:
+            whale_display = f"<code>{whale_address[:6]}...{whale_address[-4:]}</code> ({whale_name_esc})"
+        else:
+            whale_display = f"<code>{whale_address[:6]}...{whale_address[-4:]}</code>"
+
+        # URL line — plain text, no HTML link (avoids parse complications)
+        url_line = f"\n🔗 {url_esc}" if url_esc else ""
+
+        # Group/item title line
+        group_line = f"\n<b>Линия:</b> {group_item_title_esc}" if group_item_title_esc else ""
 
         message = f"""
-{side_emoji} *PAPER TRADE CREATED*
+{side_emoji} <b>PAPER TRADE CREATED</b>
 
-*Source:* {source_emoji} {source.upper()}
-*Whale:* `{whale_address[:6]}...{whale_address[-4:]}`
-*Market:* {market_display}
-*Side:* {side.upper()}{outcome_line}
-*Size:* ${size_usd:,.2f}
-*Kelly:* {kelly_fraction*100:.1f}% → ${kelly_size:,.2f}
-*Price:* {price:.4f}
-*Time:* {created_utc3.strftime("%Y-%m-%d %H:%M:%S UTC+3")}
+<b>Source:</b> {source_emoji} {source_esc.upper()}
+<b>Whale:</b> {whale_display}
+<b>Market:</b> {market_display}{outcome_line}{group_line}{url_line}
+<b>Side:</b> {side.upper()}
+<b>Size:</b> ${kelly_size:,.2f}
+<b>Price:</b> {price:.4f}
+<b>Time:</b> {created_utc3.strftime("%Y-%m-%d %H:%M:%S UTC+3")}
 """
-        await self._send_message(message)
+        return await self._send_message(message, parse_mode="HTML")
 
     async def _fetch_market_title(self, market_id: str) -> Optional[str]:
         """Fetch market_title from database.

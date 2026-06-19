@@ -3,14 +3,79 @@
 
 import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 
+import aiohttp
 import structlog
 from sqlalchemy import create_engine, text
 
 from src.monitoring.telegram_alerts import TelegramAlerts
 
 logger = structlog.get_logger(__name__)
+
+ENRICH_MAX_ATTEMPTS = 3
+SEND_MAX_ATTEMPTS = 5
+
+
+async def resolve_market_url(market_id: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Resolve market URL and group_item_title from market_id.
+
+    Returns:
+        Tuple of (url, group_item_title, error_message).
+        On success: (url, group_item_title, None).
+        On failure: (None, None, error_description).
+    """
+    import os
+
+    clob_url = f"https://clob.polymarket.com/markets/{market_id}"
+    timeout = aiohttp.ClientTimeout(total=5)
+
+    # Step 1: CLOB — get market_slug
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                clob_url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=timeout,
+            ) as resp:
+                if resp.status != 200:
+                    return None, None, f"CLOB returned {resp.status}"
+                clob_data = await resp.json()
+                market_slug = clob_data.get("market_slug")
+                if not market_slug:
+                    return None, None, "CLOB: no market_slug found"
+    except asyncio.TimeoutError:
+        return None, None, "CLOB timeout"
+    except Exception as e:
+        return None, None, f"CLOB error: {str(e)}"
+
+    # Step 2: Gamma — get events[0].slug and groupItemTitle
+    gamma_url = f"https://gamma-api.polymarket.com/markets/slug/{market_slug}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                gamma_url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=timeout,
+            ) as resp:
+                if resp.status != 200:
+                    return None, None, f"Gamma returned {resp.status}"
+                gamma_data = await resp.json()
+                if not gamma_data:
+                    return None, None, "Gamma: empty response"
+                events = gamma_data.get("events", [])
+                if not events or len(events) == 0:
+                    return None, None, "Gamma: no events array or empty"
+                event_slug = events[0].get("slug")
+                if not event_slug:
+                    return None, None, "Gamma: events[0].slug missing"
+                group_item_title = gamma_data.get("groupItemTitle")
+                url = f"https://polymarket.com/event/{event_slug}"
+                return url, group_item_title, None
+    except asyncio.TimeoutError:
+        return None, None, "Gamma timeout"
+    except Exception as e:
+        return None, None, f"Gamma error: {str(e)}"
 
 
 class NotificationWorker:
@@ -60,13 +125,17 @@ class NotificationWorker:
             return
 
         with self._engine.connect() as conn:
-            # Fetch pending notifications
+            # Fetch notifications ready for sending
             result = conn.execute(
                 text("""
                     SELECT id, whale_address, market_id, side, price, size,
-                           size_usd, kelly_fraction, kelly_size, source, created_at, outcome
+                           size_usd, kelly_fraction, kelly_size, source,
+                           created_at, outcome, market_title, attempt_count, status
                     FROM paper_trade_notifications
-                    WHERE notified = FALSE
+                    WHERE status = 'PENDING'
+                       OR (status IN ('ENRICH_FAILED', 'SEND_FAILED')
+                           AND next_retry_at IS NOT NULL
+                           AND next_retry_at <= NOW())
                     ORDER BY created_at ASC
                     LIMIT :batch_size
                 """),
@@ -80,39 +149,151 @@ class NotificationWorker:
             logger.debug("processing_notifications", count=len(rows))
 
             for row in rows:
-                try:
-                    await self._send_notification(row)
-                    # Mark as notified
-                    conn.execute(
-                        text("UPDATE paper_trade_notifications SET notified = TRUE WHERE id = :id"),
-                        {"id": row.id}
-                    )
-                    conn.commit()
-                except Exception as e:
-                    logger.error("notification_send_failed", notification_id=row.id, error=str(e))
-                    conn.rollback()
+                await self._process_single_notification(conn, row)
 
-    async def _send_notification(self, row) -> None:
-        """Send a single notification to Telegram."""
-        await self._telegram.send_paper_trade_notification(
-            whale_address=row.whale_address,
+    async def _process_single_notification(self, conn, row) -> None:
+        """Process a single notification with status machine."""
+        row_id = row.id
+        attempt_count = row.attempt_count or 0
+        whale_address = row.whale_address
+
+        # Step 1: Enrich — resolve market URL
+        url, group_item_title, enrich_error = await resolve_market_url(row.market_id)
+
+        if enrich_error:
+            attempt_count += 1
+            if attempt_count >= ENRICH_MAX_ATTEMPTS:
+                # Freeze: ENRICH_FAILED with no retry
+                conn.execute(
+                    text("""
+                        UPDATE paper_trade_notifications
+                        SET status = 'ENRICH_FAILED',
+                            attempt_count = :attempt_count,
+                            next_retry_at = NULL
+                        WHERE id = :id
+                    """),
+                    {"id": row_id, "attempt_count": attempt_count}
+                )
+                conn.commit()
+                await self._telegram.send_error(
+                    error=f"Cannot build URL for market_id {row.market_id}: {enrich_error}. Frozen after {attempt_count} attempts.",
+                    context={"notification_id": row_id, "whale_address": whale_address}
+                )
+                logger.error(
+                    "enrich_failed_frozen",
+                    notification_id=row_id,
+                    market_id=row.market_id,
+                    error=enrich_error,
+                    attempts=attempt_count,
+                )
+            else:
+                # Retry later with backoff calculated in SQL
+                conn.execute(
+                    text("""
+                        UPDATE paper_trade_notifications
+                        SET status = 'ENRICH_FAILED',
+                            attempt_count = :attempt_count,
+                            next_retry_at = NOW() + (LEAST(POWER(2, :attempt_count), 300) * INTERVAL '1 second')
+                        WHERE id = :id
+                    """),
+                    {"id": row_id, "attempt_count": attempt_count}
+                )
+                conn.commit()
+                logger.warning(
+                    "enrich_failed_retry",
+                    notification_id=row_id,
+                    market_id=row.market_id,
+                    error=enrich_error,
+                    attempts=attempt_count,
+                )
+            return
+
+        # Enrich succeeded — now get whale name
+        whale_name = None
+        try:
+            with self._engine.connect() as name_conn:
+                name_result = name_conn.execute(
+                    text("SELECT notes FROM whales WHERE wallet_address = :addr LIMIT 1"),
+                    {"addr": whale_address}
+                )
+                name_row = name_result.fetchone()
+                if name_row and name_row[0]:
+                    whale_name = name_row[0]
+        except Exception as e:
+            logger.warning("whale_name_lookup_failed", whale_address=whale_address, error=str(e))
+
+        # Step 2: Send notification
+        send_ok = await self._telegram.send_paper_trade_notification(
+            whale_address=whale_address,
             market_id=row.market_id,
             side=row.side,
             price=float(row.price) if row.price else 0.0,
             size=float(row.size) if row.size else 0.0,
             size_usd=float(row.size_usd) if row.size_usd else 0.0,
-            kelly_fraction=float(row.kelly_fraction) if row.kelly_fraction else 0.25,
+            kelly_fraction=float(row.kelly_fraction) if row.kelly_fraction else 0.0,
             kelly_size=float(row.kelly_size) if row.kelly_size else 0.0,
             source=row.source or "unknown",
             created_at=row.created_at,
             outcome=row.outcome,
+            whale_name=whale_name,
+            url=url,
+            group_item_title=group_item_title,
         )
-        logger.info(
-            "notification_sent",
-            whale_address=row.whale_address[:10] if row.whale_address else "unknown",
-            market_id=row.market_id[:20] if row.market_id else "unknown",
-            source=row.source,
-        )
+
+        if send_ok:
+            conn.execute(
+                text("UPDATE paper_trade_notifications SET status = 'SENT' WHERE id = :id"),
+                {"id": row_id}
+            )
+            conn.commit()
+            logger.info(
+                "notification_sent",
+                notification_id=row_id,
+                whale_address=whale_address[:10] if whale_address else "unknown",
+                market_id=row.market_id[:20] if row.market_id else "unknown",
+                source=row.source,
+            )
+        else:
+            # _send_message returned False — treat as send failure with backoff
+            attempt_count += 1
+            if attempt_count >= SEND_MAX_ATTEMPTS:
+                conn.execute(
+                    text("""
+                        UPDATE paper_trade_notifications
+                        SET status = 'SEND_FAILED',
+                            attempt_count = :attempt_count,
+                            next_retry_at = NULL
+                        WHERE id = :id
+                    """),
+                    {"id": row_id, "attempt_count": attempt_count}
+                )
+                conn.commit()
+                await self._telegram.send_error(
+                    error=f"Cannot send Telegram alert (API returned False). Frozen after {attempt_count} attempts.",
+                    context={"notification_id": row_id, "whale_address": whale_address}
+                )
+                logger.error(
+                    "send_failed_frozen",
+                    notification_id=row_id,
+                    attempts=attempt_count,
+                )
+            else:
+                conn.execute(
+                    text("""
+                        UPDATE paper_trade_notifications
+                        SET status = 'SEND_FAILED',
+                            attempt_count = :attempt_count,
+                            next_retry_at = NOW() + (LEAST(POWER(2, :attempt_count), 300) * INTERVAL '1 second')
+                        WHERE id = :id
+                    """),
+                    {"id": row_id, "attempt_count": attempt_count}
+                )
+                conn.commit()
+                logger.warning(
+                    "send_failed_retry",
+                    notification_id=row_id,
+                    attempts=attempt_count,
+                )
 
 
 async def run_notification_worker(

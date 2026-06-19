@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-04-19
+Обновлено: 2026-06-19
 Версия: v2_clean  
 Фаза: Paper trading (edge validation)
 
@@ -55,10 +55,10 @@
 
 - Telegram
   API - ok
-  Уведомления - OK  
-  updated: 2026-04-19
-  task: TRD-439
-  note: unfrozen  
+  Уведомления - OK (PIPE-048)
+  updated: 2026-06-19
+  task: PIPE-048
+  note: notification-channel paper-сделок живой, E2E подтверждён, parse_mode=HTML, Size=kelly_size  
 ---
 
 ## 2. БАЗА ДАННЫХ
@@ -77,9 +77,9 @@
 
 - Таблица paper_trades
   status: OK
-  updated: 2026-03-29
-  task: TRD-439
-  note: unfrozen, filtered by copy_status='paper'
+  updated: 2026-06-19
+  task: PIPE-048
+  note: триггер AFTER INSERT → notify_paper_trade (PIPE-048), paper_trade_notifications с status-машиной
 
 - Таблица trades
   status: OK

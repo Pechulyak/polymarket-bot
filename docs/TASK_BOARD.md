@@ -121,6 +121,7 @@
 | PIPE-045 | Скрипт fetch кандидатов + LP/HFT-фильтры | | DONE |
 | PIPE-046 | Скрипт roundtrip scoring + settlement кандидатов | | DONE |
 | PIPE-047 | Fix outcome mismatch в paper P&L views | | DONE |
+| PIPE-048 | Telegram live-алерты paper-сделок | | DONE |
 
 ---
 
