@@ -516,31 +516,6 @@ def format_telegram_message(analysis: dict, metrics: dict) -> str:
     # Summary
     summary = analysis.get('summary', 'нет данных')
     lines.append(f"💡 SUMMARY: {summary}")
-    lines.append("")
-    
-    # SQL for confirmed changes (human-in-the-loop)
-    sql_updates = []
-    for w in analysis.get('recommendations', []):
-        action = w.get('recommended_action', '')
-        wallet = w.get('wallet_address', '')
-        current_status = w.get('current_status', '')
-        whale_comment = w.get('whale_comment', '')
-        exclusion_reason = w.get('exclusion_reason', '')
-        
-        if action == 'upgrade' and wallet:
-            target = 'paper' if current_status == 'tracked' else 'tracked'
-            comment_sql = f", whale_comment='{whale_comment}', reviewed_at=NOW()" if whale_comment else ""
-            sql_updates.append(f"UPDATE whales SET copy_status='{target}'{comment_sql} WHERE wallet_address='{wallet}';")
-        elif action == 'downgrade' and wallet:
-            reason_sql = f", exclusion_reason='{exclusion_reason}'" if exclusion_reason and exclusion_reason != 'null' else ""
-            sql_updates.append(f"UPDATE whales SET copy_status='excluded'{reason_sql}, reviewed_at=NOW() WHERE wallet_address='{wallet}';")
-    
-    lines.append("SQL ДЛЯ ПОДТВЕРЖДЁННЫХ ИЗМЕНЕНИЙ:")
-    if sql_updates:
-        for sql in sql_updates[:10]:
-            lines.append(sql)
-    else:
-        lines.append("изменений нет")
     
     return "\n".join(lines)
 
