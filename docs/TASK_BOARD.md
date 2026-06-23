@@ -166,12 +166,14 @@
 | TRD-439 | Запуск paper-trade pipeline для отобранных китов | | IN_PROGRESS |
 | TRD-440 | Исправление застрявших roundtrips — 37 OPEN при resolved markets | | DONE |
 | TRD-441 | Классификация и исключение китов | | DONE |
-| TRD-442 | DB-trigger закрытия paper-позиций на SELL | feature:paper-sell-close | CANCELLED |
-| TRD-443 | Реактивация _close_roundtrips (exact + fuzzy matching) | feature:roundtrip-close | DONE |
+| TRD-442 | DB-trigger закрытия paper-позиций на SELL | | CANCELLED |
+| TRD-443 | Реактивация _close_roundtrips (exact + fuzzy matching) | | DONE |
 | TRD-445 | Hardening тестовой инфраструктуры roundtrip_builder | | DONE |
 | TRD-444 | Исправление NULL close_* в whale_trade_roundtrips после settlement | | DONE |
 | TRD-446 | split миграции 006 на 006a (schema) + 006b (data); стратегия для ~87% OPEN с outcome=NULL; cleanup dead WARNING в rollback 007a | | TODO | Покрывает HYG-NNN-2, HYG-NNN-8, HYG-NNN-11. Blast radius: высокий (DDL на prod). |
-| TRD-447 | Исправление rate-limit bug в _fetch_and_group_sell_trades + _close_roundtrips | feature:roundtrip-close | CANCELLED | False flag from DIAG-TRD443-RATE-LIMIT-{01,02,03,04}. Hypothesis disproven through API reconciliation on 2 sample whales. Pipeline OPEN/CLOSE sides correct, 23 DIRECT_SELL/24h is natural sparsity (majority of closures via SETTLEMENT, not direct SELL). |
+| TRD-447 | Исправление rate-limit bug в _fetch_and_group_sell_trades + _close_roundtrips |  | CANCELLED |
+| TRD-448 | Учёт комиссии Polymarket в расчёте PnL | | DONE |
+| TRD-449 | Ценовой фильтр входа: отсечка whale-сделок с price > max_entry_price (0.97) | | DONE |
 
 ---
 
