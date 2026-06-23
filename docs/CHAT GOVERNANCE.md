@@ -177,6 +177,7 @@ Winrate > 60%
    - `INFRA-*` — Infrastructure
    - `HYG-*` — System Hygiene
    - `DOC-*` — Documentation & Governance
+   - `LIVE-*` — Live Execution
    - `BUG-*` — Cross-cutting Bugs
 
    Связь между эпиками / фичами, затрагивающими несколько эпиков —

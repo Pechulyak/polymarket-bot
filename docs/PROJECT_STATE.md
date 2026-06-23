@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-06-19
+Обновлено: 2026-06-23
 Версия: v2_clean  
 Фаза: Paper trading (edge validation)
 
@@ -94,10 +94,10 @@
   note: settlement via CLOB API working
 
 - Таблица live_orders
-  status: OK (new)
-  updated: 2026-06-13
-  task: INFRA-043
-  note: pull-модель для live-исполнения, executor (Сервер 2) читает intent-ордера. Схема есть, executor L1 и trigger — отдельная задача.
+  status: OK
+  updated: 2026-06-23
+  task: INFRA-043, LIVE-001
+  note: live_executor_daemon.py на S2 доработан до production-ready (routing maker/taker по min_order_size, market-order FOK, neg_risk из стакана, file-log). Запуск вручную; systemd, balance-gate, auto-copy trigger — отдельные задачи.
 
 - Таблица bankroll
   status: OK

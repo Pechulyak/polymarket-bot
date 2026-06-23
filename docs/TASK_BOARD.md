@@ -323,4 +323,12 @@
 
 ---
 
-*Обновлено: 2026-06-10*
+## EPIC: LIVE — Live Execution
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| LIVE-001 | Доработка live-executor: routing maker/taker, market-order FOK | feature:live-execution | DONE |
+
+---
+
+*Обновлено: 2026-06-23*
