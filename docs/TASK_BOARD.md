@@ -275,6 +275,7 @@
 | INFRA-045 | Таблица system_state + grant order_executor для cross-server heartbeat | feature:live-execution | DONE |
 | INFRA-046 | Heartbeat-alert демона live_executor в pipeline_monitor (edge-trigger, 1 alert на фронт, порог 120с) | feature:live-execution | DONE |
 | INFRA-047 | Watchdog застрявших ордеров в pipeline_monitor | feature:live-execution | DONE |
+| INFRA-048 | filled_size для maker-пути (taker готов, maker ждёт образца get_order) | feature:live-execution | TODO |
 
 ---
 

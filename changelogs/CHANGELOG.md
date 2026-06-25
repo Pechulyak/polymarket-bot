@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-06-25 | LIVE-003 | filled_size (taker): submit_taker пишет реально исполненный объём в live_orders.filled_size из resp.takingAmount (shares, для BUY = купленные контракты). Применено в боевой демон S2 (рестарт, PID 622481). Maker-путь — TODO INFRA-048 (структура get_order неизвестна, нет боевого maker-fill). Правка демона вне git (S2). |
 | 2026-06-25 | INFRA-047 | Watchdog застрявших ордеров в pipeline_monitor.py. Детект строк live_orders в статусах intent/claimed/submitted старше 120с (отсчёт COALESCE(updated_at,created_at)). Edge-trigger булев флаг: 1 alert на clear→stuck (со списком id) / stuck→clear. Состояние в system_state (component='stuck_orders_alert_state'). |
 | 2026-06-25 | INFRA-045 | Таблица system_state (k/v реестр компонентов) для cross-server heartbeat. PK=component, поля heartbeat_at/status/detail(jsonb)/updated_at. Grant SELECT/INSERT/UPDATE для order_executor. Расширяема под любой компонент без миграций. |
 | 2026-06-25 | INFRA-046 | Heartbeat-alert демона live_executor в pipeline_monitor.py. Edge-trigger: 1 сообщение на переход ok→stale / stale→ok, без спама при длительном простое. Порог stale=120с. Состояние last-alerted в system_state (component='live_executor_alert_state'). Использует system_state из INFRA-045. |
