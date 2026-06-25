@@ -38,6 +38,9 @@ LAST_OK_FILE = "/tmp/pipeline_monitor_last_ok"
 # Heartbeat thresholds
 HEARTBEAT_STALE_SECONDS = 120
 
+# INFRA-047: stuck orders threshold
+STUCK_ORDER_SECONDS = 120
+
 # Container names from docker-compose.yml
 CONTAINERS = [
     "polymarket_bot",
@@ -524,6 +527,70 @@ def check_live_executor_heartbeat():
 
 
 # =============================================================================
+# INFRA-047: watchdog застрявших ордеров (edge-trigger)
+# =============================================================================
+
+def check_stuck_orders():
+    """Edge-triggered: only alert on state transitions.
+    
+    Алертит при переходе clear→stuck, восстановлении stuck→clear.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # Найти застрявшие ордера (статусы intent/claimed/submitted, старше порога)
+            cur.execute("""
+                SELECT id, status, EXTRACT(EPOCH FROM (now() - COALESCE(updated_at, created_at))) AS age_sec
+                FROM live_orders
+                WHERE status IN ('intent', 'claimed', 'submitted')
+                  AND EXTRACT(EPOCH FROM (now() - COALESCE(updated_at, created_at))) > %s
+                ORDER BY age_sec DESC
+            """, (STUCK_ORDER_SECONDS,))
+            rows = cur.fetchall()
+            current_state = 'stuck' if rows else 'clear'
+
+            # Прочитать last-alerted из system_state
+            cur.execute("""
+                SELECT status FROM system_state WHERE component = 'stuck_orders_alert_state'
+            """)
+            alert_row = cur.fetchone()
+            last_alerted = alert_row[0] if alert_row else None
+            if last_alerted is None:
+                last_alerted = 'clear'
+
+            # Edge-trigger: только при смене состояния
+            if current_state != last_alerted:
+                if current_state == 'stuck':
+                    order_lines = '\n'.join(
+                        f"  id={row[0]} status={row[1]} age={round(float(row[2]), 1)}s"
+                        for row in rows
+                    )
+                    msg = f"🚨 {len(rows)} stuck orders (>{STUCK_ORDER_SECONDS}s)\n{order_lines}"
+                    send_telegram_message(msg)
+                    detail_json = json.dumps([row[0] for row in rows])
+                    new_alert_state = 'stuck'
+                else:
+                    send_telegram_message("✅ stuck orders cleared")
+                    new_alert_state = 'clear'
+                    detail_json = None
+
+                cur.execute("""
+                    INSERT INTO system_state (component, status, detail, heartbeat_at, updated_at)
+                    VALUES ('stuck_orders_alert_state', %s, %s, NOW(), NOW())
+                    ON CONFLICT (component) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        detail = EXCLUDED.detail,
+                        heartbeat_at = EXCLUDED.heartbeat_at,
+                        updated_at = EXCLUDED.updated_at
+                """, (new_alert_state, detail_json))
+                conn.commit()
+    except Exception as e:
+        print(f"[WARN] check_stuck_orders failed: {e}")
+    finally:
+        conn.close()
+
+
+# =============================================================================
 # Telegram alerts
 # =============================================================================
 
@@ -890,6 +957,8 @@ def main():
     try:
         # INFRA-046: live_executor heartbeat — independent, before pipeline checks
         check_live_executor_heartbeat()
+        # INFRA-047: watchdog застрявших ордеров
+        check_stuck_orders()
 
         results = run_pipeline_checks()
         status = results["status"]
