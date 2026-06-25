@@ -4,6 +4,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-06-25 | INFRA-045 | Таблица system_state (k/v реестр компонентов) для cross-server heartbeat. PK=component, поля heartbeat_at/status/detail(jsonb)/updated_at. Grant SELECT/INSERT/UPDATE для order_executor. Расширяема под любой компонент без миграций. |
 | 2026-06-25 | INFRA-044 | Backfill CPU saturation S1 RESOLVED: причина рекуррентного 100% CPU (hard-reset 2026-06-19) — run_category_backfill.py запускался cron каждые 2ч без lock, прогон длится ~4ч, экземпляры накладывались и копились. Фикс: crontab → flock -n /tmp/category_backfill.lock + интервал 0 */6. Убиты накопленные дубли (4 процесса). CPU-полка упала со ~110% до <2%. |
 | 2026-06-24 | LIVE-002 | systemd unit live-executor.service: LoadCredential (DATABASE_URL через LoadCredential (plaintext, chmod 600 root:root, без шифрования at-rest — systemd-creds отсутствует на образе S2)), Restart=on-failure/RestartSec=30, MemoryHigh=200M/MemoryMax=350M. Демон переживает ребут S2 и закрытие сессии. Секрет вне env-файла. |
 | 2026-06-24 | LIVE-005 | on-chain balance-gate + фикс $1, boevoy test passed. |
