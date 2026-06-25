@@ -271,6 +271,7 @@
 | INFRA-041 | Recovery автоперезапуск whale-detector (autoheal) | | FROZEN |
 | INFRA-042 | Alert при unhealthy/устаревшем heartbeat (Telegram) | | TODO |
 | INFRA-043 | Схема live_orders + grant order_executor | feature:live-execution | DONE |
+| INFRA-044 | Backfill CPU saturation S1: cron без flock + прогон > интервал → накопление экземпляров → 100% CPU. Фикс: flock -n + 6ч | | DONE |
 
 ---
 
