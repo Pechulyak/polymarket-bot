@@ -273,6 +273,7 @@
 | INFRA-043 | Схема live_orders + grant order_executor | feature:live-execution | DONE |
 | INFRA-044 | Backfill CPU saturation S1: cron без flock + прогон > интервал → накопление экземпляров → 100% CPU. Фикс: flock -n + 6ч | | DONE |
 | INFRA-045 | Таблица system_state + grant order_executor для cross-server heartbeat | feature:live-execution | DONE |
+| INFRA-046 | Heartbeat-alert демона live_executor в pipeline_monitor (edge-trigger, 1 alert на фронт, порог 120с) | feature:live-execution | DONE |
 
 ---
 
