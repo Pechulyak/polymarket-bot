@@ -334,6 +334,7 @@
 |----|--------|-----|--------|
 | LIVE-001 | Доработка live-executor: routing maker/taker, market-order FOK | feature:live-execution | DONE |
 | LIVE-002 | systemd auto-start демона live-executor | feature:live-execution | DONE |
+| LIVE-003 | Throttle ошибок демона + route column live_orders + filled_size taker | feature:live-execution | DONE |
 | LIVE-005 | on-chain balance-gate + фикс $1 | feature:live-execution | DONE |
 
 ---
