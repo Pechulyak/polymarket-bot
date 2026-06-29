@@ -85,3 +85,12 @@ config/*.backup.*
 docker-compose.yml.backup.*
 backups/
 .alert_env
+
+# Executor secrets — never commit
+executor/secrets/
+executor/accounts/*.env
+executor/__pycache__/
+executor/*.pyc
+executor/venv/
+executor/*.bak.*
+executor/logs/
