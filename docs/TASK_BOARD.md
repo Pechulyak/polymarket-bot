@@ -171,7 +171,7 @@
 | TRD-445 | Hardening тестовой инфраструктуры roundtrip_builder | | DONE |
 | TRD-444 | Исправление NULL close_* в whale_trade_roundtrips после settlement | | DONE |
 | TRD-446 | split миграции 006 на 006a (schema) + 006b (data); стратегия для ~87% OPEN с outcome=NULL; cleanup dead WARNING в rollback 007a | | TODO | Покрывает HYG-NNN-2, HYG-NNN-8, HYG-NNN-11. Blast radius: высокий (DDL на prod). |
-| TRD-447 | Исправление rate-limit bug в _fetch_and_group_sell_trades + _close_roundtrips |  | CANCELLED |
+| TRD-447 | Исправление rate-limit bug в _fetch_and_group_sell_trades +_close_roundtrips |  | CANCELLED |
 | TRD-448 | Учёт комиссии Polymarket в расчёте PnL | | DONE |
 | TRD-449 | Ценовой фильтр входа: отсечка whale-сделок с price > max_entry_price (0.97) | | DONE |
 
@@ -336,7 +336,8 @@
 | LIVE-002 | systemd auto-start демона live-executor | feature:live-execution | DONE |
 | LIVE-003 | Throttle ошибок демона + route column live_orders + filled_size taker | feature:live-execution | DONE |
 | LIVE-005 | on-chain balance-gate + фикс $1 | feature:live-execution | DONE |
+| LIVE-006 | Версионирование executor-кода: папка executor/ в репо) | feature:live-execution | DONE |
 
 ---
 
-*Обновлено: 2026-06-23*
+*Обновлено: 2026-06-29*
