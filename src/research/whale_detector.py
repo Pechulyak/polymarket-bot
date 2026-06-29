@@ -1217,6 +1217,7 @@ class WhaleDetector:
         market_title: Optional[str] = None,
         source: str = "BACKFILL",
         outcome: Optional[str] = None,
+        token_id: Optional[str] = None,
     ) -> bool:
         """Save trade to whale_trades table via WhaleTradesRepo.
         
@@ -1262,6 +1263,7 @@ class WhaleDetector:
                 tx_hash=tx_hash,
                 source=source,
                 traded_at=traded_at,
+                token_id=token_id,
             )
             return result == "saved"
         except Exception as e:
@@ -1510,6 +1512,7 @@ class WhaleDetector:
                         market_title=trade.market_title,
                         source="BACKFILL",
                         outcome=normalized_outcome,
+                        token_id=trade.asset,
                     )
                     saved_trades_count += 1
                 except Exception as e:
@@ -1771,6 +1774,7 @@ class WhaleDetector:
                     market_title=trade.market_title,
                     source="PAPER_TRACK",  # Distinguish from BACKFILL/REALTIME
                     outcome=normalized_outcome,
+                    token_id=trade.asset,
                 )
 
                 if saved:
@@ -1905,6 +1909,7 @@ class WhaleDetector:
                     market_title=trade.market_title,
                     source="TRACKED",  # Distinguish from BACKFILL/PAPER_TRACK
                     outcome=normalized_outcome,
+                    token_id=trade.asset,
                 )
 
                 if saved:

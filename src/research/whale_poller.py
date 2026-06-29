@@ -302,6 +302,7 @@ class WhalePoller:
             market_category=market_category,  # передаём как есть, не обнуляем
             source="POLLER",
             traded_at=trade_time,  # ОБЯЗАТЕЛЬНО — реальное время сделки
+            token_id=trade.asset,
         )
         logger.debug(
             "whale_trade_save_result",

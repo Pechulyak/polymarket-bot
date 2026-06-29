@@ -22,20 +22,20 @@ logger = structlog.get_logger(__name__)
 _INSERT_PLAIN = """
     INSERT INTO whale_trades
         (whale_id, wallet_address, market_id, market_title, side,
-         size_usd, price, outcome, market_category, traded_at, tx_hash, source)
+         size_usd, price, outcome, market_category, traded_at, tx_hash, source, token_id)
     VALUES
         (:whale_id, :wallet_address, :market_id, :market_title, :side,
-         :size_usd, :price, :outcome, :market_category, :traded_at, :tx_hash, :source)
+         :size_usd, :price, :outcome, :market_category, :traded_at, :tx_hash, :source, :token_id)
 """
 
 # SQL для строк С tx_hash — partial unique index (tx_hash IS NOT NULL AND tx_hash <> '')
 _INSERT_ON_CONFLICT = """
     INSERT INTO whale_trades
         (whale_id, wallet_address, market_id, market_title, side,
-         size_usd, price, outcome, market_category, traded_at, tx_hash, source)
+         size_usd, price, outcome, market_category, traded_at, tx_hash, source, token_id)
     VALUES
         (:whale_id, :wallet_address, :market_id, :market_title, :side,
-         :size_usd, :price, :outcome, :market_category, :traded_at, :tx_hash, :source)
+         :size_usd, :price, :outcome, :market_category, :traded_at, :tx_hash, :source, :token_id)
     ON CONFLICT (tx_hash) WHERE tx_hash IS NOT NULL AND tx_hash <> '' DO NOTHING
 """
 
@@ -87,6 +87,7 @@ class WhaleTradesRepo:
         tx_hash: Optional[str] = None,
         source: str = "BACKFILL",
         traded_at: Optional[datetime] = None,
+        token_id: Optional[str] = None,
     ) -> str:
         """
         Единственная точка записи в whale_trades.
@@ -219,6 +220,7 @@ class WhaleTradesRepo:
                         "traded_at": traded_at,
                         "tx_hash": tx_hash_val,
                         "source": source,
+                        "token_id": token_id,
                     }
                 )
                 session.commit()
