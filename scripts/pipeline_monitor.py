@@ -38,6 +38,9 @@ LAST_OK_FILE = "/tmp/pipeline_monitor_last_ok"
 # Heartbeat thresholds
 HEARTBEAT_STALE_SECONDS = 120
 
+# INFRA-046 / INFRA-048: live_copy_daemon heartbeat threshold
+DAEMON_HEARTBEAT_STALE_SECONDS = 180
+
 # INFRA-047: stuck orders threshold
 STUCK_ORDER_SECONDS = 120
 
@@ -527,6 +530,66 @@ def check_live_executor_heartbeat():
 
 
 # =============================================================================
+# INFRA-048: watchdog live_copy_daemon (edge-trigger)
+# =============================================================================
+
+def check_live_copy_daemon_heartbeat():
+    """Edge-triggered: only alert on state transitions."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # Read age in seconds (DB-side, avoids naive/aware conflict)
+            cur.execute("""
+                SELECT EXTRACT(EPOCH FROM (now() - heartbeat_at))
+                FROM system_state
+                WHERE component = 'live_copy_daemon'
+            """)
+            row = cur.fetchone()
+            if row is None or row[0] is None:
+                current_state = "stale"
+                heartbeat_age_sec = None
+            else:
+                heartbeat_age_sec = round(float(row[0]), 1)
+                current_state = "stale" if heartbeat_age_sec > DAEMON_HEARTBEAT_STALE_SECONDS else "ok"
+
+            # Read last alerted state
+            cur.execute("""
+                SELECT status FROM system_state
+                WHERE component = 'live_copy_daemon_alert_state'
+            """)
+            alert_row = cur.fetchone()
+            last_alerted = alert_row[0] if alert_row else None
+
+            # First run: missing alert_state → treat as ok (no spurious recovered)
+            if last_alerted is None:
+                last_alerted = "ok"
+
+            # State transition
+            if current_state != last_alerted:
+                if current_state == "stale":
+                    msg = f"🚨 live_copy_daemon heartbeat STALE (age={heartbeat_age_sec}s)"
+                    send_telegram_message(msg)
+                    new_alert_state = "stale"
+                else:
+                    send_telegram_message("✅ live_copy_daemon recovered")
+                    new_alert_state = "ok"
+
+                cur.execute("""
+                    INSERT INTO system_state (component, status, heartbeat_at, updated_at)
+                    VALUES ('live_copy_daemon_alert_state', %s, NOW(), NOW())
+                    ON CONFLICT (component) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        heartbeat_at = EXCLUDED.heartbeat_at,
+                        updated_at = EXCLUDED.updated_at
+                """, (new_alert_state,))
+                conn.commit()
+    except Exception as e:
+        print(f"[WARN] live_copy_daemon heartbeat check failed: {e}")
+    finally:
+        conn.close()
+
+
+# =============================================================================
 # INFRA-047: watchdog застрявших ордеров (edge-trigger)
 # =============================================================================
 
@@ -957,6 +1020,8 @@ def main():
     try:
         # INFRA-046: live_executor heartbeat — independent, before pipeline checks
         check_live_executor_heartbeat()
+        # INFRA-048: watchdog live_copy_daemon
+        check_live_copy_daemon_heartbeat()
         # INFRA-047: watchdog застрявших ордеров
         check_stuck_orders()
 
