@@ -1,6 +1,6 @@
 # СОСТОЯНИЕ ПРОЕКТА
 
-Обновлено: 2026-06-23
+Обновлено: 2026-06-30
 Версия: v2_clean  
 Фаза: Paper trading (edge validation)
 
@@ -95,9 +95,9 @@
 
 - Таблица live_orders
   status: OK
-  updated: 2026-06-23
-  task: INFRA-043, LIVE-001
-  note: live_executor_daemon.py на S2 доработан до production-ready (routing maker/taker по min_order_size, market-order FOK, neg_risk из стакана, file-log). Запуск вручную; systemd, balance-gate, auto-copy trigger — отдельные задачи.
+  updated: 2026-06-30
+  task: LIVE-004
+  note: pull-model live copy активен, token_id NOT NULL, демон+watchdog на S1.
 
 - Таблица bankroll
   status: OK
@@ -267,9 +267,15 @@
 
 - whale_trades → paper_trades
   status: OK
-  updated: 2026-03-30
-  task: 
-  note: real-time verified, paper whales
+  updated: 2026-06-30
+  task: LIVE-004
+  note: real-time verified, paper whales, token_id propagated
+
+- paper_trades → live_orders
+  status: OK
+  updated: 2026-06-30
+  task: LIVE-004
+  note: pull-model copy daemon, kill-switch gated
 
 - paper_trades → trades
   status: OK
@@ -308,9 +314,9 @@
 
 - pipeline_monitor
   status: ACTIVE
-  updated: 2026-04-02
+  updated: 2026-06-30
   task: PIPE-004
-  note: cron */30, Telegram alerts every 30min
+  note: cron */30, Telegram alerts every 30min, + live_copy/stuck watchdogs (INFRA-046/047/048)
 
 - Paper-trade pipeline (active whales)
   status: ACTIVE

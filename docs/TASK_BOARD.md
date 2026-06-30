@@ -275,7 +275,8 @@
 | INFRA-045 | Таблица system_state + grant order_executor для cross-server heartbeat | feature:live-execution | DONE |
 | INFRA-046 | Heartbeat-alert демона live_executor в pipeline_monitor (edge-trigger, 1 alert на фронт, порог 120с) | feature:live-execution | DONE |
 | INFRA-047 | Watchdog застрявших ордеров в pipeline_monitor | feature:live-execution | DONE |
-| INFRA-048 | filled_size для maker-пути (taker готов, maker ждёт образца get_order) | feature:live-execution | TODO |
+| INFRA-048 | Watchdog live_copy_daemon heartbeat: edge-trigger, порог 180s, alert_state в system_state | feature:live-execution | DONE |
+| INFRA-049 | filled_size для maker-пути (taker готов, maker ждёт образца get_order) | feature:live-execution | TODO |
 
 ---
 
@@ -335,10 +336,10 @@
 | LIVE-001 | Доработка live-executor: routing maker/taker, market-order FOK | feature:live-execution | DONE |
 | LIVE-002 | systemd auto-start демона live-executor | feature:live-execution | DONE |
 | LIVE-003 | Throttle ошибок демона + route column live_orders + filled_size taker | feature:live-execution | DONE |
-| LIVE-004 | Live copy: проброс token_id и auto-copy paper→live | feature:live-execution | IN_PROGRESS |
+| LIVE-004 | Live copy: проброс token_id и auto-copy paper→live | feature:live-execution | DONE |
 | LIVE-005 | on-chain balance-gate + фикс $1 | feature:live-execution | DONE |
 | LIVE-006 | Версионирование executor-кода: папка executor/ в репо) | feature:live-execution | DONE |
 
 ---
 
-*Обновлено: 2026-06-29*
+*Обновлено: 2026-06-30*
