@@ -1,0 +1,19 @@
+[Unit]
+Description=Polymarket copy_paper_to_live LISTEN daemon (LIVE-004)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/polymarket-bot
+ExecStart=/usr/bin/python3 /root/polymarket-bot/scripts/copy_paper_to_live.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+KillSignal=SIGTERM
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
