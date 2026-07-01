@@ -339,6 +339,7 @@
 | LIVE-004 | Live copy: проброс token_id и auto-copy paper→live | feature:live-execution | DONE |
 | LIVE-005 | on-chain balance-gate + фикс $1 | feature:live-execution | DONE |
 | LIVE-006 | Версионирование executor-кода: папка executor/ в репо) | feature:live-execution | DONE |
+| FARM-001 | Farming daemon: on-chain inventory, throttle, systemd | feature:liquidity-farming | IN_PROGRESS |
 
 ---
 

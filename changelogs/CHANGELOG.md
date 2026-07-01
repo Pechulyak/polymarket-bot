@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-07
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-01 | FARM-001 | Демон farming ликвидности (Account2/Justfuuun), автономный two-sided market-maker. read_inventory переписан на on-chain: SDK get_balance_allowance() мёртв (всегда 0), читаем ERC-1155 balanceOf(funder,token_id) на CTF 0x4D97DCd9…, RPC-fallback, fail-closed None. Валидировано на 3 живых позициях acc2 (1029/1000/11.11 shares, MATCH до 6-го знака vs data-api). throttled_log переиспользован из LIVE-003 (HOLD-тики и повторные ошибки — 300s, REQUOTE/fill/новые ошибки — всегда). DRY-loop end-to-end на живом US×Iran (ноль ордеров). systemd farming-daemon.service Type=notify (sd_notify через stdlib socket, python-модуль systemd отсутствует на S2), WatchdogSec=30 — на сервере, вне git (паттерн executor). logrotate 10M/keep7/copytruncate. Money-adjacent stubbed: place_two_sided/cancel_quotes live-пути (NotImplementedError). FUNDER acc2 вписан (on-chain подтверждён). Осталось: бутстрап инвентаря (форма дня 1), live-ветка. |
+
 ## 2026-06
 
 | Дата | TASK_ID | Описание |
