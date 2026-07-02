@@ -13,16 +13,16 @@ Reused primitives from live_executor_daemon.py are marked [REUSE].
 New farming logic is marked [NEW]. Money-adjacent config marked # TODO CONFIRM.
 """
 from py_clob_client_v2 import (
-    ClobClient, OrderArgsV2, OrderType, PartialCreateOrderOptions,
+    ClobClient, OrderArgsV2, OrderType, PartialCreateOrderOptions, OrderPayload,
 )
 from py_clob_client_v2.order_builder.constants import BUY, SELL
-import psycopg2, requests, os, sys, time, re
+import requests, os, sys, time, re
 from datetime import datetime, timezone
 from web3 import Web3
 
 # ─────────────────────────── CONFIGURATION ───────────────────────────
 # [REUSE] client/auth pattern from copy-daemon, but Account 2 funder.
-KEY_PATH = "/opt/executor/secrets/.signer_key_acc2"   # TODO CONFIRM: acc2 key path
+ENV_PATH = "/opt/executor/app/accounts/account2.env"  # PRIVATE_KEY=0x... (chmod 600) — confirmed working acc2 creds
 FUNDER   = "0x5F032FF0e9376538ac240417EA5863756e1f2634"  # acc2 funder (Justfuuun), on-chain confirmed 2026-06
 SIG_TYPE = 3  # POLY_1271
 HOST     = "https://clob.polymarket.com"
@@ -42,24 +42,15 @@ RPC_URLS = [
 ]
 RPC_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# DB (heartbeat/state only; farming does NOT poll live_orders)
-_cred_dir = os.environ.get("CREDENTIALS_DIRECTORY")
-if _cred_dir and os.path.exists(os.path.join(_cred_dir, "database_url")):
-    with open(os.path.join(_cred_dir, "database_url")) as _f:
-        DB_URL = _f.read().strip()
-else:
-    DB_URL = os.environ.get("DATABASE_URL")
-
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 LOG_FILE = "/opt/executor/logs/farming_daemon.log"
 
 # ─────────────────────────── FARMING PARAMS ──────────────────────────
-DRY_RUN = True                       # SKELETON: no live orders until explicitly flipped
+DRY_RUN = False                      # LIVE: D3 prototype run (farming, acc2)
 POLL_INTERVAL   = 10                 # seconds between ticks
 QUOTE_OFFSET    = 0.015              # CONFIRMED 2026-07-01: 1.5c/leg start (opt blocked until D3 fill-freq)
 REQUOTE_FRAC    = 0.6                # [NEW] re-quote when drift >= REQUOTE_FRAC * BE_move
-HEARTBEAT_KEY   = "farming_daemon"   # system_state row key
 
 # Target markets (from Step A/B recon). size = shares per leg.
 # TODO CONFIRM: sizing, market selection, whether Fed#2 included alongside US x Iran.
@@ -112,10 +103,20 @@ def throttled_log(key, msg, seconds=300):
     log(msg)
 
 
-def mask_db_url(url):
-    if not url:
-        return "None"
-    return re.sub(r'(://[^:]+:)[^@]+(@)', r'\1****\2', url)
+def _load_signer_key() -> str:
+    """Read PRIVATE_KEY from env-file. NEVER prints value."""
+    if not os.path.exists(ENV_PATH):
+        raise FileNotFoundError(f"env file not found at {ENV_PATH}")
+    key = None
+    with open(ENV_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("PRIVATE_KEY="):
+                key = line.split("=", 1)[1].strip().strip(chr(34)).strip(chr(39))
+                break
+    if not key:
+        raise ValueError(f"PRIVATE_KEY not found in {ENV_PATH}")
+    return key
 
 
 def build_client():
@@ -125,22 +126,15 @@ def build_client():
     get_midpoint/get_trades). Inventory is read ON-CHAIN (read_inventory),
     NOT via get_balance_allowance (dead SDK branch). Live path still REQUIRES
     the key — money-adjacent placement is unaffected."""
-    if DRY_RUN and not os.path.exists(KEY_PATH):
-        log(f"[DRY_RUN] signer key absent ({KEY_PATH}) -> read-only client, no L2 creds")
+    if DRY_RUN and not os.path.exists(ENV_PATH):
+        log(f"[DRY_RUN] env file absent ({ENV_PATH}) -> read-only client, no L2 creds")
         return ClobClient(HOST, CHAIN_ID)
-    with open(KEY_PATH, 'r') as f:
-        key = f.read().strip()
+    key = _load_signer_key()
     c = ClobClient(HOST, CHAIN_ID, key, signature_type=SIG_TYPE, funder=FUNDER)
-    api_key = c.derive_api_key()
-    c.set_api_creds(api_key)
     del key
+    api_key = c.create_or_derive_api_key()
+    c.set_api_creds(api_key)
     return c
-
-
-def get_db_conn():
-    conn = psycopg2.connect(DB_URL)
-    conn.autocommit = False
-    return conn
 
 
 # ─────────────────────── REWARD / MARKET READ [NEW] ──────────────────
@@ -242,12 +236,17 @@ def estimate_share(depth, size, offset_cents, max_spread):
 
 
 # ─────────────────────── QUOTING CORE [NEW] ──────────────────────────
-def place_two_sided(c, mkt, mid):
+def place_two_sided(c, mkt, mid, plan=None, params=None):
     """[NEW] Place BID @ mid-offset and ASK @ mid+offset, both GTC maker.
     Returns (bid_order_id, ask_order_id). Uses OrderArgsV2 + post_order(GTC)
     like copy-daemon line 361-364, but TWO legs and anchored at mid, not best_bid.
 
-    MONEY-ADJACENT: real placement guarded by DRY_RUN. # TODO CONFIRM before live.
+    `plan` (from inventory_manage) drives asymmetric offsets/sizes when inventory
+    is skewed; when None or skew='flat', symmetric QUOTE_OFFSET on both legs.
+    `params` supplies neg_risk/tick_size directly (not read from mkt['params'],
+    which may be stale/absent for a market whose load failed this tick).
+
+    MONEY-ADJACENT: real placement guarded by DRY_RUN.
     """
     if DRY_RUN:
         # [NEW] validate against the LIVE book (LayerX lesson: never quote off bid-prices).
@@ -260,29 +259,128 @@ def place_two_sided(c, mkt, mid):
         # anchor on book midpoint, not the passed mid, and round to tick
         book_mid = (best_bid + best_ask) / 2 if (best_bid and best_ask) else mid
         def _round(x): return round(round(x / tick) * tick, 4)
-        our_bid = _round(book_mid - QUOTE_OFFSET)
-        our_ask = _round(book_mid + QUOTE_OFFSET)
-        ms = mkt.get("max_spread")
+        _plan = plan or {}
+        bid_off = float(_plan.get("bid_offset", QUOTE_OFFSET))
+        ask_off = float(_plan.get("ask_offset", QUOTE_OFFSET))
+        bid_sz = float(_plan.get("bid_size", mkt["min_size"]))
+        ask_sz = float(_plan.get("ask_size", mkt["min_size"]))
+        our_bid = _round(book_mid - bid_off)
+        our_ask = _round(book_mid + ask_off)
+        ms = (params or {}).get("max_spread")
+        if ms is None:
+            ms = mkt.get("max_spread")
         bid_spread_c = (book_mid - our_bid) * 100
         ask_spread_c = (our_ask - book_mid) * 100
         crosses_bid = (best_ask is not None) and (our_bid >= best_ask)  # would take asks
         crosses_ask = (best_bid is not None) and (our_ask <= best_bid)  # would take bids
         in_corridor = (ms is None) or (bid_spread_c <= ms and ask_spread_c <= ms)
         log(f"[DRY_RUN] {mkt['name']} book_bid={best_bid} book_ask={best_ask} "
-            f"book_mid={book_mid:.4f} tick={tick}")
-        log(f"[DRY_RUN]   our BID @ {our_bid} ({bid_spread_c:.2f}c from mid) | "
-            f"our ASK @ {our_ask} ({ask_spread_c:.2f}c from mid) size={mkt['min_size']}")
+            f"book_mid={book_mid:.4f} tick={tick} skew={_plan.get('skew','flat')}")
+        log(f"[DRY_RUN]   our BID @ {our_bid} ({bid_spread_c:.2f}c from mid) sz={bid_sz} | "
+            f"our ASK @ {our_ask} ({ask_spread_c:.2f}c from mid) sz={ask_sz}")
         log(f"[DRY_RUN]   maker_safe: bid_no_cross={not crosses_bid} ask_no_cross={not crosses_ask} "
             f"in_corridor={in_corridor}")
         if crosses_bid or crosses_ask:
             log(f"[DRY_RUN]   WARN: quote would cross the book -> taker fill (fee). "
                 f"Increase QUOTE_OFFSET or check tick alignment.")
-        return ("dry_bid", "dry_ask")
-    # STUB (live path):
-    #   tick = c.get_tick_size(token); opts = PartialCreateOrderOptions(tick_size, neg_risk)
-    #   bid = c.post_order(c.create_order(OrderArgsV2(token, price=mid-off, size, BUY),  opts), GTC)
-    #   ask = c.post_order(c.create_order(OrderArgsV2(token, price=mid+off, size, SELL), opts), GTC)
-    raise NotImplementedError("place_two_sided live path")
+        # mirror live return contract: suppressed leg -> None id
+        return (("dry_bid" if bid_sz > 0 else None),
+                ("dry_ask" if ask_sz > 0 else None))
+
+    # ── LIVE PATH (money moves) ──────────────────────────────────────────
+    # Symmetric maker two-sided quote anchored on the LIVE book midpoint.
+    # Both legs GTC (rest passively -> maker -> entry fee = 0). Cross-guard:
+    # if a leg would cross the book (would execute as taker and pay fee), that
+    # leg is SKIPPED this tick, never repriced into a taker fill. The other leg
+    # still posts. Returns (bid_id, ask_id); a skipped leg's id is None.
+    token = mkt["token"]
+    ob = c.get_order_book(token)
+    bids = ob.get("bids") or []
+    asks = ob.get("asks") or []
+    best_bid = max((float(b["price"]) for b in bids), default=None)
+    best_ask = min((float(a["price"]) for a in asks), default=None)
+    # tick_size must be the STRING key ROUNDING_CONFIG expects ('0.01'), not float.
+    # Prefer authoritative get_tick_size(); fall back to book/params only if it fails.
+    try:
+        tick_str = c.get_tick_size(token)
+    except Exception:
+        tick_str = str(ob.get("tick_size") or (params or {}).get("tick_size")
+                       or mkt.get("tick_size") or "0.01")
+    tick = float(tick_str)                               # float for offset arithmetic only
+    book_mid = (best_bid + best_ask) / 2 if (best_bid and best_ask) else mid
+
+    def _round(x):
+        return round(round(x / tick) * tick, 4)
+
+    # Plan-driven offsets/sizes (from inventory_manage). Default = symmetric.
+    plan = plan or {}
+    bid_off = float(plan.get("bid_offset", QUOTE_OFFSET))
+    ask_off = float(plan.get("ask_offset", QUOTE_OFFSET))
+    bid_size = float(plan.get("bid_size", mkt["min_size"]))
+    ask_size = float(plan.get("ask_size", mkt["min_size"]))
+
+    our_bid = _round(book_mid - bid_off)
+    our_ask = _round(book_mid + ask_off)
+    # neg_risk from params (authoritative), not stale mkt['params'].
+    neg_risk = bool((params or mkt.get("params") or {}).get("neg_risk", False))
+    opts = PartialCreateOrderOptions(tick_size=tick_str, neg_risk=neg_risk)
+
+    crosses_bid = (best_ask is not None) and (our_bid >= best_ask)
+    crosses_ask = (best_bid is not None) and (our_ask <= best_bid)
+
+    # corridor guard: a leg outside max_spread earns 0 reward but still risks an
+    # adverse fill. Skip it rather than rest a rewardless order.
+    ms = (params or {}).get("max_spread")
+    if ms is None:
+        ms = mkt.get("max_spread")
+    bid_spread_c = (book_mid - our_bid) * 100.0
+    ask_spread_c = (our_ask - book_mid) * 100.0
+    bid_out = (ms is not None) and (bid_spread_c > ms)
+    ask_out = (ms is not None) and (ask_spread_c > ms)
+
+    bid_id = ask_id = None
+
+    # BID leg (BUY at our_bid) — skip if plan zeroed it, crosses, or leaves corridor.
+    if bid_size <= 0:
+        log(f"[place_two_sided] BID suppressed by plan (skew={plan.get('skew')})")
+    elif crosses_bid:
+        log(f"[place_two_sided] BID @ {our_bid} would cross best_ask={best_ask} "
+            f"-> SKIP leg this tick (no taker fill)")
+    elif bid_out:
+        log(f"[place_two_sided] BID @ {our_bid} spread={bid_spread_c:.2f}c > max_spread={ms}c "
+            f"-> SKIP leg (rewardless)")
+    else:
+        try:
+            bid_args = OrderArgsV2(token_id=token, price=our_bid, size=bid_size, side=BUY)
+            signed_bid = c.create_order(bid_args, opts)
+            resp_bid = c.post_order(signed_bid, order_type=OrderType.GTC)
+            bid_id = resp_bid.get("orderID") if isinstance(resp_bid, dict) else None
+            log(f"[place_two_sided] BID posted @ {our_bid} size={bid_size} "
+                f"id={bid_id} resp={resp_bid}")
+        except Exception as e:
+            log(f"[place_two_sided] BID post error (raw, not auto-fixed): {e}")
+
+    # ASK leg (SELL at our_ask) — skip if plan zeroed it, crosses, or leaves corridor.
+    if ask_size <= 0:
+        log(f"[place_two_sided] ASK suppressed by plan (skew={plan.get('skew')})")
+    elif crosses_ask:
+        log(f"[place_two_sided] ASK @ {our_ask} would cross best_bid={best_bid} "
+            f"-> SKIP leg this tick (no taker fill)")
+    elif ask_out:
+        log(f"[place_two_sided] ASK @ {our_ask} spread={ask_spread_c:.2f}c > max_spread={ms}c "
+            f"-> SKIP leg (rewardless)")
+    else:
+        try:
+            ask_args = OrderArgsV2(token_id=token, price=our_ask, size=ask_size, side=SELL)
+            signed_ask = c.create_order(ask_args, opts)
+            resp_ask = c.post_order(signed_ask, order_type=OrderType.GTC)
+            ask_id = resp_ask.get("orderID") if isinstance(resp_ask, dict) else None
+            log(f"[place_two_sided] ASK posted @ {our_ask} size={ask_size} "
+                f"id={ask_id} resp={resp_ask}")
+        except Exception as e:
+            log(f"[place_two_sided] ASK post error (raw, not auto-fixed): {e}")
+
+    return (bid_id, ask_id)
 
 
 def cancel_quotes(c, order_ids):
@@ -290,8 +388,15 @@ def cancel_quotes(c, order_ids):
     if DRY_RUN:
         log(f"[DRY_RUN] would cancel {order_ids}")
         return
-    # STUB: for oid in order_ids: c.cancel_order(oid)
-    raise NotImplementedError("cancel_quotes live path")
+    # ── LIVE PATH ──: cancel each leg by id. None-id legs (skipped/unposted) ignored.
+    for oid in (order_ids or ()):
+        if not oid or (isinstance(oid, str) and oid.startswith("dry_")):
+            continue
+        try:
+            resp = c.cancel_order(OrderPayload(orderID=oid))
+            log(f"[cancel_quotes] cancelled {oid} resp={resp}")
+        except Exception as e:
+            log(f"[cancel_quotes] cancel {oid} error (raw, not auto-fixed): {e}")
 
 
 def check_fills(c, condition_id, funder, after_ts):
@@ -315,14 +420,19 @@ def check_fills(c, condition_id, funder, after_ts):
     # first real fill: dump raw element ONCE so we can confirm schema on D3.
     log(f"[check_fills] RAW first trade element: {trades[0]}")
     newest = after_ts
+    max_ts = after_ts
     for tr in trades:
         ts = tr.get("match_time") or tr.get("timestamp") or tr.get("created_at")
         try:
             ts = int(ts)
-            if ts > newest:
-                newest = ts
+            if ts > max_ts:
+                max_ts = ts
         except (TypeError, ValueError):
             pass
+    # Advance cursor strictly PAST the newest trade. Many trade APIs treat `after`
+    # as inclusive (>=), which would re-return the same fills every tick and make
+    # the daemon re-quote forever on one stale fill. +1s guarantees progress.
+    newest = max_ts + 1 if max_ts > after_ts else after_ts
     return trades, newest
 
 
@@ -380,7 +490,10 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
     Read-only by effect.
     """
     min_sz = float(mkt.get("min_size") or 0)
-    dead = min_sz / 2.0
+    # Deadband set to 1.5x min_size: the bootstrap ASK-leg inventory (~min_size shares,
+    # intentionally bought to seed the two-sided quote) must NOT be treated as an adverse
+    # imbalance. Only inventory that grows BEYOND the seeded leg (real adverse fills) skews.
+    dead = float(mkt.get("inv_deadband") or (min_sz * 1.5))
     off = float(QUOTE_OFFSET)
     ms = params.get("max_spread")
     plan = {"bid_offset": off, "ask_offset": off,
@@ -448,7 +561,7 @@ def heartbeat(ready=False):
 # ─────────────────────────── MAIN LOOP ────────────────────────────────
 def main():
     if '--diag' in sys.argv:
-        log(f"DB_URL: {mask_db_url(DB_URL)}  DRY_RUN={DRY_RUN}")
+        log(f"DRY_RUN={DRY_RUN}")
         try:
             c = build_client()
             log(f"Client address: {c.get_address()}  FUNDER: {FUNDER}")
@@ -458,9 +571,9 @@ def main():
             log(f"Client diag error: {e}")
             sys.exit(1)
 
-    log(f"Starting farming daemon (acc2), DRY_RUN={DRY_RUN}, DB={mask_db_url(DB_URL)}")
+    log(f"Starting farming daemon (acc2), DRY_RUN={DRY_RUN})")
     c = build_client()
-    if DRY_RUN and not os.path.exists(KEY_PATH):
+    if DRY_RUN and not os.path.exists(ENV_PATH):
         log("Client ready (read-only, no address — DRY_RUN no-key mode)")
     else:
         log(f"Client ready, address={c.get_address()}")
@@ -477,12 +590,7 @@ def main():
     tick_n = 0
 
     while True:
-        conn = None
         try:
-            if DB_URL:
-                conn = get_db_conn()
-            elif tick_n == 0:
-                log("[DRY_RUN] DB_URL absent -> DB-less mode (heartbeat skipped)")
             tick_n += 1
             for mkt in MARKETS:
                 st = state[mkt["token"]]
@@ -492,9 +600,16 @@ def main():
                 if st["params"] is None or tick_n % PARAM_REFRESH == 0:
                     p = load_reward_params(c, mkt)
                     if p is None:
+                        # Lost params: cancel any resting legs so they don't sit
+                        # unmanaged (adverse-fill risk) while we're blind. Then skip.
+                        if st["ids"] is not None:
+                            cancel_quotes(c, st["ids"])
+                            st["ids"] = None
+                            st["center"] = None
                         log(f"[SKIP] {mkt['name']} params unavailable this tick")
                         continue
                     st["params"] = p
+                    mkt["params"] = p   # expose to place_two_sided live path (neg_risk, tick)
                     if mkt.get("max_spread") is None:
                         mkt["max_spread"] = p.get("max_spread")
                     st["be"] = compute_break_even(p.get("max_spread"), QUOTE_OFFSET)
@@ -510,6 +625,20 @@ def main():
                 plan = None
                 if fills or (st["inv"] is not None and abs(st["inv"]) > (mkt.get("min_size") or 0)/2.0):
                     plan = inventory_manage(c, mkt, st["inv"], mid, params)
+
+                # 3b. reward-score estimate (Step A). This is the daemon's PRIMARY
+                #     metric — what fraction of the LP reward pool our quote earns.
+                #     Computed every tick from the live book so D3 has a time series.
+                score = None
+                ms_now = params.get("max_spread")
+                if ms_now is not None:
+                    try:
+                        depth = read_book_depth(c, token, mid, ms_now)
+                        score = estimate_share(depth, float(mkt["min_size"]),
+                                               QUOTE_OFFSET * 100.0, ms_now)
+                    except Exception as e:
+                        throttled_log(f"score_err:{token}",
+                                      f"[score] estimate failed (raw): {e}", seconds=300)
 
                 # 4. drift check -> re-quote (asymmetric if plan skewed).        [NEW]
                 #    Requote ONLY past REQUOTE_FRAC*be_margin: epoch score is
@@ -528,14 +657,16 @@ def main():
                 if need_requote:
                     if st["ids"] is not None:
                         cancel_quotes(c, st["ids"])
-                    st["ids"] = place_two_sided(c, mkt, mid)   # DRY: validates vs live book
+                    st["ids"] = place_two_sided(c, mkt, mid, plan=plan, params=params)
                     st["center"] = mid
                     action = f"REQUOTE (skew={plan.get('skew') if plan else 'flat'})"
                 else:
                     action = "HOLD (resting, accruing reward)"
 
+                share_txt = (f"share_avg={score['share_avg']:.4f}"
+                             if score else "share_avg=n/a")
                 tick_line = (f"[TICK {tick_n}] {mkt['name']} mid={mid:.4f} center={st['center']:.4f} "
-                             f"be_margin={be_margin} inv={st['inv']} share_note=see estimate_share "
+                             f"be_margin={be_margin} inv={st['inv']} {share_txt} "
                              f"-> {action}")
                 if action.startswith("HOLD"):
                     # steady state: collapse repeated HOLD ticks per market
@@ -544,17 +675,10 @@ def main():
                     log(tick_line)   # REQUOTE / skew — always surface
 
             heartbeat(ready=(tick_n == 1))   # [NEW] systemd watchdog ping (variant B)
-            if conn is not None:
-                conn.close()
             time.sleep(POLL_INTERVAL)
 
         except Exception as e:
             log(f"ERROR (raw, not auto-fixed): {e}")
-            try:
-                if conn is not None:
-                    conn.close()
-            except Exception:
-                pass
             time.sleep(30)
 
 

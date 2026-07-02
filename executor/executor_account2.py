@@ -136,7 +136,7 @@ def build_signed_order(c: ClobClient, tick):
         size=ORDER["size"],
         side=ORDER["side"],
     )
-    opts = PartialCreateOrderOptions(tick_size=tick, neg_risk=True)
+    opts = PartialCreateOrderOptions(tick_size=tick, neg_risk=False)
     signed = c.create_order(args, opts)
     return signed
 

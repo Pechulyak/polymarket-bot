@@ -340,7 +340,8 @@
 | LIVE-005 | on-chain balance-gate + фикс $1 | feature:live-execution | DONE |
 | LIVE-006 | Версионирование executor-кода: папка executor/ в репо) | feature:live-execution | DONE |
 | FARM-001 | Farming daemon: on-chain inventory, throttle, systemd | feature:liquidity-farming | IN_PROGRESS |
+| FARM-002 | Farming live: two-sided maker, smoke+scoring | feature:liquidity-farming | DONE |
 
 ---
 
-*Обновлено: 2026-06-30*
+*Обновлено: 2026-07-01*
