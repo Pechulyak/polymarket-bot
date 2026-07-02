@@ -16,7 +16,7 @@ from py_clob_client_v2 import (
     ClobClient, OrderArgsV2, OrderType, PartialCreateOrderOptions, OrderPayload,
 )
 from py_clob_client_v2.order_builder.constants import BUY, SELL
-import requests, os, sys, time, re
+import requests, os, sys, time, re, json
 from datetime import datetime, timezone
 from web3 import Web3
 
@@ -47,10 +47,11 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 LOG_FILE = "/opt/executor/logs/farming_daemon.log"
 
 # ─────────────────────────── FARMING PARAMS ──────────────────────────
-DRY_RUN = False                      # LIVE: D3 prototype run (farming, acc2)
+DRY_RUN = True                       # FARM-003: post-incident default. LIVE flip = separate confirmed step.
 POLL_INTERVAL   = 10                 # seconds between ticks
-QUOTE_OFFSET    = 0.015              # CONFIRMED 2026-07-01: 1.5c/leg start (opt blocked until D3 fill-freq)
-REQUOTE_FRAC    = 0.6                # [NEW] re-quote when drift >= REQUOTE_FRAC * BE_move
+QUOTE_OFFSET    = 0.02               # FARM-003 F2: offset MUST exceed requote threshold (incident root #1)
+REQUOTE_FRAC    = 0.4                # FARM-003 F2: threshold = 0.4 * be_margin(2.5c) = 1.0c < 2.0c offset
+STATE_FILE      = "/opt/executor/app/farming_state.json"  # FARM-003: last_ts persistence across restarts
 
 # Target markets (from Step A/B recon). size = shares per leg.
 # TODO CONFIRM: sizing, market selection, whether Fed#2 included alongside US x Iran.
@@ -59,6 +60,8 @@ MARKETS = [
         "name":  "US x Iran meeting",
         "token": "95676548525614691656970153001244738030704823210041753577158504248850005676647",
         "min_size": 200,             # shares per leg
+        "inv_center": 200,           # FARM-003 F4: target seed inventory backing the ASK leg
+                                     #   inventory deviation is measured from HERE, not from 0
         # max_spread / reward_daily filled at runtime from get_market()
     },
     # {"name": "Fed Pause x3 #2", "token": "9517687...", "min_size": 50},
@@ -101,6 +104,28 @@ def throttled_log(key, msg, seconds=300):
         return
     _throttle_state[key] = now
     log(msg)
+
+
+def load_state_file():
+    """[FARM-003] last_ts persistence: restart must NOT re-read history as fresh
+    fills (bootstrap-as-fill bug, FARM-001 debt). Returns {} on any failure."""
+    try:
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_state_file(state):
+    """[FARM-003] Atomic write (tmp+replace) of per-token cursors. Never raises."""
+    try:
+        data = {tok: {"last_ts": st.get("last_ts", 0)} for tok, st in state.items()}
+        tmp = STATE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, STATE_FILE)
+    except Exception as e:
+        throttled_log("state_save_err", f"[state] save failed (raw): {e}", 300)
 
 
 def _load_signer_key() -> str:
@@ -236,7 +261,7 @@ def estimate_share(depth, size, offset_cents, max_spread):
 
 
 # ─────────────────────── QUOTING CORE [NEW] ──────────────────────────
-def place_two_sided(c, mkt, mid, plan=None, params=None):
+def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None):
     """[NEW] Place BID @ mid-offset and ASK @ mid+offset, both GTC maker.
     Returns (bid_order_id, ask_order_id). Uses OrderArgsV2 + post_order(GTC)
     like copy-daemon line 361-364, but TWO legs and anchored at mid, not best_bid.
@@ -325,6 +350,22 @@ def place_two_sided(c, mkt, mid, plan=None, params=None):
     neg_risk = bool((params or mkt.get("params") or {}).get("neg_risk", False))
     opts = PartialCreateOrderOptions(tick_size=tick_str, neg_risk=neg_risk)
 
+    # FARM-003 F3: never post an ASK the on-chain inventory can't back.
+    # Incident: ASK 200 posted at inv=0.03 -> API 400 swallowed -> phantom
+    # 'two-sided' state. Rule: cap ask_size by inventory; below reward min_size
+    # the leg earns nothing -> conscious one-sided mode instead of 400-spam.
+    if ask_size > 0 and inv is not None:
+        backable = max(0.0, float(inv))
+        if backable < ask_size:
+            if backable >= float(mkt["min_size"]):
+                log(f"[place_two_sided] ASK size capped by inventory: "
+                    f"{ask_size} -> {backable:.2f}")
+                ask_size = float(int(backable))  # whole shares, stay under balance
+            else:
+                notify(f"[farm] ASK skipped: inventory {backable:.2f} < min_size "
+                       f"{mkt['min_size']} -> ONE-SIDED mode (1/3 score) on {mkt['name']}")
+                ask_size = 0.0
+
     crosses_bid = (best_ask is not None) and (our_bid >= best_ask)
     crosses_ask = (best_bid is not None) and (our_ask <= best_bid)
 
@@ -358,7 +399,7 @@ def place_two_sided(c, mkt, mid, plan=None, params=None):
             log(f"[place_two_sided] BID posted @ {our_bid} size={bid_size} "
                 f"id={bid_id} resp={resp_bid}")
         except Exception as e:
-            log(f"[place_two_sided] BID post error (raw, not auto-fixed): {e}")
+            notify(f"[farm] BID post FAILED on {mkt['name']} (raw, not auto-fixed): {e}")
 
     # ASK leg (SELL at our_ask) — skip if plan zeroed it, crosses, or leaves corridor.
     if ask_size <= 0:
@@ -378,7 +419,7 @@ def place_two_sided(c, mkt, mid, plan=None, params=None):
             log(f"[place_two_sided] ASK posted @ {our_ask} size={ask_size} "
                 f"id={ask_id} resp={resp_ask}")
         except Exception as e:
-            log(f"[place_two_sided] ASK post error (raw, not auto-fixed): {e}")
+            notify(f"[farm] ASK post FAILED on {mkt['name']} (raw, not auto-fixed): {e}")
 
     return (bid_id, ask_id)
 
@@ -399,6 +440,62 @@ def cancel_quotes(c, order_ids):
             log(f"[cancel_quotes] cancel {oid} error (raw, not auto-fixed): {e}")
 
 
+def reconcile_orders(c, token, st, min_size):
+    """[FARM-003 F1+F5] The BOOK is the source of truth, not in-memory st['ids'].
+    Incident 2026-07-02: restart lost st['ids'] -> orphan BUY@0.60 rested 8h;
+    rejected ASK left daemon 'two-sided' in its head, one-sided in the book.
+
+    Per tick (live only):
+      - ORPHANS: live orders on this token NOT tracked in st['ids'] -> cancel
+        (restart survivors / lost-cancel leftovers). Forces requote.
+      - MISSING: tracked ids gone from the book (filled or rejected) -> forces
+        requote so the eaten/failed leg is restored immediately.
+      - F5: a tracked leg whose remaining size < reward min_size earns ZERO
+        reward while still fill-exposed -> forces requote (cancel+replace full).
+      - ONE-SIDED: <2 sides live while quotes expected -> flagged (1/3 score);
+        NOT a requote trigger by itself (deliberate skip when inventory short —
+        requoting every tick would burn accrued score).
+    Returns {'one_sided': bool, 'force_requote': bool}. Read-only except
+    orphan cancellation. Never raises."""
+    out = {"one_sided": False, "force_requote": False}
+    if DRY_RUN or st["ids"] is None:
+        return out
+    try:
+        live = [o for o in (c.get_open_orders() or [])
+                if o.get("asset_id") == token]
+    except Exception as e:
+        throttled_log(f"reconcile_err:{token}",
+                      f"[reconcile] get_open_orders error (raw, not auto-fixed): {e}",
+                      seconds=300)
+        return out
+    tracked = set(x for x in (st["ids"] or ()) if x and not str(x).startswith("dry_"))
+    live_ids, sides = set(), set()
+    for o in live:
+        oid = o.get("id") or o.get("order_id")
+        live_ids.add(oid)
+        if oid not in tracked:
+            log(f"[reconcile] ORPHAN {o.get('side')} @ {o.get('price')} id={oid} -> cancel")
+            cancel_quotes(c, (oid,))
+            out["force_requote"] = True
+            continue
+        sides.add(o.get("side"))
+        try:
+            rem = float(o.get("original_size", 0)) - float(o.get("size_matched", 0))
+        except (TypeError, ValueError):
+            rem = None
+        if rem is not None and rem < float(min_size):
+            log(f"[reconcile] leg {o.get('side')} remaining={rem} < min_size={min_size} "
+                f"-> rewardless but fill-exposed, force requote (F5)")
+            out["force_requote"] = True
+    if tracked - live_ids:
+        log(f"[reconcile] tracked leg(s) missing from book (filled/rejected): "
+            f"{sorted(tracked - live_ids)} -> force requote")
+        out["force_requote"] = True
+    if len(sides) < 2:
+        out["one_sided"] = True
+    return out
+
+
 def check_fills(c, condition_id, funder, after_ts):
     """[NEW] Detect adverse fills via get_trades() (NOT get_order — empty docstr).
     Fill = adverse selection event, NOT success. Filters our maker trades on this
@@ -417,8 +514,9 @@ def check_fills(c, condition_id, funder, after_ts):
         return [], after_ts
     if not trades:
         return [], after_ts
-    # first real fill: dump raw element ONCE so we can confirm schema on D3.
-    log(f"[check_fills] RAW first trade element: {trades[0]}")
+    # raw element for schema audit — throttled (was: logged on EVERY non-empty batch)
+    throttled_log(f"raw_trade:{condition_id}",
+                  f"[check_fills] RAW first trade element: {trades[0]}", seconds=3600)
     newest = after_ts
     max_ts = after_ts
     for tr in trades:
@@ -490,33 +588,44 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
     Read-only by effect.
     """
     min_sz = float(mkt.get("min_size") or 0)
-    # Deadband set to 1.5x min_size: the bootstrap ASK-leg inventory (~min_size shares,
-    # intentionally bought to seed the two-sided quote) must NOT be treated as an adverse
-    # imbalance. Only inventory that grows BEYOND the seeded leg (real adverse fills) skews.
-    dead = float(mkt.get("inv_deadband") or (min_sz * 1.5))
+    # FARM-003 F4 (incident root #5): a two-sided farm on a binary token NEEDS
+    # shares to back the ASK, so the equilibrium inventory is the SEED
+    # (inv_center ~= min_size), NOT zero. Old model (center=0, dead=1.5*min_size)
+    # made the 236->0 drain invisible: skew never fired, ASK sold to depletion.
+    # Deviation is measured from inv_center; deadband 0.5*min_size.
+    center = float(mkt.get("inv_center") or 0)
+    dead = float(mkt.get("inv_deadband") or (min_sz * 0.5))
     off = float(QUOTE_OFFSET)
     ms = params.get("max_spread")
     plan = {"bid_offset": off, "ask_offset": off,
             "bid_size": min_sz, "ask_size": min_sz, "skew": "flat"}
     if inv_shares is None:
-        log("[inventory_manage] inventory unknown -> hold symmetric (no skew)")
+        throttled_log(f"invmgr_unknown:{mkt['token']}",
+                      "[inventory_manage] inventory unknown -> hold symmetric (no skew)",
+                      seconds=300)
         return plan
-    if inv_shares > dead:
-        # LONG: pull ASK closer to mid to sell, suppress BID
+    delta = inv_shares - center
+    if delta > dead:
+        # ABOVE seed (adverse BID fills accumulated): pull ASK toward mid to
+        # unload the excess, suppress BID (stop accumulating).
         tighter = max(off / 2.0, 0.005)
         plan.update(ask_offset=tighter, bid_size=0.0, skew="long_unload")
-    elif inv_shares < -dead:
-        # SHORT: pull BID closer to mid to buy back, suppress ASK
+    elif delta < -dead:
+        # BELOW seed (ASK drained): pull BID toward mid to REBUY the seed,
+        # ASK sizing handled by F3 cap (posts only what inventory can back).
         tighter = max(off / 2.0, 0.005)
-        plan.update(bid_offset=tighter, ask_size=0.0, skew="short_cover")
+        plan.update(bid_offset=tighter, skew="reseed_buy")
     # corridor guard: never propose an offset outside max_spread
     if ms is not None:
         cap = (ms / 100.0)
         plan["bid_offset"] = min(plan["bid_offset"], cap)
         plan["ask_offset"] = min(plan["ask_offset"], cap)
-    log(f"[inventory_manage] inv={inv_shares:.2f} dead=+/-{dead} -> skew={plan['skew']} "
-        f"bid_off={plan['bid_offset']} ask_off={plan['ask_offset']} "
-        f"bid_sz={plan['bid_size']} ask_sz={plan['ask_size']}")
+    # skew changes surface immediately (key includes skew); flat steady-state throttled
+    throttled_log(f"invmgr:{mkt['token']}:{plan['skew']}",
+                  f"[inventory_manage] inv={inv_shares:.2f} center={center} dead=+/-{dead} "
+                  f"delta={delta:.2f} -> skew={plan['skew']} "
+                  f"bid_off={plan['bid_offset']} ask_off={plan['ask_offset']} "
+                  f"bid_sz={plan['bid_size']} ask_sz={plan['ask_size']}", seconds=300)
     return plan
 
 
@@ -583,9 +692,14 @@ def main():
     #   be         : corridor-margin dict from compute_break_even
     #   params     : cached reward params (refreshed each PARAM_REFRESH ticks)
     #   inv        : last-read inventory (YES shares)  |  last_ts: get_trades cursor
+    persisted = load_state_file()   # FARM-003: survive restarts (bootstrap-as-fill fix)
     state = {m["token"]: {"center": None, "ids": None, "be": None,
-                          "params": None, "inv": 0.0, "last_ts": 0}
+                          "params": None, "inv": 0.0,
+                          "last_ts": int((persisted.get(m["token"]) or {}).get("last_ts", 0))}
              for m in MARKETS}
+    if persisted:
+        log(f"[state] restored cursors: "
+            f"{ {t: s['last_ts'] for t, s in state.items()} }")
     PARAM_REFRESH = 30          # re-read reward params every N ticks
     tick_n = 0
 
@@ -613,6 +727,16 @@ def main():
                     if mkt.get("max_spread") is None:
                         mkt["max_spread"] = p.get("max_spread")
                     st["be"] = compute_break_even(p.get("max_spread"), QUOTE_OFFSET)
+                    # FARM-003 F2 invariant (incident root #1): the requote
+                    # threshold must sit STRICTLY BELOW the quote offset,
+                    # otherwise mid can drift through a leg before we reposition.
+                    if st["be"] is not None:
+                        thr = REQUOTE_FRAC * st["be"]["be_margin_cents"]
+                        if thr >= QUOTE_OFFSET * 100.0:
+                            notify(f"[farm] F2 INVARIANT VIOLATED on {mkt['name']}: "
+                                   f"requote_threshold={thr:.2f}c >= offset="
+                                   f"{QUOTE_OFFSET*100:.2f}c — legs can be drifted "
+                                   f"through before requote. Fix params.")
                 params = st["params"]
 
                 # 2. midpoint                                                    [NEW]
@@ -622,9 +746,22 @@ def main():
                 fills, st["last_ts"] = check_fills(
                     c, params["condition_id"], FUNDER, st["last_ts"])
                 st["inv"] = read_inventory(c, token)
-                plan = None
-                if fills or (st["inv"] is not None and abs(st["inv"]) > (mkt.get("min_size") or 0)/2.0):
-                    plan = inventory_manage(c, mkt, st["inv"], mid, params)
+                if fills:
+                    # fill = adverse selection event; operator must hear about it
+                    # from the daemon, not from a CSV export the next morning.
+                    notify(f"[farm] fill(s) detected on {mkt['name']}: "
+                           f"n={len(fills)} inv_now={st['inv']}")
+                # plan is cheap and read-only -> compute whenever inventory known
+                plan = inventory_manage(c, mkt, st["inv"], mid, params) \
+                    if st["inv"] is not None else None
+
+                # 3a. reconcile book vs memory (F1/F5): orphans, missing legs,
+                #     undersized legs, one-sided state.                    [FARM-003]
+                rec = reconcile_orders(c, token, st, float(mkt["min_size"]))
+                if rec["one_sided"]:
+                    throttled_log(f"one_sided:{token}",
+                                  f"[reconcile] ONE-SIDED quoting on {mkt['name']} "
+                                  f"(1/3 reward score), inv={st['inv']}", seconds=1800)
 
                 # 3b. reward-score estimate (Step A). This is the daemon's PRIMARY
                 #     metric — what fraction of the LP reward pool our quote earns.
@@ -647,8 +784,12 @@ def main():
                 need_requote = False
                 if st["center"] is None:
                     need_requote = True
-                elif plan is not None and plan.get("skew") != "flat":
-                    need_requote = True     # inventory skew -> reposition
+                elif fills or rec["force_requote"]:
+                    need_requote = True     # eaten/failed/orphan/undersized leg -> restore now
+                elif plan is not None and plan.get("skew") != st.get("last_skew", "flat"):
+                    need_requote = True     # skew CHANGED -> reposition once
+                    # (steady skew must NOT requote every tick — cancel/replace
+                    #  each 10s burns the accrued per-minute epoch score)
                 elif be_margin is not None:
                     drift_c = abs(mid - st["center"]) * 100.0
                     if drift_c >= REQUOTE_FRAC * be_margin:
@@ -657,11 +798,13 @@ def main():
                 if need_requote:
                     if st["ids"] is not None:
                         cancel_quotes(c, st["ids"])
-                    st["ids"] = place_two_sided(c, mkt, mid, plan=plan, params=params)
+                    st["ids"] = place_two_sided(c, mkt, mid, plan=plan, params=params,
+                                                inv=st["inv"])
                     st["center"] = mid
                     action = f"REQUOTE (skew={plan.get('skew') if plan else 'flat'})"
                 else:
                     action = "HOLD (resting, accruing reward)"
+                st["last_skew"] = plan.get("skew") if plan else "flat"
 
                 share_txt = (f"share_avg={score['share_avg']:.4f}"
                              if score else "share_avg=n/a")
@@ -674,6 +817,7 @@ def main():
                 else:
                     log(tick_line)   # REQUOTE / skew — always surface
 
+            save_state_file(state)           # [FARM-003] persist cursors (atomic)
             heartbeat(ready=(tick_n == 1))   # [NEW] systemd watchdog ping (variant B)
             time.sleep(POLL_INTERVAL)
 
