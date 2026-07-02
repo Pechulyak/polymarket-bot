@@ -14,6 +14,7 @@ New farming logic is marked [NEW]. Money-adjacent config marked # TODO CONFIRM.
 """
 from py_clob_client_v2 import (
     ClobClient, OrderArgsV2, OrderType, PartialCreateOrderOptions, OrderPayload,
+    OrderScoringParams,  # [FARM-004] is_order_scoring(OrderScoringParams(orderId=))
 )
 from py_clob_client_v2.order_builder.constants import BUY, SELL
 import requests, os, sys, time, re, json
@@ -47,7 +48,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 LOG_FILE = "/opt/executor/logs/farming_daemon.log"
 
 # ─────────────────────────── FARMING PARAMS ──────────────────────────
-DRY_RUN = True                       # FARM-003: post-incident default. LIVE flip = separate confirmed step.
+DRY_RUN = False                       # FARM-003: post-incident default. LIVE flip = separate confirmed step.
 POLL_INTERVAL   = 10                 # seconds between ticks
 QUOTE_OFFSET    = 0.02               # FARM-003 F2: offset MUST exceed requote threshold (incident root #1)
 REQUOTE_FRAC    = 0.4                # FARM-003 F2: threshold = 0.4 * be_margin(2.5c) = 1.0c < 2.0c offset
@@ -106,20 +107,64 @@ def throttled_log(key, msg, seconds=300):
     log(msg)
 
 
+# [FARM-004] Edge-triggered operator alerts. State is per-alert-key bool:
+#   None = unknown (startup), True = bad, False = ok.
+# notify() fires on: bad->ok (recovery, always), ok->bad / None->bad (onset),
+#   and bad->bad only past `cooldown` (re-nudge for a persistent problem).
+# ok->ok is silent. Liveness rule: never raises (an alert bug must not kill
+# the loop). DRY: callers gate on `not DRY_RUN`, so all three are no-op in DRY.
+_alert_state = {}          # key -> last bool (None until first observation)
+_alert_last_bad = {}       # key -> monotonic ts of last bad-notify (cooldown)
+
+def edge_notify(key, is_bad, msg_bad, msg_ok, cooldown=1800):
+    """Fire notify() only on state transitions (+ throttled re-nudge while bad).
+    Returns None. Never raises."""
+    try:
+        prev = _alert_state.get(key)          # None / False / True
+        now = time.time()
+        if is_bad:
+            if prev is not True:
+                # onset (None->bad or ok->bad): always notify, arm cooldown
+                notify(msg_bad)
+                _alert_last_bad[key] = now
+            elif now - _alert_last_bad.get(key, 0) >= cooldown:
+                # still bad after cooldown: one re-nudge (not per-tick spam)
+                notify(msg_bad)
+                _alert_last_bad[key] = now
+        else:
+            if prev is True:
+                # recovery bad->ok: always notify. None->ok stays silent.
+                notify(msg_ok)
+        _alert_state[key] = is_bad
+    except Exception as e:
+        log(f"[edge_notify] raw (not auto-fixed): {e}")
+
+
 def load_state_file():
     """[FARM-003] last_ts persistence: restart must NOT re-read history as fresh
-    fills (bootstrap-as-fill bug, FARM-001 debt). Returns {} on any failure."""
+    fills (bootstrap-as-fill bug, FARM-001 debt). Also restores alert latch state.
+    Returns {} on any failure."""
     try:
         with open(STATE_FILE) as f:
-            return json.load(f)
+            data = json.load(f)
+        # Restore persisted alert latch state
+        alerts = data.get("_alerts", {})
+        global _alert_state
+        _alert_state = {k: bool(v) for k, v in alerts.items()}
+        return data
     except Exception:
         return {}
 
 
 def save_state_file(state):
-    """[FARM-003] Atomic write (tmp+replace) of per-token cursors. Never raises."""
+    """[FARM-003] Atomic write (tmp+replace) of per-token cursors + alert latch.
+    Never raises."""
     try:
-        data = {tok: {"last_ts": st.get("last_ts", 0)} for tok, st in state.items()}
+        # Token cursors
+        token_data = {tok: {"last_ts": st.get("last_ts", 0)} for tok, st in state.items()}
+        # Alert latch: only the bool state (not _alert_last_bad timestamps)
+        alert_data = {"_alerts": dict(_alert_state)}
+        data = {**token_data, **alert_data}
         tmp = STATE_FILE + ".tmp"
         with open(tmp, "w") as f:
             json.dump(data, f)
@@ -362,8 +407,8 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None):
                     f"{ask_size} -> {backable:.2f}")
                 ask_size = float(int(backable))  # whole shares, stay under balance
             else:
-                notify(f"[farm] ASK skipped: inventory {backable:.2f} < min_size "
-                       f"{mkt['min_size']} -> ONE-SIDED mode (1/3 score) on {mkt['name']}")
+                log(f"[place_two_sided] ASK skipped: inventory {backable:.2f} < min_size "
+                    f"{mkt['min_size']} -> ONE-SIDED mode (1/3 score) on {mkt['name']}")
                 ask_size = 0.0
 
     crosses_bid = (best_ask is not None) and (our_bid >= best_ask)
@@ -398,8 +443,40 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None):
             bid_id = resp_bid.get("orderID") if isinstance(resp_bid, dict) else None
             log(f"[place_two_sided] BID posted @ {our_bid} size={bid_size} "
                 f"id={bid_id} resp={resp_bid}")
+            # Recovery after balance rejection: next successful BID clears the latch
+            edge_notify(f"balance_reject:{token}", False,
+                        "", "", cooldown=0)
         except Exception as e:
-            notify(f"[farm] BID post FAILED on {mkt['name']} (raw, not auto-fixed): {e}")
+            # Check for balance rejection: extract available/needed from error message
+            err_str = str(e)
+            if "not enough balance" in err_str.lower() or "insufficient" in err_str.lower():
+                # Parse free/need/active from actual API error fields:
+                # "balance: 171673465, sum of active orders: 124000000, order amount (inc. fees): 124000000"
+                free = need = active = None
+                try:
+                    import re
+                    # free = balance - sum_active (what's available after locking resting orders)
+                    m_bal = re.search(r'balance:\s*([0-9]+)', err_str)
+                    m_act = re.search(r'sum of active orders:\s*([0-9]+)', err_str)
+                    m_amt = re.search(r'order amount[^:]*:\s*([0-9]+)', err_str)
+                    if m_bal and m_act:
+                        balance_raw = float(m_bal.group(1))
+                        sum_active_raw = float(m_act.group(1))
+                        active = sum_active_raw / 1e6
+                        free = (balance_raw - sum_active_raw) / 1e6
+                    if m_amt:
+                        need = float(m_amt.group(1)) / 1e6
+                except Exception:
+                    pass
+                edge_notify(
+                    f"balance_reject:{token}", True,
+                    f"🟠 Заявка отклонена ({mkt['name']}) / "
+                    f"BID не поставлен: старый ордер держит средства. / "
+                    f"Свободно {free} · нужно {need} · в книге {active}",
+                    f"🟢 Заявка принята ({mkt['name']})",
+                    cooldown=0)
+            else:
+                notify(f"[farm] BID post FAILED on {mkt['name']} (raw, not auto-fixed): {e}")
 
     # ASK leg (SELL at our_ask) — skip if plan zeroed it, crosses, or leaves corridor.
     if ask_size <= 0:
@@ -681,6 +758,9 @@ def main():
             sys.exit(1)
 
     log(f"Starting farming daemon (acc2), DRY_RUN={DRY_RUN})")
+    # [FARM-004] Catches "came back up" after crash/restart. The inverse ("went
+    # down") cannot be self-reported by a dead process -> external watcher, FARM-005.
+    notify(f"🟢 Демон поднялся · LIVE (DRY_RUN={DRY_RUN})")
     c = build_client()
     if DRY_RUN and not os.path.exists(ENV_PATH):
         log("Client ready (read-only, no address — DRY_RUN no-key mode)")
@@ -759,9 +839,8 @@ def main():
                 #     undersized legs, one-sided state.                    [FARM-003]
                 rec = reconcile_orders(c, token, st, float(mkt["min_size"]))
                 if rec["one_sided"]:
-                    throttled_log(f"one_sided:{token}",
-                                  f"[reconcile] ONE-SIDED quoting on {mkt['name']} "
-                                  f"(1/3 reward score), inv={st['inv']}", seconds=1800)
+                    log(f"[reconcile] ONE-SIDED quoting on {mkt['name']} "
+                        f"(1/3 reward score), inv={st['inv']}")
 
                 # 3b. reward-score estimate (Step A). This is the daemon's PRIMARY
                 #     metric — what fraction of the LP reward pool our quote earns.
@@ -781,6 +860,11 @@ def main():
                 #    Requote ONLY past REQUOTE_FRAC*be_margin: epoch score is
                 #    per-minute; aggressive cancel/replace burns accrued score.
                 be_margin = (st["be"] or {}).get("be_margin_cents")
+                # [FARM-004] drift_c hoisted out of the requote branch below: the
+                # HARD-DRIFT alert needs it every tick, not only when be_margin
+                # gates a requote. None when no center yet (first tick).
+                drift_c = (abs(mid - st["center"]) * 100.0
+                           if st["center"] is not None else None)
                 need_requote = False
                 if st["center"] is None:
                     need_requote = True
@@ -790,8 +874,7 @@ def main():
                     need_requote = True     # skew CHANGED -> reposition once
                     # (steady skew must NOT requote every tick — cancel/replace
                     #  each 10s burns the accrued per-minute epoch score)
-                elif be_margin is not None:
-                    drift_c = abs(mid - st["center"]) * 100.0
+                elif be_margin is not None and drift_c is not None:
                     if drift_c >= REQUOTE_FRAC * be_margin:
                         need_requote = True
 
@@ -805,6 +888,54 @@ def main():
                 else:
                     action = "HOLD (resting, accruing reward)"
                 st["last_skew"] = plan.get("skew") if plan else "flat"
+
+                # ─── [FARM-004] operator edge-alerts (live only; no-op in DRY) ───
+                if not DRY_RUN and st["ids"] is not None:
+                    # A. ONE-SIDED: onset/recovery with Russian texts (#1/#6), latch persisted.
+                    # Guard: don't fire (or overwrite latch) until daemon has placed legs this run.
+                    mkt_min_sz = float(mkt.get("min_size", 0))
+                    inv_val = st.get("inv")
+                    inv_txt = f"{inv_val:.2f}" if inv_val is not None else "n/a"
+                    edge_notify(
+                        f"one_sided:{token}", rec["one_sided"],
+                        f"🟡 Одна сторона ({mkt['name']}) / Котирую только BID. "
+                        f"Reward ⅓. / Inventory: {inv_txt} / {mkt_min_sz:.0f} YES",
+                        f"🟢 Обе стороны ({mkt['name']}) / BID + ASK активны. Полный reward.",
+                        cooldown=1800)
+
+                    # B. SCORING-LOST: legs alive but outside reward corridor (#2), cooldown=0.
+                    #    Only checked on a settled book (both legs tracked, no requote this tick).
+                    _legs = [x for x in (st["ids"] or ())
+                             if x and not str(x).startswith("dry_")]
+                    if not need_requote and len(_legs) == 2:
+                        try:
+                            results = [c.is_order_scoring(OrderScoringParams(orderId=oid))
+                                       for oid in _legs]
+                            bid_scoring = (results[0].get("scoring", False)
+                                          if results and len(results) > 0 else False)
+                            ask_scoring = (results[1].get("scoring", False)
+                                          if results and len(results) > 1 else False)
+                            not_scoring = not (bid_scoring and ask_scoring)
+                            edge_notify(
+                                f"scoring:{token}", not_scoring,
+                                f"🔴 Скоринг потерян ({mkt['name']}) / "
+                                f"Ордера в книге, вне reward-зоны. / "
+                                f"BID: {'✓' if bid_scoring else '✗'} · ASK: {'✓' if ask_scoring else '✗'}",
+                                f"[OK] scoring restored on {mkt['name']}",
+                                cooldown=0)
+                        except Exception as e:
+                            throttled_log(f"scoring_chk_err:{token}",
+                                          f"[scoring-alert] check failed (raw): {e}",
+                                          seconds=600)
+
+                    # C. HARD-DRIFT: mid this far from center (#3), cooldown=0.
+                    if drift_c is not None:
+                        edge_notify(
+                            f"drift:{token}", drift_c >= 3.0,
+                            f"⚠️ Ордер оторвался от цены ({mkt['name']}) / "
+                            f"Сдвиг {drift_c:.1f}c, requote не сработал.",
+                            f"[OK] drift settled on {mkt['name']} ({drift_c:.1f}c)",
+                            cooldown=0)
 
                 share_txt = (f"share_avg={score['share_avg']:.4f}"
                              if score else "share_avg=n/a")
