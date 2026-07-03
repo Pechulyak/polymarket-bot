@@ -3,6 +3,7 @@
 ## 2026-07-03
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-07-03 | FARM-004e/f/g | 004e: TG-алерты только onset+recovery (re-nudge удалён). 004f (D2): reseed st[ids] при рестарте — усыновление одной лучшей ноги на сторону (drift ≤ REQUOTE_FRAC×QUOTE_OFFSET), прочие cancel; epoch score переживает рестарт (подтверждено деплоем). 004g: ревью-фиксы — unload_id трекается в reconcile (не отменяется как orphan, recovery latch при пропаже из книги, независимая ветка force_requote для прочих ног), st[center] после adoption, DRY_RUN-гейт авторазгрузки |
 | 2026-07-03 | FARM-004c/d | 004c: dynamic BID cap по free cash (read_cash_balance on-chain pUSD), парсер #4 balance-reject. 004d rev.1-5: фикс inv-overshoot при partial fill (инцидент inv=236 02.07): Fix1 — partial BUY не отменяется при drift ≤ REQUOTE_FRAC×QUOTE_OFFSET; Fix2 — overshoot-гейт inv+bid_sz > center+dead, только в skew=reseed_buy (rev.5); Fix3 — авторазгрузка излишка >20 шер maker SELL, Decimal-safe тик-округление (rev.3-4). Деплой подтверждён, two-sided восстановлен |
 
 ## 2026-07

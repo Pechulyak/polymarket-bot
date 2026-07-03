@@ -118,20 +118,16 @@ _alert_state = {}          # key -> last bool (None until first observation)
 _alert_last_bad = {}       # key -> monotonic ts of last bad-notify (cooldown)
 
 def edge_notify(key, is_bad, msg_bad, msg_ok, cooldown=1800):
-    """Fire notify() only on state transitions (+ throttled re-nudge while bad).
+    """[FARM-004e] Fire notify() only on state transitions (onset + recovery).
+    Re-nudge (bad→bad after cooldown) removed. cooldown param kept for call-site compat.
     Returns None. Never raises."""
     try:
         prev = _alert_state.get(key)          # None / False / True
-        now = time.time()
         if is_bad:
             if prev is not True:
-                # onset (None->bad or ok->bad): always notify, arm cooldown
+                # onset (None->bad or ok->bad): always notify
                 notify(msg_bad)
-                _alert_last_bad[key] = now
-            elif now - _alert_last_bad.get(key, 0) >= cooldown:
-                # still bad after cooldown: one re-nudge (not per-tick spam)
-                notify(msg_bad)
-                _alert_last_bad[key] = now
+                _alert_last_bad[key] = time.time()
         else:
             if prev is True:
                 # recovery bad->ok: always notify. None->ok stays silent.
@@ -579,6 +575,10 @@ def reconcile_orders(c, token, st, min_size, mid=None):
                       seconds=300)
         return out
     tracked = set(x for x in (st["ids"] or ()) if x and not str(x).startswith("dry_"))
+    # [FARM-004g B1] also track auto_unload order so it's not cancelled as orphan
+    unload_id = st.get("unload_id")
+    if unload_id and not str(unload_id).startswith("dry_"):
+        tracked.add(unload_id)
     live_ids, sides = set(), set()
     for o in live:
         oid = o.get("id") or o.get("order_id")
@@ -619,9 +619,23 @@ def reconcile_orders(c, token, st, min_size, mid=None):
                     f"-> rewardless but fill-exposed, force requote (F5)")
                 out["force_requote"] = True
     if tracked - live_ids:
-        log(f"[reconcile] tracked leg(s) missing from book (filled/rejected): "
-            f"{sorted(tracked - live_ids)} -> force requote")
-        out["force_requote"] = True
+        missing = tracked - live_ids
+        # [FARM-004g B1] if auto_unload order disappeared -> it was filled/cancelled;
+        # clear st["unload_id"] and fire recovery latch, NO requote for that
+        if unload_id and unload_id in missing:
+            log(f"[reconcile] auto_unload id={unload_id} missing from book "
+                f"(filled/cancelled) -> clear st['unload_id'], recovery latch")
+            st["unload_id"] = None
+            edge_notify(
+                f"auto_unload:{token}", False,
+                f"[auto_unload] pending on {token}",
+                f"[OK] auto_unload resolved on {token} (order disappeared from book)",
+                cooldown=0)
+        rest = missing - {unload_id}
+        if rest:
+            log(f"[reconcile] tracked leg(s) missing from book (filled/rejected): "
+                f"{sorted(rest)} -> force requote")
+            out["force_requote"] = True
     if len(sides) < 2:
         out["one_sided"] = True
     return out
@@ -921,7 +935,7 @@ def main():
                         dead = float(mkt.get("inv_deadband") or (min_sz * 0.5))
                         threshold = center + dead
                         excess = inv_now - center
-                        if inv_now > threshold and excess > 20:
+                        if inv_now > threshold and excess > 20 and not DRY_RUN:
                             # Place auto-unload SELL at mid for excess shares
                             # [FARM-004d rev.2 Правка B] round price UP to nearest tick
                             # (safe for SELL: price must be > mid to not cross the book)
@@ -946,6 +960,7 @@ def main():
                                 log(f"[FARM-004d Fix 3] auto-unload SELL posted @ {sell_price:.4f} "
                                     f"(mid={mid:.4f}, tick={tick}) size={excess:.0f} "
                                     f"id={unload_id} resp={resp_unload}")
+                                st["unload_id"] = unload_id   # [FARM-004g B1]
                                 # One-time TG alert via latch (edge_notify)
                                 edge_notify(
                                     f"auto_unload:{token}", True,
@@ -959,6 +974,79 @@ def main():
                 # plan is cheap and read-only -> compute whenever inventory known
                 plan = inventory_manage(c, mkt, st["inv"], mid, params) \
                     if st["inv"] is not None else None
+
+                # [FARM-004f] Reseed: on first tick after restart st["ids"] is None
+                # (only last_ts is persisted). reconcile_orders exits early for
+                # st["ids"]=None, so orphan orders from the dead process never get
+                # detected. Fix: fetch live orders, adopt ONE per side (closest to
+                # target), cancel all other legs even if within threshold.
+                if st["ids"] is None and not DRY_RUN and mid is not None:
+                    bid_target = mid - float(QUOTE_OFFSET)
+                    ask_target = mid + float(QUOTE_OFFSET)
+                    requote_thr = REQUOTE_FRAC * float(QUOTE_OFFSET)
+                    adopted_ids = []
+                    try:
+                        live = [o for o in (c.get_open_orders() or [])
+                                if o.get("asset_id") == token]
+                    except Exception as e:
+                        throttled_log(f"reseed_err:{token}",
+                                       f"[FARM-004f] get_open_orders failed: {e}", seconds=60)
+                        live = []
+                    # Find best (min drift) order per side
+                    best_buy = None   # (drift, oid, price)
+                    best_sell = None  # (drift, oid, price)
+                    for o in live:
+                        oid = o.get("id") or o.get("order_id")
+                        side = o.get("side")
+                        price = float(o.get("price"))
+                        if side == "BUY":
+                            drift = abs(price - bid_target)
+                            label = f"BUY@{price:.4f} vs target={bid_target:.4f}"
+                        else:
+                            drift = abs(price - ask_target)
+                            label = f"SELL@{price:.4f} vs target={ask_target:.4f}"
+                        if drift <= requote_thr:
+                            if side == "BUY":
+                                if best_buy is None or drift < best_buy[0]:
+                                    best_buy = (drift, oid, price)
+                            else:
+                                if best_sell is None or drift < best_sell[0]:
+                                    best_sell = (drift, oid, price)
+                        else:
+                            log(f"[FARM-004f] cancel (out of threshold) {label} "
+                                f"drift={drift:.4f} > thr={requote_thr:.4f} id={oid}")
+                            cancel_quotes(c, (oid,))
+                    # Cancel ALL other orders per side (even within threshold),
+                    # keep only the closest one per side
+                    for o in live:
+                        oid = o.get("id") or o.get("order_id")
+                        side = o.get("side")
+                        price = float(o.get("price"))
+                        is_adopted = False
+                        if side == "BUY" and best_buy is not None:
+                            if oid == best_buy[1]:
+                                adopted_ids.append(oid)
+                                log(f"[FARM-004f] adopted BUY@{price:.4f} "
+                                    f"(best drift={best_buy[0]:.4f}) id={oid}")
+                                is_adopted = True
+                        elif side == "SELL" and best_sell is not None:
+                            if oid == best_sell[1]:
+                                adopted_ids.append(oid)
+                                log(f"[FARM-004f] adopted SELL@{price:.4f} "
+                                    f"(best drift={best_sell[0]:.4f}) id={oid}")
+                                is_adopted = True
+                        if not is_adopted and oid:
+                            log(f"[FARM-004f] cancel (not best) id={oid} side={side} "
+                                f"price={price:.4f}")
+                            cancel_quotes(c, (oid,))
+                    if adopted_ids:
+                        st["ids"] = adopted_ids
+                        st["center"] = mid   # [FARM-004g B2] prevent immediate requote
+                        log(f"[FARM-004f] reseed adopted {len(adopted_ids)} leg(s): {adopted_ids})")
+                    else:
+                        log(f"[FARM-004f] no legs within threshold — cancel-all, "
+                            f" штатная постановка с нуля")
+                        # st["ids"] stays None → place_two_sided will post fresh
 
                 # 3a. reconcile book vs memory (F1/F5): orphans, missing legs,
                 #     undersized legs, one-sided state.                    [FARM-003]

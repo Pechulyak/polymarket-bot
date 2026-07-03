@@ -344,6 +344,7 @@
 | FARM-003 | Инцидент-фиксы: reconcile книга=истина, F2 offset/requote инвариант, ASK-cap inv, skew reseed, last_ts персистентность | feature:liquidity-farming | DONE |
 | FARM-004 | Telegram alert-система: 6 TG-алертов, русификация, edge-latch в farming_state.json, st["ids"] gate против осцилляции, #4 balance-reject парсинг, LIVE-флип | feature:liquidity-farming | DONE |
 | FARM-004c/d | Dynamic BID cap (free cash on-chain) + inv-overshoot fix: partial-BUY hold, reseed-гейт (rev.5), авторазгрузка излишка (Decimal tick) | feature:liquidity-farming | DONE |
+| FARM-004e/f/g | TG onset/recovery, D2 reseed-adoption при рестарте, unload_id-трекинг + ревью-фиксы B1/B2/B4/B5 | feature:liquidity-farming | DONE |
 
 ---
 
