@@ -53,6 +53,7 @@ DRY_RUN = False                       # FARM-003: post-incident default. LIVE fl
 POLL_INTERVAL   = 10                 # seconds between ticks
 QUOTE_OFFSET    = 0.02               # FARM-003 F2: offset MUST exceed requote threshold (incident root #1)
 REQUOTE_FRAC    = 0.4                # FARM-003 F2: threshold = 0.4 * be_margin(2.5c) = 1.0c < 2.0c offset
+MAX_INV         = 450                # [FARM-004h] hard capital ceiling per market; 400 = normal two-sided at full center passes; F5-double-buy is blocked
 STATE_FILE      = "/opt/executor/app/farming_state.json"  # FARM-003: last_ts persistence across restarts
 
 # Target markets (from Step A/B recon). size = shares per leg.
@@ -441,20 +442,14 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None):
                     f"(free=${free_cash:.2f})")
                 bid_size = affordable_cap
 
-    # [FARM-004d rev.5] Fix 2: inv+bid_size overshoot gate.
-    # Active only when skew == 'reseed_buy' (deficit repurchase mode).
-    # In flat/sell modes, gate is bypassed (pre-004d behavior).
-    # Formula: if inv + bid_size > center + dead -> skip BID (overshoot).
-    if bid_size > 0 and inv is not None and plan.get('skew') == 'reseed_buy':
-        min_sz = float(mkt.get("min_size") or 0)
-        center = float(mkt.get("inv_center") or 0)
-        dead = float(mkt.get("inv_deadband") or (min_sz * 0.5))
-        threshold = center + dead
-        if inv + bid_size > threshold:
-            log(f"[place_two_sided] BID skipped: inv={inv:.0f} + bid_size={bid_size:.0f} = "
-                f"{inv + bid_size:.0f} > threshold={threshold:.0f} (center={center:.0f} + dead={dead:.0f}) "
-                f"skew={plan.get('skew')} -> inv overshoot gate (FARM-004d Fix 2)")
-            bid_size = 0.0
+    # [FARM-004h] Unified inv cap: skip BID if inv unknown or would exceed MAX_INV.
+    # Replaces Fix 2 (reseed_buy-only overshoot gate using center+dead).
+    # MAX_INV = 450 is a hard capital ceiling; 400 = normal two-sided at full center.
+    if bid_size > 0 and (inv is None or inv + bid_size > MAX_INV):
+        inv_sum = "N/A" if inv is None else f"{inv + bid_size:.0f}"
+        log(f"[place_two_sided] BID skipped: inv={inv} + bid_size={bid_size:.0f} = "
+            f"{inv_sum} > MAX_INV={MAX_INV} -> inv cap gate (FARM-004h)")
+        bid_size = 0.0
 
     bid_id = ask_id = None
 
@@ -555,9 +550,7 @@ def reconcile_orders(c, token, st, min_size, mid=None):
         requote so the eaten/failed leg is restored immediately.
       - F5: a tracked leg whose remaining size < reward min_size earns ZERO
         reward while still fill-exposed -> forces requote (cancel+replace full).
-        Exception (FARM-004d): BUY leg with size_matched > 0 (partially filled)
-        is kept in book if drift from mid is within REQUOTE_FRAC*QUOTE_OFFSET —
-        only requote if mid has genuinely drifted away from the order.
+        (FARM-004h: Fix 1 exception removed — undersized BUY always requotes).
       - ONE-SIDED: <2 sides live while quotes expected -> flagged (1/3 score);
         NOT a requote trigger by itself (deliberate skip when inventory short —
         requoting every tick would burn accrued score).
@@ -596,28 +589,10 @@ def reconcile_orders(c, token, st, min_size, mid=None):
             rem = None
             size_matched = 0.0
         if rem is not None and rem < float(min_size):
-            # [FARM-004d] Fix 1: BUY partially filled -> keep in book if drift is small
-            side = o.get("side")
-            order_price = float(o.get("price"))
-            skip_requote = False
-            if side == "BUY" and size_matched > 0 and mid is not None:
-                # drift from mid in cents
-                drift_c = abs(mid - order_price) * 100.0
-                threshold_c = REQUOTE_FRAC * QUOTE_OFFSET * 100.0
-                if drift_c <= threshold_c:
-                    skip_requote = True
-                    throttled_log(
-                        f"buy_partial_fill_keep:{token}",
-                        f"[reconcile] BUY partially filled (matched={size_matched:.0f}, "
-                        f"remaining={rem:.0f}), drift={drift_c:.2f}c <= threshold={threshold_c:.2f}c "
-                        f"-> keep in book (FARM-004d Fix 1)",
-                        seconds=300)
-            if skip_requote:
-                pass  # don't force requote, keep BUY in book
-            else:
-                log(f"[reconcile] leg {side} remaining={rem} < min_size={min_size} "
-                    f"-> rewardless but fill-exposed, force requote (F5)")
-                out["force_requote"] = True
+            # [FARM-004h] Fix 1 removed: undersized leg always triggers requote
+            log(f"[reconcile] leg {o.get('side')} remaining={rem} < min_size={min_size} "
+                f"-> rewardless but fill-exposed, force requote (F5)")
+            out["force_requote"] = True
     if tracked - live_ids:
         missing = tracked - live_ids
         # [FARM-004g B1] if auto_unload order disappeared -> it was filled/cancelled;

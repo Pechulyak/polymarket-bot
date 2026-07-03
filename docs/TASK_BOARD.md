@@ -329,6 +329,20 @@
 
 ---
 
+## EPIC: FARM — Liquidity Farming
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| FARM-001 | Farming daemon: on-chain inventory, throttle, systemd | feature:liquidity-farming | DONE |
+| FARM-002 | Farming live: two-sided maker, smoke+scoring | feature:liquidity-farming | DONE |
+| FARM-003 | Инцидент-фиксы: reconcile книга=истина, F2 offset/requote инвариант, ASK-cap inv, skew reseed, last_ts персистентность | feature:liquidity-farming | DONE |
+| FARM-004 | Telegram alert-система: 6 TG-алертов, русификация, edge-latch в farming_state.json, st["ids"] gate против осцилляции, #4 balance-reject парсинг, LIVE-флип | feature:liquidity-farming | DONE |
+| FARM-005 | Dynamic BID cap (free cash) + inv-overshoot fix: partial-BUY hold, reseed-гейт, авторазгрузка излишка (Decimal tick) | feature:liquidity-farming | DONE |
+| FARM-006 | TG onset/recovery, reseed-adoption при рестарте, unload_id-трекинг + ревью-фиксы | feature:liquidity-farming | DONE |
+| FARM-007 | Unified inv-cap MAX_INV=450, Fix 1/Fix 2 удалены, inv=None fail-closed | feature:liquidity-farming | DONE |
+| FARM-008 | External heartbeat watcher (dead-process detection) | feature:liquidity-farming | TODO |
+| FARM-009 | Requote burns epoch score (оптимизация) | feature:liquidity-farming | TODO |
+
 ## EPIC: LIVE — Live Execution
 
 | ID | Задача | Тег | Статус |
@@ -339,13 +353,7 @@
 | LIVE-004 | Live copy: проброс token_id и auto-copy paper→live | feature:live-execution | DONE |
 | LIVE-005 | on-chain balance-gate + фикс $1 | feature:live-execution | DONE |
 | LIVE-006 | Версионирование executor-кода: папка executor/ в репо) | feature:live-execution | DONE |
-| FARM-001 | Farming daemon: on-chain inventory, throttle, systemd | feature:liquidity-farming | DONE |
-| FARM-002 | Farming live: two-sided maker, smoke+scoring | feature:liquidity-farming | DONE |
-| FARM-003 | Инцидент-фиксы: reconcile книга=истина, F2 offset/requote инвариант, ASK-cap inv, skew reseed, last_ts персистентность | feature:liquidity-farming | DONE |
-| FARM-004 | Telegram alert-система: 6 TG-алертов, русификация, edge-latch в farming_state.json, st["ids"] gate против осцилляции, #4 balance-reject парсинг, LIVE-флип | feature:liquidity-farming | DONE |
-| FARM-004c/d | Dynamic BID cap (free cash on-chain) + inv-overshoot fix: partial-BUY hold, reseed-гейт (rev.5), авторазгрузка излишка (Decimal tick) | feature:liquidity-farming | DONE |
-| FARM-004e/f/g | TG onset/recovery, D2 reseed-adoption при рестарте, unload_id-трекинг + ревью-фиксы B1/B2/B4/B5 | feature:liquidity-farming | DONE |
 
 ---
 
-*Обновлено: 2026-07-01*
+*Обновлено: 2026-07-03*
