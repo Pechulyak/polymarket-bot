@@ -343,6 +343,7 @@
 | FARM-002 | Farming live: two-sided maker, smoke+scoring | feature:liquidity-farming | DONE |
 | FARM-003 | Инцидент-фиксы: reconcile книга=истина, F2 offset/requote инвариант, ASK-cap inv, skew reseed, last_ts персистентность | feature:liquidity-farming | DONE |
 | FARM-004 | Telegram alert-система: 6 TG-алертов, русификация, edge-latch в farming_state.json, st["ids"] gate против осцилляции, #4 balance-reject парсинг, LIVE-флип | feature:liquidity-farming | DONE |
+| FARM-004c/d | Dynamic BID cap (free cash on-chain) + inv-overshoot fix: partial-BUY hold, reseed-гейт (rev.5), авторазгрузка излишка (Decimal tick) | feature:liquidity-farming | DONE |
 
 ---
 

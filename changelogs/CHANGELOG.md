@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-07-03
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-03 | FARM-004c/d | 004c: dynamic BID cap по free cash (read_cash_balance on-chain pUSD), парсер #4 balance-reject. 004d rev.1-5: фикс inv-overshoot при partial fill (инцидент inv=236 02.07): Fix1 — partial BUY не отменяется при drift ≤ REQUOTE_FRAC×QUOTE_OFFSET; Fix2 — overshoot-гейт inv+bid_sz > center+dead, только в skew=reseed_buy (rev.5); Fix3 — авторазгрузка излишка >20 шер maker SELL, Decimal-safe тик-округление (rev.3-4). Деплой подтверждён, two-sided восстановлен |
+
 ## 2026-07
 
 | Дата | TASK_ID | Описание |

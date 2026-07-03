@@ -18,6 +18,7 @@ from py_clob_client_v2 import (
 )
 from py_clob_client_v2.order_builder.constants import BUY, SELL
 import requests, os, sys, time, re, json
+from decimal import Decimal, ROUND_CEILING
 from datetime import datetime, timezone
 from web3 import Web3
 
@@ -424,6 +425,41 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None):
     bid_out = (ms is not None) and (bid_spread_c > ms)
     ask_out = (ms is not None) and (ask_spread_c > ms)
 
+    # [FARM-004] C: dynamic BID cap — free cash (pUSD balanceOf FUNDER) limits bid_size.
+    # mirrors F3 ASK cap (line 402) but for the cash leg: BID size costs our_bid * size pUSD.
+    # buffer 3% (1.03) covers fee / price drift so cap is not immediately stale.
+    if bid_size > 0:
+        free_cash = read_cash_balance()
+        if free_cash is not None:
+            # affordable = floor(free_cash / (price * size)) -> solve for size
+            # size <= free_cash / (our_bid * 1.03)
+            affordable_cap = free_cash / (our_bid * 1.03) if our_bid > 0 else 0.0
+            affordable_cap = float(int(affordable_cap))  # whole shares
+            if affordable_cap < float(mkt["min_size"]):
+                log(f"[place_two_sided] BID skipped: free_cash ${free_cash:.2f} < "
+                    f"${free_cash:.2f} / ({our_bid:.4f} * 1.03) = affordable ${affordable_cap:.2f} "
+                    f"< min_size ${mkt['min_size']} -> conscious one-sided BID skip")
+                bid_size = 0.0
+            elif affordable_cap < bid_size:
+                log(f"[place_two_sided] BID size capped by cash: {bid_size} -> {affordable_cap:.0f} "
+                    f"(free=${free_cash:.2f})")
+                bid_size = affordable_cap
+
+    # [FARM-004d rev.5] Fix 2: inv+bid_size overshoot gate.
+    # Active only when skew == 'reseed_buy' (deficit repurchase mode).
+    # In flat/sell modes, gate is bypassed (pre-004d behavior).
+    # Formula: if inv + bid_size > center + dead -> skip BID (overshoot).
+    if bid_size > 0 and inv is not None and plan.get('skew') == 'reseed_buy':
+        min_sz = float(mkt.get("min_size") or 0)
+        center = float(mkt.get("inv_center") or 0)
+        dead = float(mkt.get("inv_deadband") or (min_sz * 0.5))
+        threshold = center + dead
+        if inv + bid_size > threshold:
+            log(f"[place_two_sided] BID skipped: inv={inv:.0f} + bid_size={bid_size:.0f} = "
+                f"{inv + bid_size:.0f} > threshold={threshold:.0f} (center={center:.0f} + dead={dead:.0f}) "
+                f"skew={plan.get('skew')} -> inv overshoot gate (FARM-004d Fix 2)")
+            bid_size = 0.0
+
     bid_id = ask_id = None
 
     # BID leg (BUY at our_bid) — skip if plan zeroed it, crosses, or leaves corridor.
@@ -450,29 +486,23 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None):
             # Check for balance rejection: extract available/needed from error message
             err_str = str(e)
             if "not enough balance" in err_str.lower() or "insufficient" in err_str.lower():
-                # Parse free/need/active from actual API error fields:
+                # Parse free/need from actual API error fields (microUSD -> divide by 1e6):
                 # "balance: 171673465, sum of active orders: 124000000, order amount (inc. fees): 124000000"
-                free = need = active = None
+                free = need = None
                 try:
                     import re
-                    # free = balance - sum_active (what's available after locking resting orders)
                     m_bal = re.search(r'balance:\s*([0-9]+)', err_str)
-                    m_act = re.search(r'sum of active orders:\s*([0-9]+)', err_str)
                     m_amt = re.search(r'order amount[^:]*:\s*([0-9]+)', err_str)
-                    if m_bal and m_act:
-                        balance_raw = float(m_bal.group(1))
-                        sum_active_raw = float(m_act.group(1))
-                        active = sum_active_raw / 1e6
-                        free = (balance_raw - sum_active_raw) / 1e6
+                    if m_bal:
+                        free = float(m_bal.group(1)) / 1e6
                     if m_amt:
                         need = float(m_amt.group(1)) / 1e6
                 except Exception:
                     pass
                 edge_notify(
                     f"balance_reject:{token}", True,
-                    f"🟠 Заявка отклонена ({mkt['name']}) / "
-                    f"BID не поставлен: старый ордер держит средства. / "
-                    f"Свободно {free} · нужно {need} · в книге {active}",
+                    f"🟠 BID урезан/пропущен ({mkt['name']}): "
+                    f"свободно ${free} < нужно ${need}",
                     f"🟢 Заявка принята ({mkt['name']})",
                     cooldown=0)
             else:
@@ -517,7 +547,7 @@ def cancel_quotes(c, order_ids):
             log(f"[cancel_quotes] cancel {oid} error (raw, not auto-fixed): {e}")
 
 
-def reconcile_orders(c, token, st, min_size):
+def reconcile_orders(c, token, st, min_size, mid=None):
     """[FARM-003 F1+F5] The BOOK is the source of truth, not in-memory st['ids'].
     Incident 2026-07-02: restart lost st['ids'] -> orphan BUY@0.60 rested 8h;
     rejected ASK left daemon 'two-sided' in its head, one-sided in the book.
@@ -529,6 +559,9 @@ def reconcile_orders(c, token, st, min_size):
         requote so the eaten/failed leg is restored immediately.
       - F5: a tracked leg whose remaining size < reward min_size earns ZERO
         reward while still fill-exposed -> forces requote (cancel+replace full).
+        Exception (FARM-004d): BUY leg with size_matched > 0 (partially filled)
+        is kept in book if drift from mid is within REQUOTE_FRAC*QUOTE_OFFSET —
+        only requote if mid has genuinely drifted away from the order.
       - ONE-SIDED: <2 sides live while quotes expected -> flagged (1/3 score);
         NOT a requote trigger by itself (deliberate skip when inventory short —
         requoting every tick would burn accrued score).
@@ -558,12 +591,33 @@ def reconcile_orders(c, token, st, min_size):
         sides.add(o.get("side"))
         try:
             rem = float(o.get("original_size", 0)) - float(o.get("size_matched", 0))
+            size_matched = float(o.get("size_matched", 0))
         except (TypeError, ValueError):
             rem = None
+            size_matched = 0.0
         if rem is not None and rem < float(min_size):
-            log(f"[reconcile] leg {o.get('side')} remaining={rem} < min_size={min_size} "
-                f"-> rewardless but fill-exposed, force requote (F5)")
-            out["force_requote"] = True
+            # [FARM-004d] Fix 1: BUY partially filled -> keep in book if drift is small
+            side = o.get("side")
+            order_price = float(o.get("price"))
+            skip_requote = False
+            if side == "BUY" and size_matched > 0 and mid is not None:
+                # drift from mid in cents
+                drift_c = abs(mid - order_price) * 100.0
+                threshold_c = REQUOTE_FRAC * QUOTE_OFFSET * 100.0
+                if drift_c <= threshold_c:
+                    skip_requote = True
+                    throttled_log(
+                        f"buy_partial_fill_keep:{token}",
+                        f"[reconcile] BUY partially filled (matched={size_matched:.0f}, "
+                        f"remaining={rem:.0f}), drift={drift_c:.2f}c <= threshold={threshold_c:.2f}c "
+                        f"-> keep in book (FARM-004d Fix 1)",
+                        seconds=300)
+            if skip_requote:
+                pass  # don't force requote, keep BUY in book
+            else:
+                log(f"[reconcile] leg {side} remaining={rem} < min_size={min_size} "
+                    f"-> rewardless but fill-exposed, force requote (F5)")
+                out["force_requote"] = True
     if tracked - live_ids:
         log(f"[reconcile] tracked leg(s) missing from book (filled/rejected): "
             f"{sorted(tracked - live_ids)} -> force requote")
@@ -645,6 +699,32 @@ def read_inventory(c, token):
             last_error = e
             continue
     log(f"[read_inventory] all RPCs failed (raw, not auto-fixed): {last_error}")
+    return None
+
+
+def read_cash_balance():
+    """[NEW] Read pUSD (ERC-20) cash balance for FUNDER on-chain.
+
+    Uses the same RPC pattern as read_inventory:
+      selector keccak256("balanceOf(address)") = 0x70a08231
+      args: address left-padded to 32B.
+    Falls back through RPC_URLS. Returns float pUSD (raw / 1e6), or None on
+    total RPC failure. Read-only.
+    """
+    selector = bytes.fromhex("70a08231")
+    last_error = None
+    for rpc_url in RPC_URLS:
+        try:
+            w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"headers": RPC_HEADERS}))
+            padded_addr = w3.to_bytes(hexstr=FUNDER).rjust(32, b"\x00")
+            calldata = selector + padded_addr
+            result = w3.eth.call({"to": PUSD_CONTRACT, "data": "0x" + calldata.hex()})
+            raw = int.from_bytes(result, "big")
+            return raw / (10 ** SHARE_DECIMALS)
+        except Exception as e:
+            last_error = e
+            continue
+    log(f"[read_cash_balance] all RPCs failed (raw, not auto-fixed): {last_error}")
     return None
 
 
@@ -831,13 +911,58 @@ def main():
                     # from the daemon, not from a CSV export the next morning.
                     notify(f"[farm] fill(s) detected on {mkt['name']}: "
                            f"n={len(fills)} inv_now={st['inv']}")
+                    # [FARM-004d] Fix 3: auto-unload excess inventory after fill.
+                    # If inv > center + dead and excess > 20 shares, place one
+                    # maker SELL GTC at mid to unload the excess.
+                    inv_now = st["inv"]
+                    if inv_now is not None:
+                        min_sz = float(mkt.get("min_size") or 0)
+                        center = float(mkt.get("inv_center") or 0)
+                        dead = float(mkt.get("inv_deadband") or (min_sz * 0.5))
+                        threshold = center + dead
+                        excess = inv_now - center
+                        if inv_now > threshold and excess > 20:
+                            # Place auto-unload SELL at mid for excess shares
+                            # [FARM-004d rev.2 Правка B] round price UP to nearest tick
+                            # (safe for SELL: price must be > mid to not cross the book)
+                            try:
+                                tick_str = str(params.get("tick_size")
+                                              or mkt.get("tick_size") or "0.01")
+                                tick = float(tick_str)
+                                # [FARM-004d rev.3] Decimal-safe rounding UP to nearest tick
+                                ticks = int((Decimal(str(mid)) / Decimal(str(tick))).to_integral_value(rounding=ROUND_CEILING))
+                                sell_price = float(ticks * Decimal(str(tick)))
+                                neg_risk = bool(params.get("neg_risk", False))
+                                unload_opts = PartialCreateOrderOptions(
+                                    tick_size=tick_str, neg_risk=neg_risk)
+                                unload_args = OrderArgsV2(
+                                    token_id=token, price=sell_price,
+                                    size=float(int(excess)), side=SELL)
+                                signed_unload = c.create_order(unload_args, unload_opts)
+                                resp_unload = c.post_order(
+                                    signed_unload, order_type=OrderType.GTC)
+                                unload_id = resp_unload.get("orderID") if isinstance(
+                                    resp_unload, dict) else None
+                                log(f"[FARM-004d Fix 3] auto-unload SELL posted @ {sell_price:.4f} "
+                                    f"(mid={mid:.4f}, tick={tick}) size={excess:.0f} "
+                                    f"id={unload_id} resp={resp_unload}")
+                                # One-time TG alert via latch (edge_notify)
+                                edge_notify(
+                                    f"auto_unload:{token}", True,
+                                    f"🟠 Авторазгрузка ({mkt['name']}): "
+                                    f"BID fill → inv={inv_now:.0f}, "
+                                    f"выгружено {excess:.0f} шер @ {sell_price:.4f}",
+                                    f"[OK] auto-unload resolved on {mkt['name']}",
+                                    cooldown=0)
+                            except Exception as e:
+                                log(f"[FARM-004d Fix 3] auto-unload failed: {e}")
                 # plan is cheap and read-only -> compute whenever inventory known
                 plan = inventory_manage(c, mkt, st["inv"], mid, params) \
                     if st["inv"] is not None else None
 
                 # 3a. reconcile book vs memory (F1/F5): orphans, missing legs,
                 #     undersized legs, one-sided state.                    [FARM-003]
-                rec = reconcile_orders(c, token, st, float(mkt["min_size"]))
+                rec = reconcile_orders(c, token, st, float(mkt["min_size"]), mid)
                 if rec["one_sided"]:
                     log(f"[reconcile] ONE-SIDED quoting on {mkt['name']} "
                         f"(1/3 reward score), inv={st['inv']}")
