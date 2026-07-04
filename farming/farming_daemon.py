@@ -18,7 +18,7 @@ from py_clob_client_v2 import (
 )
 from py_clob_client_v2.order_builder.constants import BUY, SELL
 import requests, os, sys, time, re, json
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 from datetime import datetime, timezone
 from web3 import Web3
 
@@ -85,12 +85,16 @@ MARKETS = [
         "token": "95676548525614691656970153001244738030704823210041753577158504248850005676647",
         "min_size": 200,
         "inv_center": 200,
+        "inv_deadband": 200,         # [FARM-017] = нога: филл не выбивает в skew
+        "max_inv": 600,              # [FARM-017] center + 2*нога, выше — ASK-only
     },
     {
         "name":  "Bardella FR-2027",
         "token": "1114938555853162662375805609341386795965961002028313810409954359771505507177",
         "min_size": 50,              # rewards.min_size (CLOB, 2026-07-04)
         "inv_center": 50,
+        "inv_deadband": 50,          # [FARM-017]
+        "max_inv": 150,              # [FARM-017]
     },
 ]
 
@@ -366,7 +370,9 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
         tick = float(ob.get("tick_size") or mkt.get("tick_size") or 0.01)
         # anchor on book midpoint, not the passed mid, and round to tick
         book_mid = (best_bid + best_ask) / 2 if (best_bid and best_ask) else mid
-        def _round(x): return round(round(x / tick) * tick, 4)
+        def _round(x):
+            q = (Decimal(str(x)) / Decimal(str(tick))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+            return float(round(q * Decimal(str(tick)), 4))
         _plan = plan or {}
         bid_off = float(_plan.get("bid_offset", QUOTE_OFFSET))
         ask_off = float(_plan.get("ask_offset", QUOTE_OFFSET))
@@ -418,7 +424,10 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
     book_mid = (best_bid + best_ask) / 2 if (best_bid and best_ask) else mid
 
     def _round(x):
-        return round(round(x / tick) * tick, 4)
+        # [FARM-014] banker's rounding в round() давал асимметрию ног +-0.5 тика
+        # на полутиковых ценах (0.585 -> BID 2.5c / ASK 1.5c). HALF_UP детерминирован.
+        q = (Decimal(str(x)) / Decimal(str(tick))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        return float(round(q * Decimal(str(tick)), 4))
 
     # Plan-driven offsets/sizes (from inventory_manage). Default = symmetric.
     plan = plan or {}
@@ -485,6 +494,19 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
                 log(f"[place_two_sided] BID size capped by cash: {bid_size} -> {affordable_cap:.0f} "
                     f"(free=${free_cash:.2f})")
                 bid_size = affordable_cap
+
+    # [FARM-017] Безусловный верхний кап инвентаря (в файле нет FARM-007):
+    # если inv + bid_size > max_inv -> BID не ставим (ASK-only выше капа).
+    # Действует при ЛЮБОМ skew, в отличие от гейта FARM-004d ниже (reseed_buy only).
+    if bid_size > 0 and inv is not None:
+        max_inv = float(mkt.get("max_inv") or 0)
+        if max_inv <= 0:
+            _c = float(mkt.get("inv_center") or 0)
+            max_inv = _c + 2.0 * float(mkt.get("min_size") or 0)
+        if inv + bid_size > max_inv:
+            log(f"[place_two_sided] BID skipped: inv={inv:.0f} + bid_size={bid_size:.0f} "
+                f"> max_inv={max_inv:.0f} -> ASK-only (FARM-017 cap)")
+            bid_size = 0.0
 
     # [FARM-004d rev.5] Fix 2: inv+bid_size overshoot gate.
     # Active only when skew == 'reseed_buy' (deficit repurchase mode).
@@ -980,7 +1002,10 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
         # ABOVE seed (adverse BID fills accumulated): pull ASK toward mid to
         # unload the excess, suppress BID (stop accumulating).
         tighter = max(off / 2.0, 0.005)
-        plan.update(ask_offset=tighter, bid_size=0.0, skew="long_unload")
+        # [FARM-017] BID widen x2 вместо bid_size=0: подавление BID держало
+        # демона one-sided 57% времени 03.07 (1/3 score). Corridor guard ниже
+        # капнет offset на max_spread, если x2 вылезает за коридор.
+        plan.update(ask_offset=tighter, bid_offset=off * 2.0, skew="long_unload")
     elif delta < -dead:
         # BELOW seed (ASK drained): pull BID toward mid to REBUY the seed,
         # ASK sizing handled by F3 cap (posts only what inventory can back).
