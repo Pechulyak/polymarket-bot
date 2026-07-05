@@ -1676,10 +1676,10 @@ class WhaleDetector:
 
         session = self._Session()
         try:
-            # Step 1: Get whales with copy_status='paper'
+            # Step 1: Get whales with copy_status='paper' or 'live' (LIVE-007)
             query = text("""
                 SELECT wallet_address FROM whales
-                WHERE copy_status = 'paper'
+                WHERE copy_status IN ('paper', 'live')
             """)
             result = session.execute(query)
             paper_whales = [row[0] for row in result]

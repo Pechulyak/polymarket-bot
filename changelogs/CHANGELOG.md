@@ -1,4 +1,9 @@
 # CHANGELOG
+## 2026-07-05
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-05 | LIVE-007 | Root cause: live-кит (0x033f0346, TheVeryGoodCow) не собирался в whale_trades — _fetch_paper_whale_trades WHERE copy_status='paper' не включал 'live', при этом триггер copy_whale_trade_to_paper (IN paper,live) и copy_paper_to_live (='live') для live готовы. Разрыв только в fetch. Fix: whale_detector.py:1682 → IN ('paper','live'). Live-киты теперь на paper-цикле 30s, whale_trades→trigger→paper_trades→notify→live_orders цепь замкнута. Долг: last_targeted_fetch_at застрял 2026-04-04 (отдельный тикет). |
 
 ## 2026-07-04
 
