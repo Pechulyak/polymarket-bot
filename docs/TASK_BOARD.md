@@ -342,7 +342,7 @@
 | FARM-007 | Unified inv-cap MAX_INV=450, Fix 1/Fix 2 удалены, inv=None fail-closed | feature:liquidity-farming | DONE |
 | FARM-008 | External heartbeat watcher (dead-process detection) | feature:liquidity-farming | TODO |
 | FARM-009 | Requote burns epoch score (оптимизация) | feature:liquidity-farming | TODO |
-| FARM-010 | Market scanner (Gamma funnel + CLOB deep-scan) — отменён: Gamma-пагинация нечинима, замена CLOB /sampling-markets ручным скринингом | feature:liquidity-farming | CANCELLED |
+| FARM-010 | Скринер v4 (farm_screen.py): Gamma Phase A, метрика our_daily=our_share×pool, отсечка volatile/thin. Farm маргинален при $231 | feature:liquidity-farming | DONE |
 | FARM-011 | Circuit breaker: сдвиг mid ≥2¢/10мин → cancel all + кулдаун 15мин, recovery по стабильности | feature:liquidity-farming | DONE |
 | FARM-012 | Fill-реакция: fill/missing-leg → пауза 120с (merge кулдаунов через max), персистентность pause_until | feature:liquidity-farming | DONE |
 | FARM-013 | Websocket CLOB WSS (латентность 10-20с → <1с) — заморожен: +$4.86/д на дне катастрофы 03.07, burst-филлы не ловит | feature:liquidity-farming | FROZEN |
@@ -350,6 +350,7 @@
 | FARM-015 | Multi-market lite: cash-аллокатор → markets.json → parallel poll (гейт: ≥$2.5/д после 2 недель live) | feature:liquidity-farming | TODO |
 | FARM-016 | save_state_file сохраняет курсоры токенов вне текущего MARKETS (регрессия n=93) | feature:liquidity-farming | DONE |
 | FARM-017 | Deadband=нога, max_inv=center+2×нога безусловным капом, long_unload → BID-widening ×2 (поглощает FARM-004j) | feature:liquidity-farming | DONE |
+| FARM-018 | Скринер: добор пагинации диапазона 20-50k (Streeting liq=37k теряется за GAMMA_PAGES=5) | feature:liquidity-farming | TODO |
 
 ## EPIC: LIVE — Live Execution
 

@@ -3,6 +3,7 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-07-05 | FARM-010 | Скринер v4 (S1, LIVE-006 N/A). Phase A: CLOB /sampling-markets→Gamma /markets (liquidity-диапазоны + order=liquidityNum; «нечинимость пагинации» опровергнута). Метрика: our_daily=our_share×pool вместо средней $/kpts. offset B' внутри reward-зоны, отсечка mv2c>8/pts_k<0.5, гейт пустой книги, POOL_MIN 30→5. Вывод: farm при $231 маргинален (центы-$3.5/д), подтверждено внешними кейсами. Хвост: пагинация 20-50k неполна (FARM-018). |
 | 2026-07-05 | LIVE-007 | Root cause: live-кит (0x033f0346, TheVeryGoodCow) не собирался в whale_trades — _fetch_paper_whale_trades WHERE copy_status='paper' не включал 'live', при этом триггер copy_whale_trade_to_paper (IN paper,live) и copy_paper_to_live (='live') для live готовы. Разрыв только в fetch. Fix: whale_detector.py:1682 → IN ('paper','live'). Live-киты теперь на paper-цикле 30s, whale_trades→trigger→paper_trades→notify→live_orders цепь замкнута. Долг: last_targeted_fetch_at застрял 2026-04-04 (отдельный тикет). |
 
 ## 2026-07-04
