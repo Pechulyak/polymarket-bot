@@ -184,6 +184,10 @@ for m in gm:
                  "min_size": m.get("rewardsMinSize") or 0, "tick": tick,
                  "neg_risk": m.get("negRisk"),
                  "condition_id": m.get("conditionId"),
+                 # [v4.9] rebate/holding: rebate только на feesEnabled-рынках
+                 "fees_enabled": m.get("feesEnabled"),
+                 "fee_type": m.get("feeType"),
+                 "holding": m.get("holdingRewardsEnabled"),
                  "end": end[:10]})
 print(f"phase A filter skips: {skipped}")
 cand.sort(key=lambda x: -x["pool"])
@@ -266,7 +270,7 @@ cand.sort(key=lambda x: -x["our_daily"])
 # usd/kpts = средняя книги (справочно). pts_k≈0 = тонкая книга (⚠, гейт11).
 # below $1/d (гейт6) по НАШЕМУ доходу -> флаг ✗.
 hdr = (f"{'our$/d':>7} {'share':>6} {'pool':>6} {'usd/kp':>7} {'pts_k':>7} "
-       f"{'mv2c':>5} {'rng7':>6} {'mid':>6} {'min':>4} {'ms':>4} {'nr':>3} "
+       f"{'mv2c':>5} {'rng7':>6} {'mid':>6} {'min':>4} {'ms':>4} {'nr':>3} {'fee':>4} {'hld':>4} "
        f"{'group':>9} {'end':>11}  question")
 print("\n" + hdr)
 print("-" * len(hdr))
@@ -280,6 +284,8 @@ for c in cand[:SHOW_N]:
     print(f"{c['our_daily']:>6.2f}{lowd}{c['our_share']:>8.5f} {c['pool']:>6.0f} "
           f"{upk_s:>7} {c['pts_k']:>7}{thin}{mv_s:>4} {rng_s:>6} {c['mid']:>6} "
           f"{c['min_size']:>4} {str(c['max_spread']):>4} {nr_s:>3} "
+          f"{'Y' if c.get('fees_enabled') is True else ('N' if c.get('fees_enabled') is False else '?'):>4} "
+          f"{'Y' if c.get('holding') is True else ('N' if c.get('holding') is False else '?'):>4} "
           f"{c.get('group',''):>9} {c['end']:>11}  {c['q']}")
 
 # группы с >1 кандидатом (гейт15 напоминание оператору)
