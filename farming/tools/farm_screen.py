@@ -46,7 +46,7 @@ PTS_K_MIN       = 0.5          # Слой3: книга тоньше = мёртв
 OUR_SIZE        = int(sys.argv[1]) if len(sys.argv) > 1 else 300  # нога: argv[1] или 300
 GAMMA_PAGE      = 100          # Gamma режет страницу на 100 (не 500)
 GAMMA_PAGES     = 5            # страниц на окно ликвидности (100×5=500 верх)
-LIQ_WINDOWS     = [(0, 5000), (5000, 20000), (20000, 50000)]  # диапазоны (min,max) liq
+LIQ_WINDOWS     = [(0, 5000), (5000, 20000), (20000, 50000), (50000, None)]  # FARM-018: None = без верха
 SHOW_N          = 30           # сколько строк вывести
 
 def get(url, tries=3):
@@ -109,12 +109,13 @@ def gamma_markets():
     out, seen = [], set()
     for lo, hi in LIQ_WINDOWS:
         for page in range(GAMMA_PAGES):
-            qs = urllib.parse.urlencode({
-                "closed": "false", "limit": GAMMA_PAGE,
-                "offset": page * GAMMA_PAGE,
-                "liquidity_num_min": lo, "liquidity_num_max": hi,
-                "order": "liquidityNum", "ascending": "true",
-            })
+            p = {"closed": "false", "limit": GAMMA_PAGE,
+                 "offset": page * GAMMA_PAGE,
+                 "liquidity_num_min": lo,
+                 "order": "liquidityNum", "ascending": "true"}
+            if hi is not None:                     # FARM-018: окно 50k+ без max
+                p["liquidity_num_max"] = hi
+            qs = urllib.parse.urlencode(p)
             d = get(f"{GAMMA}/markets?{qs}")
             if not d:
                 break
