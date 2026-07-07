@@ -277,6 +277,7 @@
 | INFRA-047 | Watchdog застрявших ордеров в pipeline_monitor | feature:live-execution | DONE |
 | INFRA-048 | Watchdog live_copy_daemon heartbeat: edge-trigger, порог 180s, alert_state в system_state | feature:live-execution | DONE |
 | INFRA-049 | filled_size для maker-пути (taker готов, maker ждёт образца get_order) | feature:live-execution | TODO |
+| INFRA-050 | farming-daemon.service отсутствует в репо — добавить в deploy/ (по аналогии с polymarket-copy-live-daemon.service) | feature:systemd | BACKLOG |
 
 ---
 
@@ -351,6 +352,10 @@
 | FARM-016 | save_state_file сохраняет курсоры токенов вне текущего MARKETS (регрессия n=93) | feature:liquidity-farming | DONE |
 | FARM-017 | Deadband=нога, max_inv=center+2×нога безусловным капом, long_unload → BID-widening ×2 (поглощает FARM-004j) | feature:liquidity-farming | DONE |
 | FARM-018 | Скринер: добор пагинации диапазона 20-50k (Streeting liq=37k теряется за GAMMA_PAGES=5) | feature:liquidity-farming | TODO |
+| FARM-019 | Telegram control bot: long-polling getUpdates, whitelist, /status (per-market + last log line), /stop + /confirm_stop, /start + /confirm_start | feature:liquidity-farming | DONE |
+| FARM-020 | Graceful shutdown: SIGTERM handler cancel all + save state + exit 0, TimeoutStopSec=120 | feature:liquidity-farming | DONE |
+| FARM-020-fix | one_sided latch bug: place_two_sided return → XOR = one_sided; non-requote → reconcile only if full path; skip latch on early-return | feature:liquidity-farming | DONE |
+| FARM-021 | hardening: normalize st["ids"] after RESEED adoption to 2-tuple (bid_id, ask_id), None for missing leg — unpack at alert block fragile to future code paths | feature:liquidity-farming | BACKLOG |
 
 ## EPIC: LIVE — Live Execution
 
@@ -366,4 +371,4 @@
 
 ---
 
-*Обновлено: 2026-07-04*
+*Обновлено: 2026-07-07*

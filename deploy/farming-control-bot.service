@@ -1,0 +1,22 @@
+[Unit]
+Description=Telegram Control Bot for farming-daemon (FARM-019)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+TimeoutStartSec=30
+WorkingDirectory=/opt/executor/app
+ExecStart=/opt/executor/app/venv/bin/python3 /opt/executor/app/farming_control_bot.py
+Restart=on-failure
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=farming-control-bot
+EnvironmentFile=/opt/executor/app/accounts/farming.env
+
+# Note: This bot runs as root to be able to systemctl stop/start farming-daemon.service
+# which also runs as root. The bot only processes commands from ALLOWED_CHAT_ID.
+
+[Install]
+WantedBy=multi-user.target

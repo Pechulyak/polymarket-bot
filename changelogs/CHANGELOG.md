@@ -6,6 +6,15 @@
 | 2026-07-05 | FARM-010 | Скринер v4 (S1, LIVE-006 N/A). Phase A: CLOB /sampling-markets→Gamma /markets (liquidity-диапазоны + order=liquidityNum; «нечинимость пагинации» опровергнута). Метрика: our_daily=our_share×pool вместо средней $/kpts. offset B' внутри reward-зоны, отсечка mv2c>8/pts_k<0.5, гейт пустой книги, POOL_MIN 30→5. Вывод: farm при $231 маргинален (центы-$3.5/д), подтверждено внешними кейсами. Хвост: пагинация 20-50k неполна (FARM-018). |
 | 2026-07-05 | LIVE-007 | Root cause: live-кит (0x033f0346, TheVeryGoodCow) не собирался в whale_trades — _fetch_paper_whale_trades WHERE copy_status='paper' не включал 'live', при этом триггер copy_whale_trade_to_paper (IN paper,live) и copy_paper_to_live (='live') для live готовы. Разрыв только в fetch. Fix: whale_detector.py:1682 → IN ('paper','live'). Live-киты теперь на paper-цикле 30s, whale_trades→trigger→paper_trades→notify→live_orders цепь замкнута. Долг: last_targeted_fetch_at застрял 2026-04-04 (отдельный тикет). |
 
+## 2026-07-07
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-07 | FARM-019 | Telegram control bot (farming_control_bot.py): long-polling getUpdates, whitelist по chat_id, команды /status (per-market с last log line + UTC+3), /stop + /confirm_stop, /start + /confirm_start, /cancel. html.escape на всех динамических значениях, fallback в plain text при 400. systemd unit farming-control-bot.service (Restart=on-failure, RestartSec=15, TimeoutStopSec=120), logrotate 10M/keep7. Деплой подтверждён. |
+| 2026-07-07 | FARM-020 | Graceful shutdown: SIGTERM handler → _graceful_shutdown() → cancel all orders → save state → exit 0. TimeoutStopSec=120 в farming-daemon.service. |
+| 2026-07-07 | FARM-020-fix2 | one_sided latch bug fix: источник истины — place_two_sided return (bid_id, ask_id), one_sided=XOR. Requote tick → place_one_sided. Non-requote tick → rec["one_sided"] только если reconcile ran full path (ids_before_reseed is not None). Early-return skip latch. Верификация: рестарт при latch=True → нет ложного 🟢. |
+| 2026-07-07 | — | Repo hygiene: удалён легаси-дубль farming/farming_daemon.py; канонический путь executor/farming_daemon.py. В BACKLOG: INFRA-050 — farming-daemon.service отсутствует в репо (добавить в deploy/). |
+
 ## 2026-07-04
 
 | Дата | TASK_ID | Описание |

@@ -17,8 +17,8 @@ from py_clob_client_v2 import (
     OrderScoringParams,  # [FARM-004] is_order_scoring(OrderScoringParams(orderId=))
 )
 from py_clob_client_v2.order_builder.constants import BUY, SELL
-import requests, os, sys, time, re, json
-from decimal import Decimal, ROUND_CEILING
+import requests, os, sys, time, re, json, signal
+from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 from datetime import datetime, timezone
 from web3 import Web3
 
@@ -49,24 +49,57 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 LOG_FILE = "/opt/executor/logs/farming_daemon.log"
 
 # ─────────────────────────── FARMING PARAMS ──────────────────────────
-DRY_RUN = False                       # FARM-003: post-incident default. LIVE flip = separate confirmed step.
+DRY_RUN = False                       # LIVE 2026-07-06: New People 2nd 200/leg, maker-only bootstrap, confirmed
 POLL_INTERVAL   = 10                 # seconds between ticks
 QUOTE_OFFSET    = 0.02               # FARM-003 F2: offset MUST exceed requote threshold (incident root #1)
 REQUOTE_FRAC    = 0.4                # FARM-003 F2: threshold = 0.4 * be_margin(2.5c) = 1.0c < 2.0c offset
 STATE_FILE      = "/opt/executor/app/farming_state.json"  # FARM-003: last_ts persistence across restarts
 
+# ── [FARM-011] CIRCUIT BREAKER (incident 2026-07-03: mid 0.615->0.59->back,
+#    61 fill events, ~12 full inventory cycles; F5 requote kept repositioning
+#    legs under informed flow). Trip: mid RANGE (max-min) over trailing window
+#    >= CB_DELTA_CENTS -> cancel ALL orders on market + pause quoting.
+#    Calibration (03.07 crash + 02.07 logs): normal drift 0.5-1c/5min;
+#    adverse episodes 2-3c/10min. Target segment (mature/stable, big_moves
+#    0/29 per 30d) should essentially never trip at 2c/10min.
+#    TRIP needs no minimum history span (2 samples suffice — a fresh restart
+#    into a storm must still trip fast). RECOVERY requires a minimum span
+#    (blind resume after restart is exactly the failure mode to avoid).
+CB_DELTA_CENTS          = 2.0   # trip: mid range >= this (cents) over window
+CB_WINDOW_SEC           = 600   # trailing window for trip check
+CB_COOLDOWN_SEC         = 900   # minimum pause after trip
+CB_RECOVERY_RANGE_CENTS = 1.0   # resume: mid range <= this over recovery window
+CB_RECOVERY_WINDOW_SEC  = 600   # trailing window for recovery check
+CB_RECOVERY_MIN_SPAN    = 300   # need >= this много history (sec) to judge recovery
+# ── [FARM-012] FILL REACTION: fill != "requote immediately" (old F5 behavior
+#    fed the steamroller). fill -> cancel BOTH legs + unload, short pause,
+#    re-evaluate mid, then requote. Pauses from FARM-011/012 MERGE via max()
+#    (never stack). Risk (accepted): pause zeroes reward score for its duration.
+FILL_PAUSE_SEC          = 120   # pause after adverse fill / missing tracked leg
+
 # Target markets (from Step A/B recon). size = shares per leg.
 # TODO CONFIRM: sizing, market selection, whether Fed#2 included alongside US x Iran.
 MARKETS = [
+    # 2026-07-06: single market. New People (NL) 2nd-most seats, Duma.
+    # Live /book: book_pts=1569, two-sided leg200 share=0.073 -> $1.17/d,
+    # mv2c=0/169h, range7d=4c, neg_risk, mid=0.21. end 2026-09-20.
+    # Netanyahu removed (resolved/exited 2026-07-06); cursors preserved FARM-016.
     {
-        "name":  "US x Iran meeting",
-        "token": "95676548525614691656970153001244738030704823210041753577158504248850005676647",
-        "min_size": 200,             # shares per leg
-        "inv_center": 200,           # FARM-003 F4: target seed inventory backing the ASK leg
-                                     #   inventory deviation is measured from HERE, not from 0
-        # max_spread / reward_daily filled at runtime from get_market()
+        "name":  "New People 2nd seats",
+        "token": "16812776081734673413618925676070790303458587814000834940389189903201996256784",
+        "min_size": 200,
+        "inv_center": 200,
+        "inv_deadband": 200,         # [FARM-017]
+        "max_inv": 400,              # [FARM-017]
+    },    
+    {
+        "name":  "AI 1530 Arena by Sep30",
+        "token": "54893086053865884845869248787484771799795088600261085229269223835220342300136",
+        "min_size": 200,
+        "inv_center": 200,
+        "inv_deadband": 100,
+        "max_inv": 400,
     },
-    # {"name": "Fed Pause x3 #2", "token": "9517687...", "min_size": 50},
 ]
 
 
@@ -157,9 +190,22 @@ def save_state_file(state):
     """[FARM-003] Atomic write (tmp+replace) of per-token cursors + alert latch.
     Never raises."""
     try:
-        # Token cursors
-        token_data = {tok: {"last_ts": st.get("last_ts", 0),
-                            "unload_id": st.get("unload_id")} for tok, st in state.items()}
+        # [FARM-016] preserve cursors for tokens NOT in current MARKETS:
+        # removing a market from the list must not drop its last_ts, or
+        # re-adding it replays full trade history as fresh fills (n=93, 04.07).
+        try:
+            with open(STATE_FILE) as f:
+                token_data = {k: v for k, v in json.load(f).items()
+                              if k != "_alerts"}
+        except Exception:
+            token_data = {}
+        # Token cursors (current markets overwrite preserved entries)
+        token_data.update({tok: {"last_ts": st.get("last_ts", 0),
+                            "unload_id": st.get("unload_id"),
+                            # [FARM-011] pause survives restart: a restart mid-storm
+                            # must NOT resume quoting into the same storm.
+                            "pause_until": st.get("pause_until", 0)}
+                      for tok, st in state.items()})
         # Alert latch: only the bool state (not _alert_last_bad timestamps)
         alert_data = {"_alerts": dict(_alert_state)}
         data = {**token_data, **alert_data}
@@ -328,7 +374,9 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
         tick = float(ob.get("tick_size") or mkt.get("tick_size") or 0.01)
         # anchor on book midpoint, not the passed mid, and round to tick
         book_mid = (best_bid + best_ask) / 2 if (best_bid and best_ask) else mid
-        def _round(x): return round(round(x / tick) * tick, 4)
+        def _round(x):
+            q = (Decimal(str(x)) / Decimal(str(tick))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+            return float(round(q * Decimal(str(tick)), 4))
         _plan = plan or {}
         bid_off = float(_plan.get("bid_offset", QUOTE_OFFSET))
         ask_off = float(_plan.get("ask_offset", QUOTE_OFFSET))
@@ -380,7 +428,10 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
     book_mid = (best_bid + best_ask) / 2 if (best_bid and best_ask) else mid
 
     def _round(x):
-        return round(round(x / tick) * tick, 4)
+        # [FARM-014] banker's rounding в round() давал асимметрию ног +-0.5 тика
+        # на полутиковых ценах (0.585 -> BID 2.5c / ASK 1.5c). HALF_UP детерминирован.
+        q = (Decimal(str(x)) / Decimal(str(tick))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        return float(round(q * Decimal(str(tick)), 4))
 
     # Plan-driven offsets/sizes (from inventory_manage). Default = symmetric.
     plan = plan or {}
@@ -447,6 +498,19 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
                 log(f"[place_two_sided] BID size capped by cash: {bid_size} -> {affordable_cap:.0f} "
                     f"(free=${free_cash:.2f})")
                 bid_size = affordable_cap
+
+    # [FARM-017] Безусловный верхний кап инвентаря (в файле нет FARM-007):
+    # если inv + bid_size > max_inv -> BID не ставим (ASK-only выше капа).
+    # Действует при ЛЮБОМ skew, в отличие от гейта FARM-004d ниже (reseed_buy only).
+    if bid_size > 0 and inv is not None:
+        max_inv = float(mkt.get("max_inv") or 0)
+        if max_inv <= 0:
+            _c = float(mkt.get("inv_center") or 0)
+            max_inv = _c + 2.0 * float(mkt.get("min_size") or 0)
+        if inv + bid_size > max_inv:
+            log(f"[place_two_sided] BID skipped: inv={inv:.0f} + bid_size={bid_size:.0f} "
+                f"> max_inv={max_inv:.0f} -> ASK-only (FARM-017 cap)")
+            bid_size = 0.0
 
     # [FARM-004d rev.5] Fix 2: inv+bid_size overshoot gate.
     # Active only when skew == 'reseed_buy' (deficit repurchase mode).
@@ -577,6 +641,71 @@ def cancel_quotes(c, order_ids):
             log(f"[cancel_quotes] cancel {oid} error (raw, not auto-fixed): {e}")
 
 
+# ─────────────────── CIRCUIT BREAKER / PAUSE [FARM-011/012] ──────────────────
+def _mid_range_cents(hist, window_sec, now=None):
+    """[FARM-011] Range (max-min) of mid over the trailing `window_sec`, in cents.
+    `hist` = list of (wall_ts, mid). Returns (range_cents, span_sec);
+    range_cents is None when <2 samples fall inside the window (can't judge).
+    Read-only, never raises on well-formed hist."""
+    now = now if now is not None else time.time()
+    lo = now - window_sec
+    mids = [m for ts, m in hist if ts >= lo]
+    if len(mids) < 2:
+        return None, 0.0
+    ts_in = [ts for ts, m in hist if ts >= lo]
+    span = max(ts_in) - min(ts_in)
+    return (max(mids) - min(mids)) * 100.0, span
+
+
+def _prune_mid_hist(hist, now=None):
+    """[FARM-011] Drop samples older than the longest lookback (+60s slack).
+    In-place; returns hist."""
+    now = now if now is not None else time.time()
+    horizon = max(CB_WINDOW_SEC, CB_RECOVERY_WINDOW_SEC) + 60
+    lo = now - horizon
+    while hist and hist[0][0] < lo:
+        hist.pop(0)
+    return hist
+
+
+def enter_pause(c, st, mkt, duration_sec, reason):
+    """[FARM-011/012] Enter (or extend) quoting pause on a market:
+      - cancel tracked legs AND the auto-unload order (a maker SELL resting
+        through a storm is adverse-fill bait, same as the legs);
+      - clear ids/center/unload_id so resume starts from a fresh quote;
+      - pause_until = max(current, now + duration): pauses MERGE, never stack.
+    Alert: onset via edge_notify latch (live only; DRY logs only). Extension of
+    an already-active pause logs but does not re-notify (latch stays bad).
+    Never raises (cancel_quotes swallows per-order errors)."""
+    now = time.time()
+    try:
+        if st.get("ids") is not None:
+            cancel_quotes(c, st["ids"])
+            st["ids"] = None
+        if st.get("unload_id"):
+            cancel_quotes(c, (st["unload_id"],))
+            st["unload_id"] = None
+        st["center"] = None
+        prev_until = float(st.get("pause_until") or 0)
+        new_until = max(prev_until, now + duration_sec)
+        st["pause_until"] = new_until
+        left = new_until - now
+        log(f"[FARM-011/012] PAUSE on {mkt['name']}: reason={reason} "
+            f"min_left={left/60:.1f}m (until={new_until:.0f})")
+        if not DRY_RUN:
+            edge_notify(
+                f"pause:{mkt['token']}", True,
+                f"🔴 Пауза котирования ({mkt['name']}): {reason}. "
+                f"Все ордера сняты. Возобновление — после стабилизации mid "
+                f"(размах ≤{CB_RECOVERY_RANGE_CENTS:.1f}c за "
+                f"{CB_RECOVERY_WINDOW_SEC//60} мин), не раньше чем через "
+                f"{duration_sec//60} мин.",
+                "",  # recovery text is sent at the resume site
+                cooldown=0)
+    except Exception as e:
+        log(f"[enter_pause] raw (not auto-fixed): {e}")
+
+
 def reconcile_orders(c, token, st, min_size, mid=None):
     """[FARM-003 F1+F5] The BOOK is the source of truth, not in-memory st['ids'].
     Incident 2026-07-02: restart lost st['ids'] -> orphan BUY@0.60 rested 8h;
@@ -597,7 +726,7 @@ def reconcile_orders(c, token, st, min_size, mid=None):
         requoting every tick would burn accrued score).
     Returns {'one_sided': bool, 'force_requote': bool}. Read-only except
     orphan cancellation. Never raises."""
-    out = {"one_sided": False, "force_requote": False}
+    out = {"one_sided": False, "force_requote": False, "missing_legs": False}
     # [FARM-004h Fix 2] Compute locked_sell even when st["ids"] is None (first tick
     # after restart). This ensures place_two_sided has the correct locked_sell even
     # on the first tick, so ASK-cap is not blind.
@@ -639,6 +768,15 @@ def reconcile_orders(c, token, st, min_size, mid=None):
             log(f"[reconcile] ORPHAN {o.get('side')} @ {o.get('price')} id={oid} -> cancel")
             cancel_quotes(c, (oid,))
             out["force_requote"] = True
+            continue
+        # [FARM-017-fix3] unload — намеренно rewardless параллельная нога
+        # (excess < min_size by design при deadband=min_size). F5-гейт ниже
+        # мерит её порогом min_size -> rem<min -> force_requote КАЖДЫЙ тик ->
+        # requote-storm (инцидент 05.07, TICK48-79). Дисциплина unload —
+        # отдельный drift-guard FARM-004h Fix1 ниже, НЕ порог min_size.
+        # sides.add сохранён: unload как SELL-сторона учитывается в one_sided.
+        if unload_id and oid == unload_id:
+            sides.add(o.get("side"))
             continue
         sides.add(o.get("side"))
         try:
@@ -725,9 +863,14 @@ def reconcile_orders(c, token, st, min_size, mid=None):
                 cooldown=0)
         rest = missing - {unload_id}
         if rest:
+            # [FARM-012] a tracked leg vanished = filled or rejected. Old behavior
+            # (force requote NOW) is what fed the steamroller on 03.07. Route
+            # through the fill-pause instead: main loop cancels the surviving leg
+            # and pauses. Orphan/undersized branches above keep force_requote —
+            # those are hygiene, not adverse-flow signals.
             log(f"[reconcile] tracked leg(s) missing from book (filled/rejected): "
-                f"{sorted(rest)} -> force requote")
-            out["force_requote"] = True
+                f"{sorted(rest)} -> fill-pause (FARM-012)")
+            out["missing_legs"] = True
     if len(sides) < 2:
         out["one_sided"] = True
     return out
@@ -872,7 +1015,10 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
         # ABOVE seed (adverse BID fills accumulated): pull ASK toward mid to
         # unload the excess, suppress BID (stop accumulating).
         tighter = max(off / 2.0, 0.005)
-        plan.update(ask_offset=tighter, bid_size=0.0, skew="long_unload")
+        # [FARM-017] BID widen x2 вместо bid_size=0: подавление BID держало
+        # демона one-sided 57% времени 03.07 (1/3 score). Corridor guard ниже
+        # капнет offset на max_spread, если x2 вылезает за коридор.
+        plan.update(ask_offset=tighter, bid_offset=off * 2.0, skew="long_unload")
     elif delta < -dead:
         # BELOW seed (ASK drained): pull BID toward mid to REBUY the seed,
         # ASK sizing handled by F3 cap (posts only what inventory can back).
@@ -930,6 +1076,35 @@ def heartbeat(ready=False):
         log(f"[heartbeat] notify send failed (raw, not auto-fixed): {e}")
 
 
+# ─────────────────────────── GRACEFUL SHUTDOWN [FARM-020] ──────────────────
+_shutdown_requested = False
+
+
+def _sigterm_handler(signum, frame):
+    global _shutdown_requested
+    _shutdown_requested = True
+
+
+def _graceful_shutdown(c, state):
+    """Cancel all active orders on all markets, save state, log, exit 0."""
+    log("[SHUTDOWN] Received SIGTERM, cancelling all orders...")
+    for mkt in MARKETS:
+        token = mkt["token"]
+        st = state.get(token, {})
+        ids_to_cancel = list(st.get("ids") or [])
+        unload_id = st.get("unload_id")
+        if unload_id:
+            ids_to_cancel.append(unload_id)
+        if ids_to_cancel:
+            cancel_quotes(c, ids_to_cancel)
+            log(f"[SHUTDOWN] {mkt['name']}: cancelled {len(ids_to_cancel)} order(s)")
+        else:
+            log(f"[SHUTDOWN] {mkt['name']}: no active orders")
+    save_state_file(state)
+    log("[SHUTDOWN] orders cancelled, state saved")
+    sys.exit(0)
+
+
 # ─────────────────────────── MAIN LOOP ────────────────────────────────
 def main():
     if '--diag' in sys.argv:
@@ -948,6 +1123,7 @@ def main():
     # down") cannot be self-reported by a dead process -> external watcher, FARM-005.
     notify(f"🟢 Демон поднялся · LIVE (DRY_RUN={DRY_RUN})")
     c = build_client()
+    signal.signal(signal.SIGTERM, _sigterm_handler)  # [FARM-020] graceful shutdown
     if DRY_RUN and not os.path.exists(ENV_PATH):
         log("Client ready (read-only, no address — DRY_RUN no-key mode)")
     else:
@@ -962,7 +1138,13 @@ def main():
     state = {m["token"]: {"center": None, "ids": None, "be": None,
                           "params": None, "inv": 0.0,
                           "last_ts": int((persisted.get(m["token"]) or {}).get("last_ts", 0)),
-                          "unload_id": (persisted.get(m["token"]) or {}).get("unload_id")}
+                          "unload_id": (persisted.get(m["token"]) or {}).get("unload_id"),
+                          # [FARM-011] mid history (wall_ts, mid); NOT persisted —
+                          # rebuilds in-window; trip needs only 2 samples so a
+                          # restart into a storm still trips within ~1 tick of
+                          # a 2c move. [FARM-011] pause_until IS persisted.
+                          "mid_hist": [],
+                          "pause_until": float((persisted.get(m["token"]) or {}).get("pause_until", 0) or 0)}
              for m in MARKETS}
     if persisted:
         log(f"[state] restored cursors: "
@@ -971,6 +1153,8 @@ def main():
     tick_n = 0
 
     while True:
+        if _shutdown_requested:
+            _graceful_shutdown(c, state)
         try:
             tick_n += 1
             for mkt in MARKETS:
@@ -1009,6 +1193,26 @@ def main():
                 # 2. midpoint                                                    [NEW]
                 mid = read_midpoint(c, token)
 
+                # 2a. [FARM-011] mid history + circuit-breaker trip check.
+                #     Runs EVERY tick (incl. during pause — history keeps building
+                #     so the recovery check has data). Trip only ENTERS/extends
+                #     nothing while already paused: recovery gate alone controls
+                #     resume (trip range >= 2c and recovery range <= 1c over the
+                #     same-length windows are mutually exclusive states).
+                now_ts = time.time()
+                st["mid_hist"].append((now_ts, mid))
+                _prune_mid_hist(st["mid_hist"], now_ts)
+                paused_now = now_ts < float(st.get("pause_until") or 0)
+                if not paused_now:
+                    rng_c, _span = _mid_range_cents(
+                        st["mid_hist"], CB_WINDOW_SEC, now_ts)
+                    if rng_c is not None and rng_c >= CB_DELTA_CENTS:
+                        enter_pause(c, st, mkt, CB_COOLDOWN_SEC,
+                                    f"circuit breaker: размах mid {rng_c:.1f}c "
+                                    f"за {CB_WINDOW_SEC//60} мин "
+                                    f"≥ {CB_DELTA_CENTS:.1f}c")
+                        paused_now = True
+
                 # 3. adverse-fill FIRST (fill = failure), then reconcile inventory[NEW]
                 fills, st["last_ts"] = check_fills(
                     c, params["condition_id"], FUNDER, st["last_ts"])
@@ -1016,8 +1220,65 @@ def main():
                 if fills:
                     # fill = adverse selection event; operator must hear about it
                     # from the daemon, not from a CSV export the next morning.
-                    notify(f"[farm] fill(s) detected on {mkt['name']}: "
-                           f"n={len(fills)} inv_now={st['inv']}")
+                    inv_txt = (f"{st['inv']:.2f}" if st['inv'] is not None
+                               else "n/a")
+                    notify(f"\U0001F534 Адверс-филл ({mkt['name']}): "
+                           f"n={len(fills)} / Inventory: {inv_txt}")
+                    # [FARM-012] fill -> cancel both legs + unload, pause, re-evaluate
+                    # mid before requoting (old behavior: F5 force requote NOW,
+                    # which repositioned legs under informed flow -> 03.07).
+                    # If already paused (e.g. CB tripped this tick) this only
+                    # extends pause_until via max() — merge, not stack.
+                    enter_pause(c, st, mkt, FILL_PAUSE_SEC,
+                                f"адверс-филл n={len(fills)}")
+                    paused_now = True
+
+                # 3-gate. [FARM-011/012] pause gate: while paused — no quoting,
+                # no auto-unload (a maker SELL resting through a storm is bait),
+                # no reseed, no requote. check_fills above still runs (cursor
+                # hygiene + fill alerts). Resume requires BOTH:
+                #   (a) minimum pause elapsed, AND
+                #   (b) mid stable: range <= CB_RECOVERY_RANGE_CENTS over the
+                #       recovery window, with >= CB_RECOVERY_MIN_SPAN of history
+                #       (fresh restart can't blind-resume into the storm).
+                if paused_now or float(st.get("pause_until") or 0) > 0:
+                    if paused_now:
+                        left = float(st["pause_until"]) - now_ts
+                        throttled_log(
+                            f"pause_tick:{token}",
+                            f"[TICK {tick_n}] {mkt['name']} mid={mid:.4f} "
+                            f"-> PAUSED ({left/60:.1f}m min left; resume needs "
+                            f"stable mid)", seconds=300)
+                        continue
+                    # pause_until elapsed -> check stability before resuming
+                    rec_rng, rec_span = _mid_range_cents(
+                        st["mid_hist"], CB_RECOVERY_WINDOW_SEC, now_ts)
+                    if (rec_rng is None or rec_span < CB_RECOVERY_MIN_SPAN
+                            or rec_rng > CB_RECOVERY_RANGE_CENTS):
+                        rng_txt = f"{rec_rng:.1f}c" if rec_rng is not None else "n/a"
+                        throttled_log(
+                            f"pause_hold:{token}",
+                            f"[FARM-011] {mkt['name']} pause elapsed but mid not "
+                            f"stable yet: range={rng_txt} span={rec_span:.0f}s "
+                            f"(need <= {CB_RECOVERY_RANGE_CENTS:.1f}c over "
+                            f">= {CB_RECOVERY_MIN_SPAN}s) -> stay paused",
+                            seconds=300)
+                        continue
+                    # stable -> resume
+                    st["pause_until"] = 0
+                    log(f"[FARM-011] RESUME on {mkt['name']}: mid stable "
+                        f"(range={rec_rng:.1f}c over {rec_span:.0f}s)")
+                    if not DRY_RUN:
+                        edge_notify(
+                            f"pause:{token}", False,
+                            "",
+                            f"🟢 Котирование возобновлено ({mkt['name']}): mid "
+                            f"стабилен (размах {rec_rng:.1f}c ≤ "
+                            f"{CB_RECOVERY_RANGE_CENTS:.1f}c за "
+                            f"{CB_RECOVERY_WINDOW_SEC//60} мин).",
+                            cooldown=0)
+                    # fall through: this tick continues into normal quoting path
+                    # (center=None -> fresh two-sided quote below)
                 # [FARM-004h] Fix 3 every tick: auto-unload excess inventory.
                 # Runs on every tick (not only on fills) while no active unload order exists.
                 # Conditions: inv known, not DRY_RUN, no pending unload_id, inv > threshold+20.
@@ -1028,7 +1289,7 @@ def main():
                     dead = float(mkt.get("inv_deadband") or (min_sz * 0.5))
                     threshold = center + dead
                     excess = inv_now - center
-                    if inv_now > threshold and excess > 20:
+                    if excess > 20:  # [FARM-017-fix2] unload any excess over center (was: only at cap - left partial excess stranded)
                         # Place auto-unload SELL at mid for excess shares
                         # [FARM-004d rev.2 Правка B] round price UP to nearest tick
                         # (safe for SELL: price must be > mid to not cross the book)
@@ -1073,6 +1334,7 @@ def main():
                 # st["ids"]=None, so orphan orders from the dead process never get
                 # detected. Fix: fetch live orders, adopt ONE per side (closest to
                 # target), cancel all other legs even if within threshold.
+                ids_before_reseed = st["ids"]   # [FARM-020-fix2] track if reconcile ran full path
                 if st["ids"] is None and not DRY_RUN and mid is not None:
                     bid_target = mid - float(QUOTE_OFFSET)
                     ask_target = mid + float(QUOTE_OFFSET)
@@ -1148,6 +1410,14 @@ def main():
                 # 3a. reconcile book vs memory (F1/F5): orphans, missing legs,
                 #     undersized legs, one-sided state.                    [FARM-003]
                 rec = reconcile_orders(c, token, st, float(mkt["min_size"]), mid)
+                # [FARM-012] tracked leg vanished (filled/rejected) -> same
+                # reaction as a detected fill: cancel survivor + pause. Covers
+                # the data-api lag case where the leg is gone from the book
+                # before get_trades returns the fill.
+                if rec.get("missing_legs"):
+                    enter_pause(c, st, mkt, FILL_PAUSE_SEC,
+                                "нога исчезла из книги (филл/реджект)")
+                    continue
                 if rec["one_sided"]:
                     log(f"[reconcile] ONE-SIDED quoting on {mkt['name']} "
                         f"(1/3 reward score), inv={st['inv']}")
@@ -1178,8 +1448,11 @@ def main():
                 need_requote = False
                 if st["center"] is None:
                     need_requote = True
-                elif fills or rec["force_requote"]:
-                    need_requote = True     # eaten/failed/orphan/undersized leg -> restore now
+                elif rec["force_requote"]:
+                    need_requote = True     # orphan/undersized/unload-drift leg -> restore now
+                    # [FARM-012] `fills` removed from this condition: adverse
+                    # fills now route through enter_pause above (never requote
+                    # straight into informed flow).
                 elif plan is not None and plan.get("skew") != st.get("last_skew", "flat"):
                     need_requote = True     # skew CHANGED -> reposition once
                     # (steady skew must NOT requote every tick — cancel/replace
@@ -1191,6 +1464,27 @@ def main():
                 if need_requote:
                     if st["ids"] is not None:
                         cancel_quotes(c, st["ids"])
+                        # [FARM-019] locked_sell was computed by reconcile BEFORE this
+                        # cancel: the ASK leg just cancelled is still counted, so F3
+                        # sized backable = inv - stale_lock = 0 -> ONE-SIDED oscillation
+                        # (every second requote lost the ASK). Recompute from live open
+                        # orders AFTER the cancel; unload order (not in st["ids"]) stays
+                        # correctly counted. On API failure keep stale value (safe side:
+                        # under-posts ASK, never over-posts).
+                        try:
+                            _live = [o for o in (c.get_open_orders() or [])
+                                     if o.get("asset_id") == token]
+                            _lock = 0.0
+                            for _o in _live:
+                                if _o.get("side") == "SELL":
+                                    try:
+                                        _lock += (float(_o.get("original_size", 0))
+                                                  - float(_o.get("size_matched", 0)))
+                                    except (TypeError, ValueError):
+                                        pass
+                            st["locked_sell"] = _lock
+                        except Exception:
+                            pass
                     st["ids"] = place_two_sided(c, mkt, mid, plan=plan, params=params,
                                                 inv=st["inv"], locked_sell=st.get("locked_sell"))
                     st["center"] = mid
@@ -1202,16 +1496,43 @@ def main():
                 # ─── [FARM-004] operator edge-alerts (live only; no-op in DRY) ───
                 if not DRY_RUN and st["ids"] is not None:
                     # A. ONE-SIDED: onset/recovery with Russian texts (#1/#6), latch persisted.
-                    # Guard: don't fire (or overwrite latch) until daemon has placed legs this run.
+                    # [FARM-020-fix2] Source of truth for one_sided:
+                    #   - Requote tick: place_two_sided returned (bid_id, ask_id) → one_sided = XOR
+                    #   - Non-requote tick: rec["one_sided"] only if reconcile ran full path
+                    #     (ids_before_reseed is not None). If reconcile early-returned and
+                    #     no requote happened → don't touch latch at all.
                     mkt_min_sz = float(mkt.get("min_size", 0))
                     inv_val = st.get("inv")
                     inv_txt = f"{inv_val:.2f}" if inv_val is not None else "n/a"
-                    edge_notify(
-                        f"one_sided:{token}", rec["one_sided"],
-                        f"🟡 Одна сторона ({mkt['name']}) / Котирую только BID. "
-                        f"Reward ⅓. / Inventory: {inv_txt} / {mkt_min_sz:.0f} YES",
-                        f"🟢 Обе стороны ({mkt['name']}) / BID + ASK активны. Полный reward.",
-                        cooldown=1800)
+                    # [FARM-020-fix2] Derive one_sided from place_two_sided's actual return.
+                    # st["ids"] is (bid_id, ask_id). one_sided = exactly one leg not None.
+                    bid_id, ask_id = st["ids"]
+                    real_bid = bid_id and not str(bid_id).startswith("dry_")
+                    real_ask = ask_id and not str(ask_id).startswith("dry_")
+                    place_one_sided = real_bid != real_ask  # XOR: exactly one leg
+                    if need_requote:
+                        # We placed orders → use place_two_sided result.
+                        # Only call edge_notify if at least one REAL leg was placed
+                        # (avoids false alert when place_two_sided returned (None, None)).
+                        if real_bid or real_ask:
+                            edge_notify(
+                                f"one_sided:{token}", place_one_sided,
+                                f"🟡 Одна сторона ({mkt['name']}) / Котирую только BID. "
+                                f"Reward ⅓. / Inventory: {inv_txt} / {mkt_min_sz:.0f} YES",
+                                f"🟢 Обе стороны ({mkt['name']}) / BID + ASK активны. Полный reward.",
+                                cooldown=1800)
+                    else:
+                        # No requote → trust reconcile's result, but only if it ran full path.
+                        # ids_before_reseed is not None means we had tracked orders going into
+                        # this tick → reconcile actually checked the book.
+                        # If reconcile early-returned (ids_before_reseed is None) → don't touch latch.
+                        if ids_before_reseed is not None:
+                            edge_notify(
+                                f"one_sided:{token}", rec["one_sided"],
+                                f"🟡 Одна сторона ({mkt['name']}) / Котирую только BID. "
+                                f"Reward ⅓. / Inventory: {inv_txt} / {mkt_min_sz:.0f} YES",
+                                f"🟢 Обе стороны ({mkt['name']}) / BID + ASK активны. Полный reward.",
+                                cooldown=1800)
 
                     # B. SCORING-LOST: legs alive but outside reward corridor (#2), cooldown=0.
                     #    Only checked on a settled book (both legs tracked, no requote this tick).

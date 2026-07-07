@@ -1,0 +1,9 @@
+/opt/executor/logs/farming_control_bot.log {
+    size 10M
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
