@@ -357,6 +357,7 @@
 | FARM-020-fix | one_sided latch bug: place_two_sided return → XOR = one_sided; non-requote → reconcile only if full path; skip latch on early-return | feature:liquidity-farming | DONE |
 | FARM-021 | hardening: normalize st["ids"] after RESEED adoption to 2-tuple (bid_id, ask_id), None for missing leg — unpack at alert block fragile to future code paths | feature:liquidity-farming | BACKLOG |
 | FARM-022 | DONE: (K1) farm_screen→DB candidates+fees, cron 2×/день, retention 30d; (K2) degradation-watch в pipeline_monitor (pool/max_spread/fees/end_date); (K3) TG-дайджест топ-5+дельты, cron after farm_screen | feature:liquidity-farming | DONE |
+| FARM-023 | book_depth per-side + thin_book фильтр в скринере и дайджесте | feature:liquidity-farming | DONE |
 
 ## EPIC: LIVE — Live Execution
 

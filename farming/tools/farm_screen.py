@@ -49,6 +49,7 @@ TOP_N_BY_POOL   = 40           # phase A: топ по пулу под live-book 
 TICK_REQUIRED   = "0.01"       # Слой0 гейт2: только 1¢, 0.1¢ = пенни-война
 MAXSPREAD_MIN   = 3.0          # Слой1 гейт5: max_spread ниже -> нога без запаса
 DOLLAR_PER_DAY_MIN = 1.0       # Слой1 гейт6: reward ниже порога не платится
+THIN_BOOK_MULT     = 1.0       # thin_book: min(bid,ask)_depth_usd < THIN_BOOK_MULT × our_size_per_side
 MV2C_MAX        = 8            # Слой3: >N движений≥2¢/нед = волатилен -> вон (adverse)
 PTS_K_MIN       = 0.5          # Слой3: книга тоньше = мёртвый рынок -> вон (не флаг)
 OUR_SIZE        = int(sys.argv[1]) if len(sys.argv) > 1 else 300  # нога: argv[1] или 300
@@ -85,6 +86,7 @@ def insert_candidates_to_db(candidates, scan_run_id, conn):
             end_date, days_to_end, required_capital,
             funnel_stage, our_daily_usd, est_daily_yield_pct,
             fees_enabled, neg_risk, tick, moves2c, dead_book,
+            bid_depth_usd, ask_depth_usd, thin_book,
             scan_run_id, scanned_at, is_deep_scanned
         ) VALUES (
             %s, %s, %s, %s, %s, %s,
@@ -93,6 +95,7 @@ def insert_candidates_to_db(candidates, scan_run_id, conn):
             %s, %s, %s,
             %s, %s, %s,
             %s, %s, %s, %s, %s,
+            %s, %s, %s,
             %s, NOW(), FALSE
         )
     """
@@ -134,6 +137,9 @@ def insert_candidates_to_db(candidates, scan_run_id, conn):
                 c.get("tick"),              # tick
                 c.get("moves2c"),          # moves2c
                 c.get("dead_book"),         # dead_book
+                c.get("bid_depth_usd"),     # bid_depth_usd
+                c.get("ask_depth_usd"),     # ask_depth_usd
+                c.get("thin_book"),         # thin_book
                 scan_run_id,                # scan_run_id
             ]
             with conn.cursor() as cur:
@@ -366,6 +372,24 @@ for c in cand:
         c["our_share"] = round(our_share, 6) if our_share is not None else None
         c["our_daily"] = round(our_share * c["pool"], 2) if our_share is not None else None
         c["usd_per_kpts"] = round(c["pool"] / (book_pts / 1000), 2) if book_pts > 0 else None
+
+        # [FARM-023] dollar depth: bid_depth_usd = Σ price×size, ask_depth_usd = Σ (1-price)×size
+        # liquidity_clob = reward pool sum, misnamed; не глубина книги
+        bid_depth_usd = 0.0
+        ask_depth_usd = 0.0
+        for side in ("bids", "asks"):
+            for lvl in b.get(side, []):
+                s = abs(float(lvl["price"]) - mid)
+                if s < ms:
+                    px = float(lvl["price"])
+                    sz = float(lvl["size"])
+                    if side == "bids":
+                        bid_depth_usd += px * sz
+                    else:
+                        ask_depth_usd += (1.0 - px) * sz
+        c["bid_depth_usd"] = round(bid_depth_usd, 2)
+        c["ask_depth_usd"] = round(ask_depth_usd, 2)
+        c["thin_book"] = min(bid_depth_usd, ask_depth_usd) < THIN_BOOK_MULT * OUR_SIZE
     except Exception as e:
         c["our_daily"] = None
         c["err"] = str(e)[:40]

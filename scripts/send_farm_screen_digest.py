@@ -134,12 +134,19 @@ def build_digest() -> str:
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            # Top-5 of latest run
+            # Count thin_book=t in latest run (for footer)
+            cur.execute("""
+                SELECT COUNT(*) FROM farming_market_candidates
+                WHERE scan_run_id = %s AND thin_book = TRUE
+            """, (latest_run_id,))
+            thin_book_count = cur.fetchone()[0] or 0
+
+            # Top-5 of latest run (exclude thin_book candidates)
             cur.execute("""
                 SELECT gamma_id, question, our_daily_usd, fees_enabled,
                        neg_risk, tick, moves2c
                 FROM farming_market_candidates
-                WHERE scan_run_id = %s
+                WHERE scan_run_id = %s AND (thin_book IS NULL OR thin_book = FALSE)
                 ORDER BY our_daily_usd DESC NULLS LAST
                 LIMIT 5
             """, (latest_run_id,))
@@ -198,6 +205,10 @@ def build_digest() -> str:
         flags = " ".join(x for x in [fees_flag, neg_flag] if x)
         lines.append(f"{i}. {q_short}")
         lines.append(f"   our_daily=${our_val:.2f}{delta_line} {flags}")
+
+    if thin_book_count > 0:
+        lines.append("")
+        lines.append(f"<i>отфильтровано thin_book: {thin_book_count}</i>")
 
     msg = "\n".join(lines)
     return msg
