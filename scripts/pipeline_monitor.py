@@ -10,6 +10,8 @@ import re
 import subprocess
 import sys
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -449,6 +451,204 @@ def check_retention_cron_error():
         return False  # Error reading file — skip, don't alert
 
 
+# =============================================================================
+# FARM-022 К2: farm degradation watch
+# =============================================================================
+
+CLOB_API = "https://clob.polymarket.com"
+GAMMA_API = "https://gamma-api.polymarket.com"
+UA = {"User-Agent": "Mozilla/5.0"}
+
+
+def _http_get(url, timeout=10):
+    """Simple GET with UA, returns dict or None on error."""
+    try:
+        req = urllib.request.Request(url, headers=UA)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except Exception:
+        return None
+
+
+def _get_clob_market(condition_id):
+    """Fetch CLOB /markets/{condition_id}, return (pool, max_spread, end_date_iso, neg_risk)."""
+    d = _http_get(f"{CLOB_API}/markets/{condition_id}")
+    if not d:
+        return None
+    rewards = d.get("rewards") or {}
+    rates = rewards.get("rates") or []
+    pool = sum(float(x.get("rewards_daily_rate", 0)) for x in rates)
+    return {
+        "pool": pool,
+        "max_spread": rewards.get("max_spread"),
+        "end_date_iso": d.get("end_date_iso"),
+        "neg_risk": d.get("neg_risk"),
+    }
+
+
+def _get_gamma_fees(gamma_id):
+    """Fetch Gamma /markets/{gamma_id}, return feesEnabled or None."""
+    d = _http_get(f"{GAMMA_API}/markets/{gamma_id}")
+    if not d:
+        return None
+    return d.get("feesEnabled")
+
+
+def check_farm_degradation(results: dict):
+    """
+    Edge-triggered degradation watch for farming_active_markets status=active.
+    Проверяет: pool=0/снижен>30%, max_spread≠baseline, feesEnabled false→true, days_to_end<14.
+    Component в system_state: farm_degradation_{gamma_id}.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, token_id, condition_id, gamma_id, name,
+                       pool_baseline, max_spread_baseline, fees_enabled_baseline,
+                       neg_risk_baseline, end_date_baseline
+                FROM farming_active_markets
+                WHERE status = 'active'
+            """)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return
+
+    degradation_events = []
+
+    for row in rows:
+        (mkt_id, token_id, condition_id, gamma_id, name,
+         pool_bl, ms_bl, fees_bl, nr_bl, end_bl) = row
+
+        # CLOB: pool, max_spread, end_date
+        clob = _get_clob_market(condition_id)
+        if clob is None:
+            print(f"[WARN] farm_degradation: CLOB failed for {name}")
+            continue
+
+        pool_cur = clob["pool"]
+        ms_cur = clob["max_spread"]
+        end_date_iso = clob["end_date_iso"]
+
+        # Gamma: feesEnabled
+        fees_cur = _get_gamma_fees(gamma_id)
+        if fees_cur is None:
+            print(f"[WARN] farm_degradation: Gamma failed for {name}")
+            continue
+
+        # Compute current degraded conditions set (static names for state)
+        # condition_details: name → human-readable detail for alert text
+        condition_names = set()
+        condition_details = {}
+
+        # pool = 0 or dropped >30% from baseline
+        pool_bl_f = float(pool_bl) if pool_bl else 0.0
+        if pool_cur == 0:
+            condition_names.add("pool_zero")
+            condition_details["pool_zero"] = f"pool: {pool_bl_f:.1f} → 0 (zero)"
+        elif pool_bl_f > 0 and pool_cur < pool_bl_f * 0.7:
+            drop_pct = round((1 - pool_cur / pool_bl_f) * 100)
+            condition_names.add("pool_dropped")
+            condition_details["pool_dropped"] = f"pool: {pool_bl_f:.1f} → {pool_cur:.1f} (−{drop_pct}%)"
+
+        # max_spread changed
+        ms_bl_f = float(ms_bl) if ms_bl else None
+        if ms_cur != ms_bl_f:
+            condition_names.add("max_spread_changed")
+            condition_details["max_spread_changed"] = (
+                f"max_spread: {ms_bl_f} → {ms_cur}"
+                if ms_bl_f is not None else f"max_spread: none → {ms_cur}"
+            )
+
+        # feesEnabled: false→true vs baseline
+        if fees_cur is True and fees_bl is False:
+            condition_names.add("fees_enabled_true")
+            condition_details["fees_enabled_true"] = "feesEnabled: false → true (rebate ON)"
+
+        # days_to_end < 14
+        if end_date_iso:
+            try:
+                end_dt = datetime.fromisoformat(end_date_iso.replace("Z", "+00:00"))
+                days_left = (end_dt.date() - datetime.utcnow().date()).days
+                if days_left < 14:
+                    condition_names.add("days_to_end_low")
+                    condition_details["days_to_end_low"] = f"days_to_end: {days_left} (<14)"
+            except Exception:
+                pass
+
+        # Build current state string (sorted for deterministic comparison)
+        current_state = "|".join(sorted(condition_names)) if condition_names else "OK"
+
+        # Read previous state from system_state
+        conn2 = get_db_connection()
+        try:
+            with conn2.cursor() as cur:
+                cur.execute(
+                    "SELECT status FROM system_state WHERE component = %s",
+                    (f"farm_degradation_{gamma_id}",)
+                )
+                row2 = cur.fetchone()
+                prev_state = row2[0] if row2 else None
+                if prev_state is None:
+                    prev_state = "INIT"
+        finally:
+            conn2.close()
+
+        # Edge-triggered: alert only on state change
+        if current_state != prev_state:
+            if current_state == "OK":
+                msg = f"✅ Фарм-деградация восстановлена: {name}"
+                send_telegram_message(msg)
+            elif prev_state == "INIT":
+                msg = f"ℹ️ Фарм-деградация инициализирована: {name} → [{current_state}]"
+                send_telegram_message(msg)
+            else:
+                # Describe what changed (use condition_details for full text)
+                prev_set = set(prev_state.split("|")) if prev_state else set()
+                changed = condition_names - prev_set
+                recovered = prev_set - condition_names
+                lines = []
+                if changed:
+                    lines.append(f"⚠️ {name}:")
+                    for c in sorted(changed):
+                        detail = condition_details.get(c, c)
+                        lines.append(f"  • {detail}")
+                if recovered:
+                    lines.append(f"✅ Восстановлен: {name}")
+                    for c in sorted(recovered):
+                        lines.append(f"  • {c}")
+                if lines:
+                    send_telegram_message("\n".join(lines))
+
+            # Persist new state
+            conn3 = get_db_connection()
+            try:
+                with conn3.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO system_state (component, status, heartbeat_at, updated_at) "
+                        "VALUES (%s, %s, NOW(), NOW()) "
+                        "ON CONFLICT (component) DO UPDATE SET "
+                        "status = EXCLUDED.status, heartbeat_at = EXCLUDED.heartbeat_at, updated_at = EXCLUDED.updated_at",
+                        (f"farm_degradation_{gamma_id}", current_state)
+                    )
+                conn3.commit()
+            finally:
+                conn3.close()
+
+            degradation_events.append({
+                "name": name, "gamma_id": gamma_id,
+                "prev": prev_state, "current": current_state
+            })
+
+    results["farm_degradation"] = {
+        "checked": len(rows),
+        "events": degradation_events,
+    }
+
+
 def check_retention_deleted_count():
     """Parse last 'Total deleted' count from retention_cron.log.
 
@@ -836,6 +1036,9 @@ def run_pipeline_checks():
 
     # Check 14: retention deleted count from log
     results["retention_deleted"] = check_retention_deleted_count()
+
+    # Check 15: FARM-022 К2 — farm degradation watch (active markets)
+    check_farm_degradation(results)
 
     # Determine status based on results
     status, warnings, criticals = determine_status(results)

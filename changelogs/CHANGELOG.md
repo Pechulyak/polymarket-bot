@@ -14,6 +14,7 @@
 | 2026-07-07 | FARM-020 | Graceful shutdown: SIGTERM handler → _graceful_shutdown() → cancel all orders → save state → exit 0. TimeoutStopSec=120 в farming-daemon.service. |
 | 2026-07-07 | FARM-020-fix2 | one_sided latch bug fix: источник истины — place_two_sided return (bid_id, ask_id), one_sided=XOR. Requote tick → place_one_sided. Non-requote tick → rec["one_sided"] только если reconcile ran full path (ids_before_reseed is not None). Early-return skip latch. Верификация: рестарт при latch=True → нет ложного 🟢. |
 | 2026-07-07 | — | Repo hygiene: удалён легаси-дубль farming/farming_daemon.py; канонический путь executor/farming_daemon.py. В BACKLOG: INFRA-050 — farming-daemon.service отсутствует в репо (добавить в deploy/). |
+| 2026-07-07 | FARM-022 | (K1) farm_screen.py v4.9→DB: farming_market_candidates INSERT, 30d retention, cron 2×/день. Миграция: our_daily_usd, fees_enabled, neg_risk, tick, moves2c, dead_book. (K2) degradation-watch: check_farm_degradation() в pipeline_monitor, edge-triggered (system_state), мониторит pool/max_spread/feesEnabled/end_date против baselines из farming_active_markets. (K3) TG-дайджест: send_farm_screen_digest.py — топ-5 по our_daily_usd + дельты vs предыдущий прогон, 💰/NR флаги, HTML parse_mode. Cron after farm_screen. scan_farming_candidates.py удалён (заменён farm_screen.py v4.9). |
 
 ## 2026-07-04
 
