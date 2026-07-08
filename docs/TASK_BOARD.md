@@ -348,7 +348,7 @@
 | FARM-012 | Fill-реакция: fill/missing-leg → пауза 120с (merge кулдаунов через max), персистентность pause_until | feature:liquidity-farming | DONE |
 | FARM-013 | Websocket CLOB WSS (латентность 10-20с → <1с) — заморожен: +$4.86/д на дне катастрофы 03.07, burst-филлы не ловит | feature:liquidity-farming | FROZEN |
 | FARM-014 | ROUND_HALF_UP в _round (оба пути ценообразования) | feature:liquidity-farming | DONE |
-| FARM-015 | Multi-market lite: cash-аллокатор → markets.json → parallel poll (гейт: ≥$2.5/д после 2 недель live) | feature:liquidity-farming | TODO |
+| FARM-015-lite | markets.json schema + export script (min_size, inv_center, inv_deadband, max_inv, weight, gamma_id, condition_id); migration_farm024 adds columns; export_farming_markets.py | feature:liquidity-farming | DONE |
 | FARM-016 | save_state_file сохраняет курсоры токенов вне текущего MARKETS (регрессия n=93) | feature:liquidity-farming | DONE |
 | FARM-017 | Deadband=нога, max_inv=center+2×нога безусловным капом, long_unload → BID-widening ×2 (поглощает FARM-004j) | feature:liquidity-farming | DONE |
 | FARM-018 | Скринер: добор пагинации диапазона 20-50k (Streeting liq=37k теряется за GAMMA_PAGES=5) | feature:liquidity-farming | TODO |

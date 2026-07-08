@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-08
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-08 | FARM-015-lite | markets.json schema + export script (FARM-015 subset). Schema: version=1, markets[] с полями name, token, min_size, inv_center, inv_deadband, max_inv, weight, gamma_id, condition_id. Миграция farm024: ALTER TABLE farming_active_markets ADD min_size/inv_center/inv_deadband/max_inv/weight DEFAULT (200/200/200-100/400/1). scripts/export_farming_markets.py: docker exec psql → JSON, валидация (непустой, уникальный token, numeric>0, inv_center≤max_inv), exit 1 на ошибку. |
+
 ## 2026-07-05
 
 | Дата | TASK_ID | Описание |
