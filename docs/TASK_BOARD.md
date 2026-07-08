@@ -348,7 +348,7 @@
 | FARM-012 | Fill-реакция: fill/missing-leg → пауза 120с (merge кулдаунов через max), персистентность pause_until | feature:liquidity-farming | DONE |
 | FARM-013 | Websocket CLOB WSS (латентность 10-20с → <1с) — заморожен: +$4.86/д на дне катастрофы 03.07, burst-филлы не ловит | feature:liquidity-farming | FROZEN |
 | FARM-014 | ROUND_HALF_UP в _round (оба пути ценообразования) | feature:liquidity-farming | DONE |
-| FARM-015-lite | markets.json schema + export script (min_size, inv_center, inv_deadband, max_inv, weight, gamma_id, condition_id); migration_farm024 adds columns; export_farming_markets.py | feature:liquidity-farming | DONE |
+| FARM-015 | markets.json schema + export script (min_size, inv_center, inv_deadband, max_inv, weight, gamma_id, condition_id); migration_farm024 adds columns; export_farming_markets.py. Pre-gate: schema + migration + export. Post-gate: загрузка markets.json в демон, cash-аллокатор, параллельный поллинг (гейт: ≥$2.5/д после 2 недель live) | feature:liquidity-farming | IN_PROGRESS |
 | FARM-016 | save_state_file сохраняет курсоры токенов вне текущего MARKETS (регрессия n=93) | feature:liquidity-farming | DONE |
 | FARM-017 | Deadband=нога, max_inv=center+2×нога безусловным капом, long_unload → BID-widening ×2 (поглощает FARM-004j) | feature:liquidity-farming | DONE |
 | FARM-018 | Скринер: добор пагинации диапазона 20-50k (Streeting liq=37k теряется за GAMMA_PAGES=5) | feature:liquidity-farming | TODO |
@@ -358,6 +358,7 @@
 | FARM-021 | hardening: normalize st["ids"] after RESEED adoption to 2-tuple (bid_id, ask_id), None for missing leg — unpack at alert block fragile to future code paths | feature:liquidity-farming | BACKLOG |
 | FARM-022 | DONE: (K1) farm_screen→DB candidates+fees, cron 2×/день, retention 30d; (K2) degradation-watch в pipeline_monitor (pool/max_spread/fees/end_date); (K3) TG-дайджест топ-5+дельты, cron after farm_screen | feature:liquidity-farming | DONE |
 | FARM-023 | book_depth per-side + thin_book фильтр в скринере и дайджесте | feature:liquidity-farming | DONE |
+| FARM-025 | level-gate после адверс-филла: запись last_adverse_fill в fill-ветке, level-gate при resume (mid ±1 tick), halted state с manual reset, halted+last_adverse_fill персистентны в farming_state.json | feature:liquidity-farming | IN_PROGRESS |
 
 ## EPIC: LIVE — Live Execution
 
@@ -373,4 +374,4 @@
 
 ---
 
-*Обновлено: 2026-07-07*
+*Обновлено: 2026-07-08*

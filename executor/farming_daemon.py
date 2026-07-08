@@ -204,7 +204,12 @@ def save_state_file(state):
                             "unload_id": st.get("unload_id"),
                             # [FARM-011] pause survives restart: a restart mid-storm
                             # must NOT resume quoting into the same storm.
-                            "pause_until": st.get("pause_until", 0)}
+                            "pause_until": st.get("pause_until", 0),
+                            # [FARM-025] halted survives restart: operator must manually
+                            # clear it after investigating the root cause.
+                            "halted": st.get("halted", False),
+                            # [FARM-025] last adverse fill price/side/ts for level-gate.
+                            "last_adverse_fill": st.get("last_adverse_fill")}
                       for tok, st in state.items()})
         # Alert latch: only the bool state (not _alert_last_bad timestamps)
         alert_data = {"_alerts": dict(_alert_state)}
@@ -1144,7 +1149,11 @@ def main():
                           # restart into a storm still trips within ~1 tick of
                           # a 2c move. [FARM-011] pause_until IS persisted.
                           "mid_hist": [],
-                          "pause_until": float((persisted.get(m["token"]) or {}).get("pause_until", 0) or 0)}
+                          "pause_until": float((persisted.get(m["token"]) or {}).get("pause_until", 0) or 0),
+                          # [FARM-025] halted survives restart: manual clear required.
+                          "halted": (persisted.get(m["token"]) or {}).get("halted", False),
+                          # [FARM-025] last adverse fill for level-gate (cleared on resume).
+                          "last_adverse_fill": (persisted.get(m["token"]) or {}).get("last_adverse_fill")}
              for m in MARKETS}
     if persisted:
         log(f"[state] restored cursors: "
@@ -1160,6 +1169,30 @@ def main():
             for mkt in MARKETS:
                 st = state[mkt["token"]]
                 token = mkt["token"]
+
+                # [FARM-025] early halted-gate: if halted, only monitor (mid + fill
+                # cursor hygiene), skip all trading. Independent of pause_until.
+                if st.get("halted"):
+                    now_halt = time.time()
+                    try:
+                        mid_halt = float(c.get_midpoint(token)["mid"])
+                        st["mid_hist"].append((now_halt, mid_halt))
+                        _prune_mid_hist(st["mid_hist"], now_halt)
+                    except Exception:
+                        mid_halt = None
+                    # check_fills cursor hygiene: only if condition_id available
+                    if st["params"] and st["params"].get("condition_id"):
+                        try:
+                            _, st["last_ts"] = check_fills(
+                                c, st["params"]["condition_id"], FUNDER, st["last_ts"])
+                        except Exception:
+                            pass
+                    mid_txt = f"{mid_halt:.4f}" if mid_halt is not None else "n/a"
+                    throttled_log(
+                        f"halted_tick:{token}",
+                        f"[FARM-025] {mkt['name']} halted, monitoring only mid={mid_txt}",
+                        seconds=300)
+                    continue
 
                 # 1. reward params + corridor margin (refresh periodically)      [NEW]
                 if st["params"] is None or tick_n % PARAM_REFRESH == 0:
@@ -1224,6 +1257,19 @@ def main():
                                else "n/a")
                     notify(f"\U0001F534 Адверс-филл ({mkt['name']}): "
                            f"n={len(fills)} / Inventory: {inv_txt}")
+                    # [FARM-025] record first adverse fill: side + price + ts
+                    our = None
+                    for tr in fills:
+                        for mo in (tr.get("maker_orders") or []):
+                            if str(mo.get("maker_address", "")).lower() == FUNDER.lower():
+                                our = {"side": mo.get("side"),
+                                       "price": float(mo.get("price") or 0),
+                                       "ts": int(time.time())}
+                                break
+                        if our:
+                            break
+                    if our and our["price"] > 0:
+                        st["last_adverse_fill"] = our
                     # [FARM-012] fill -> cancel both legs + unload, pause, re-evaluate
                     # mid before requoting (old behavior: F5 force requote NOW,
                     # which repositioned legs under informed flow -> 03.07).
@@ -1264,7 +1310,38 @@ def main():
                             f">= {CB_RECOVERY_MIN_SPAN}s) -> stay paused",
                             seconds=300)
                         continue
-                    # stable -> resume
+                    # [FARM-025] level-gate: if last_adverse_fill price exists,
+                    # mid must be within ±1 tick of that level before resuming.
+                    # Otherwise set halted=True and do NOT resume this tick.
+                    laf = st.get("last_adverse_fill")
+                    if laf and laf.get("price"):
+                        tick_g = float((params or {}).get("tick_size")
+                                       or mkt.get("tick_size") or 0.01)
+                        fp = float(laf["price"])
+                        if laf.get("side") == "SELL":
+                            level_ok = mid <= fp + tick_g
+                        elif laf.get("side") == "BUY":
+                            level_ok = mid >= fp - tick_g
+                        else:
+                            level_ok = True
+                        if not level_ok:
+                            st["halted"] = True
+                            mkt_name = mkt.get("name", token)
+                            edge_notify(
+                                f"halted:{token}", True,
+                                f"⛔ HALTED ({mkt_name}): mid {mid:.4f} вне уровня филла "
+                                f"{fp:.4f}±1t ({laf.get('side')}). Ордера не выставляются. "
+                                f"Возврат: /stop → убрать halted из farming_state.json → /start",
+                                f"🟢 HALT снят ({mkt_name})",
+                                cooldown=0)
+                            throttled_log(
+                                f"halted_tick:{token}",
+                                f"[FARM-025] {mkt_name} halted: mid {mid:.4f} outside fill "
+                                f"level {fp:.4f}±1t ({laf.get('side')})",
+                                seconds=300)
+                            continue
+                    # level OK or no fill recorded — штатный RESUME; clear last_adverse_fill
+                    st.pop("last_adverse_fill", None)
                     st["pause_until"] = 0
                     log(f"[FARM-011] RESUME on {mkt['name']}: mid stable "
                         f"(range={rec_rng:.1f}c over {rec_span:.0f}s)")

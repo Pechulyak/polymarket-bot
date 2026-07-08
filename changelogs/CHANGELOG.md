@@ -3,7 +3,8 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
-| 2026-07-08 | FARM-015-lite | markets.json schema + export script (FARM-015 subset). Schema: version=1, markets[] с полями name, token, min_size, inv_center, inv_deadband, max_inv, weight, gamma_id, condition_id. Миграция farm024: ALTER TABLE farming_active_markets ADD min_size/inv_center/inv_deadband/max_inv/weight DEFAULT (200/200/200-100/400/1). scripts/export_farming_markets.py: docker exec psql → JSON, валидация (непустой, уникальный token, numeric>0, inv_center≤max_inv), exit 1 на ошибку. |
+| 2026-07-08 | FARM-015 | markets.json schema + export script (FARM-015 subset). Schema: version=1, markets[] с полями name, token, min_size, inv_center, inv_deadband, max_inv, weight, gamma_id, condition_id. Миграция farm024: ALTER TABLE farming_active_markets ADD min_size/inv_center/inv_deadband/max_inv/weight DEFAULT (200/200/200-100/400/1). scripts/export_farming_markets.py: docker exec psql → JSON, валидация (непустой, уникальный token, numeric>0, inv_center≤max_inv), exit 1 на ошибку. Pre-gate часть готова (schema + migration + export). Post-gate: загрузка markets.json в демон, cash-аллокатор, параллельный поллинг. |
+| 2026-07-08 | FARM-025 | level-gate после адверс-филла: (1) запись last_adverse_fill в fill-ветке: side + price + ts первого нашего maker-филла; (2) level-gate при resume: mid должен вернуться в ±1 tick от уровня фила — иначе halted=True; (3) halted state: early-gate в цикле (мониторинг только, no place/requote/unload), независим от pause_until; (4) edge_notify на HALT/снятие; (5) персистентность halted + last_adverse_fill в farming_state.json (save + load). Manual reset: /stop → убрать halted из farming_state.json → /start. S2 (авто-resume после level recovery) — отдельный операторский шаг. |
 
 ## 2026-07-05
 
