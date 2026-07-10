@@ -84,14 +84,25 @@ MARKETS = [
     # Live /book: book_pts=1569, two-sided leg200 share=0.073 -> $1.17/d,
     # mv2c=0/169h, range7d=4c, neg_risk, mid=0.21. end 2026-09-20.
     # Netanyahu removed (resolved/exited 2026-07-06); cursors preserved FARM-016.
+    # 2026-07-06: market #2. Phillies NL East title. farm_screen v4.8 (FARM-018):
+    # pool=$17/d, leg100 share=0.063 -> $1.08/d screen, mv2c=3, rng7=10.5,
+    # mid=0.375, tick 1c, fee=Y (sports 0.03), reward min=20, ms=4.5. end 2026-10-11.
     {
-        "name":  "New People 2nd seats",
-        "token": "16812776081734673413618925676070790303458587814000834940389189903201996256784",
+        "name":  "Phillies NL East",
+        "token": "39412648633128959688152763881401048225314774593465497054882544514059472489266",
         "min_size": 200,
         "inv_center": 200,
-        "inv_deadband": 200,         # [FARM-017]
-        "max_inv": 400,              # [FARM-017]
-    },    
+        "inv_deadband": 100,
+        "max_inv": 500,
+    },
+    {
+        "name":  "Requiao Parana Gov",
+        "token": "60755671257194524215403626055586076048149890192804409412736579332211541797129",
+        "min_size": 300,
+        "inv_center": 300,
+        "inv_deadband": 150,
+        "max_inv": 600,
+    },
     {
         "name":  "AI 1530 Arena by Sep30",
         "token": "54893086053865884845869248787484771799795088600261085229269223835220342300136",
@@ -461,7 +472,7 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
         locked = float(locked_sell) if locked_sell is not None else 0.0
         backable = max(0.0, float(inv) - locked)
         if backable < ask_size:
-            if backable >= float(mkt["min_size"]):
+            if backable >= float(mkt["min_size"]) - 1.0:
                 log(f"[place_two_sided] ASK size capped by inventory (locked={locked:.0f}, "
                     f"inv={inv:.2f}): {ask_size} -> {backable:.2f}")
                 ask_size = float(int(backable))  # whole shares, stay under balance
