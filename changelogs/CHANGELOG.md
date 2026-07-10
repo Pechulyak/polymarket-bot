@@ -1,4 +1,12 @@
 # CHANGELOG
+## 2026-07-09
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-09 | FARM-025 | level-gate после адверс-филла: (1) запись last_adverse_fill в fill-ветке: side + price + ts первого нашего maker-филла; (2) level-gate при resume: mid должен вернуться в ±1 tick от уровня фила — иначе halted=True; (3) halted state: early-gate в цикле (мониторинг только, no place/requote/unload), независим от pause_until; (4) edge_notify на HALT/снятие; (5) персистентность halted + last_adverse_fill в farming_state.json (save + load). Manual reset: /stop → убрать halted из farming_state.json → /start. Первый боевой тест 09.07: Arena adverse → level-gate → halted, персистентность подтверждена рестартом. Урок: min_size играет двойную роль — биржевой минимум и размер ноги; plan строит bid/ask_size=min_size (~строки 1022-1023); center≠нога вызывает авторазгрузку ручных докупок; зазор max_inv ≥ нога+хвост. |
+| 2026-07-09 | FARM-026 | Ротация портфолио фарминга (NL→Phillies+Requião) + F3-допуск дробного хвоста. |
+| 2026-07-09 | FARM-027 | calc_farm_economics.py: добавлены колонки %ср (marginal/капитал шага к средней $/д на $100) и marg/$100; порог метки деградации 50%→70%; backup .bak-farm027. Тест на Phillies: метка на size=150 (%ср=63). |
+
 ## 2026-07-08
 
 | Дата | TASK_ID | Описание |

@@ -358,7 +358,13 @@
 | FARM-021 | hardening: normalize st["ids"] after RESEED adoption to 2-tuple (bid_id, ask_id), None for missing leg — unpack at alert block fragile to future code paths | feature:liquidity-farming | BACKLOG |
 | FARM-022 | DONE: (K1) farm_screen→DB candidates+fees, cron 2×/день, retention 30d; (K2) degradation-watch в pipeline_monitor (pool/max_spread/fees/end_date); (K3) TG-дайджест топ-5+дельты, cron after farm_screen | feature:liquidity-farming | DONE |
 | FARM-023 | book_depth per-side + thin_book фильтр в скринере и дайджесте | feature:liquidity-farming | DONE |
-| FARM-025 | level-gate после адверс-филла: запись last_adverse_fill в fill-ветке, level-gate при resume (mid ±1 tick), halted state с manual reset, halted+last_adverse_fill персистентны в farming_state.json | feature:liquidity-farming | IN_PROGRESS |
+| FARM-025 | level-gate после адверс-филла: запись last_adverse_fill в fill-ветке, level-gate при resume (mid ±1 tick), halted state с manual reset, halted+last_adverse_fill персистентны в farming_state.json | feature:liquidity-farming | DONE |
+| FARM-026 | Ротация портфолио фарминга (NL→Phillies+Requião) + F3-допуск дробного хвоста | feature:liquidity-farming | DONE |
+| FARM-027 | Нормализация marginal в calc_farm_economics (%ср, порог 70%) | feature:liquidity-farming | DONE |
+| FARM-028 | quote_size отдельным полем конфига, развязать с min_size | feature:liquidity-farming | BACKLOG |
+| FARM-029 | Автокалькуляция center/deadband/max_inv от quote_size (center=quote_size, dead=0.5×quote_size, max_inv=2×center+нога) | feature:liquidity-farming | BACKLOG |
+| FARM-030 | /status контрол-бота — динамический список рынков + отображение halted | feature:liquidity-farming | BACKLOG |
+| FARM-031 | check_fills — фильтровать собственные taker-сделки (3 ложные адверс-паузы 09.07) | feature:liquidity-farming | BACKLOG |
 
 ## EPIC: LIVE — Live Execution
 
@@ -374,4 +380,4 @@
 
 ---
 
-*Обновлено: 2026-07-08*
+*Обновлено: 2026-07-09*
