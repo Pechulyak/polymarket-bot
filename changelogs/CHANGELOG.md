@@ -4,6 +4,9 @@
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
 | 2026-07-11 | FARM-033-fix | condition_id lookup для рынков вне status='active' (DB_QUERY_BY_TOKEN, rotated-out рынки сохраняют реальные cid/gamma_id/name). Верификация: 09.07 Σ=3.107 сходится с API, 10.07 Σ=3.577. Cron на S2 12:35 UTC. |
+| 2026-07-11 | FARM-035 | BACKLOG: HOLD-путь не восстанавливает недостающую ногу (ASK skipped по locked_sell при requote, Phillies 9ч на ⅓ score). |
+| 2026-07-11 | FARM-036 | BACKLOG: алерт-латч 🟢/🟡 сбрасывается на API-ошибке get_open_orders → ложные «Обе стороны». |
+| 2026-07-11 | FARM-037 | Деплой US Soft Landing + Raquel Lyra, нога 100, параметры 100/100/50/300, осознанный override thin-вето по soft landing (ask $255<$300), капитал +$192. Демон: 2262a0f с S2. |
 
 ## 2026-07-10
 

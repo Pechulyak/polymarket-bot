@@ -368,6 +368,7 @@
 | FARM-033 | Дневной снапшот фарминга: таблица farming_daily_snapshot (migration_farm033.sql) + сборщик farming_snapshot.py. Источники: earnings API (c.get_earnings_for_user_for_day), on-chain inv (ERC-1155 balanceOf), trades fees (taker-only, TRD-448 formula). legs_state/hours_both реконструкция из fills + open orders + halted. UPSERT по (snap_date, token). Деплой на S2 + cron отдельно. | feature:liquidity-farming | DONE |
 | FARM-035 | Recover недостающей ноги из HOLD (ASK skipped по locked_sell при requote) | feature:liquidity-farming | BACKLOG |
 | FARM-036 | Алерт-латч не сбрасывать на API-ошибке get_open_orders | feature:liquidity-farming | BACKLOG |
+| FARM-037 | Деплой US Soft Landing + Raquel Lyra (leg 100, override thin-вето soft landing, параметры 100/100/50/300, capital +$192) | feature:liquidity-farming | DONE |
 
 ## EPIC: LIVE — Live Execution
 
