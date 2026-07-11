@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-10
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-10 | FARM-033 | Дневной снапшот фарминга: таблица farming_daily_snapshot (migration_farm033.sql, PK: snap_date+token) + скрипт farming/tools/farming_snapshot.py. Источники: reward_usd из c.get_earnings_for_user_for_day(date) (dict по condition_id, один вызов за прогон); inv из on-chain ERC-1155 balanceOf(FUNDER, token); mid из CLOB /midpoint; capital_usd = inv×mid + bid_notional; fees_usd из c.get_trades(TradeParams) — только taker (trader_side/taker_address vs FUNDER), формула TRD-448 при отсутствии fee в ответе; legs_state/hours_both реконструкция из fills+open orders+halted. markets с earnings но не в active — token=condition_id, legs_state=none, log=not_in_active_markets. UPSERT idempotent. |
+
 ## 2026-07-09
 
 | Дата | TASK_ID | Описание |

@@ -365,6 +365,7 @@
 | FARM-029 | Автокалькуляция center/deadband/max_inv от quote_size (center=quote_size, dead=0.5×quote_size, max_inv=2×center+нога) | feature:liquidity-farming | BACKLOG |
 | FARM-030 | /status контрол-бота — динамический список рынков + отображение halted | feature:liquidity-farming | BACKLOG |
 | FARM-031 | check_fills — фильтровать собственные taker-сделки (3 ложные адверс-паузы 09.07) | feature:liquidity-farming | BACKLOG |
+| FARM-033 | Дневной снапшот фарминга: таблица farming_daily_snapshot (migration_farm033.sql) + сборщик farming_snapshot.py. Источники: earnings API (c.get_earnings_for_user_for_day), on-chain inv (ERC-1155 balanceOf), trades fees (taker-only, TRD-448 formula). legs_state/hours_both реконструкция из fills + open orders + halted. UPSERT по (snap_date, token). Деплой на S2 + cron отдельно. | feature:liquidity-farming | DONE |
 
 ## EPIC: LIVE — Live Execution
 
