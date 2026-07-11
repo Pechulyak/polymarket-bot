@@ -103,6 +103,28 @@ MARKETS = [
         "inv_deadband": 150,
         "max_inv": 600,
     },
+    # 2026-07-11: market #4. US soft landing end-2026. calc_farm_economics:
+    # pool=$23/d, leg100 -> ~$5.5/d, mv2c=2, rng7=4.0, mid=0.395, end 2027-01-31.
+    # thin ask ($255<$300 FARM-023) — deliberate operator override, small size.
+    {
+        "name":  "US Soft Landing 2026",
+        "token": "46312529158416609898079553446176504311993678139330779840129310682124759689495",
+        "min_size": 100,
+        "inv_center": 100,
+        "inv_deadband": 50,
+        "max_inv": 300,
+    },
+    # 2026-07-11: market #5. Raquel Lyra Pernambuco Gov. Screener #4:
+    # pool=$26/d, leg100 -> ~$5.4/d, mv2c=4, rng7=26.5 (watch), mid=0.565,
+    # neg_risk, end 2026-10-04.
+    {
+        "name":  "Raquel Lyra Pernambuco",
+        "token": "105368625795655432964190496754546650270881070451655430684110166613065601984894",
+        "min_size": 100,
+        "inv_center": 100,
+        "inv_deadband": 50,
+        "max_inv": 300,
+    },
     {
         "name":  "AI 1530 Arena by Sep30",
         "token": "54893086053865884845869248787484771799795088600261085229269223835220342300136",
