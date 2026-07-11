@@ -116,10 +116,24 @@ async def process_candidate(
             close_type = "SELL"
             close_price = group["close_price"]
             closed_at = group["closed_at"]
-            net_pnl = (float(close_price) - float(group["open_price"])) * float(group["close_size_usd"])
-            gross_pnl = net_pnl
-            status = "CLOSED"
-            pnl_status = "CONFIRMED"
+            
+            # Guard against NULL close_price or open_price (data anomaly)
+            if close_price is None or group["open_price"] is None:
+                print(f"[score] {username} {market_id[:20]}... price NULL -> treat as OPEN "
+                      f"(buy={buy_count}, sell={sell_count}, close_price={close_price}, open_price={group['open_price']})")
+                close_side = None
+                close_type = "OPEN"
+                close_price = None
+                closed_at = None
+                net_pnl = None
+                gross_pnl = None
+                status = "OPEN"
+                pnl_status = "OPEN"
+            else:
+                net_pnl = (float(close_price) - float(group["open_price"])) * float(group["close_size_usd"])
+                gross_pnl = net_pnl
+                status = "CLOSED"
+                pnl_status = "CONFIRMED"
         elif buy_count > 0 and sell_count == 0:
             # Need settlement
             open_side = "BUY"
@@ -145,7 +159,14 @@ async def process_candidate(
                         matched = True
                         if closed:
                             winner = token.get("winner", False)
-                            if winner:
+                            # Guard against NULL open_price
+                            if group["open_price"] is None:
+                                print(f"[score] {username} {market_id[:20]}... open_price NULL in settlement")
+                                close_type = "OPEN"
+                                net_pnl = None
+                                gross_pnl = None
+                                status = "OPEN"
+                            elif winner:
                                 close_type = "SETTLEMENT_WIN"
                                 close_price = 1.0
                                 net_pnl = (1.0 - float(group["open_price"])) * float(group["open_size_usd"])
@@ -166,7 +187,7 @@ async def process_candidate(
                 # Fallback: if no exact match, use winner=True token
                 if not matched and closed:
                     winner_token = next((t for t in tokens if t.get("winner") == True), None)
-                    if winner_token:
+                    if winner_token and group["open_price"] is not None:
                         # We held one side - if winner exists, we win
                         close_type = "SETTLEMENT_WIN"
                         close_price = 1.0
@@ -175,7 +196,7 @@ async def process_candidate(
                         status = "CLOSED"
                         pnl_status = "CONFIRMED"
                     else:
-                        # No winner token (shouldn't happen for closed market)
+                        # No winner token or open_price is NULL
                         close_type = "OPEN"
                 
                 print(f"[settlement] {username} {market_id[:20]}... closed={closed}, matched={matched}")

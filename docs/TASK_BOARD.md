@@ -122,6 +122,9 @@
 | PIPE-046 | Скрипт roundtrip scoring + settlement кандидатов | | DONE |
 | PIPE-047 | Fix outcome mismatch в paper P&L views | | DONE |
 | PIPE-048 | Telegram live-алерты paper-сделок | | DONE |
+| PIPE-049 | Fetch кандидатов из 9 категорий leaderboard + populate best_category/categories | | DONE |
+| PIPE-050 | NULL-guard в score_leaderboard_candidates.py: 11 групп с NULL price → OPEN (PIPE-050) | | DONE |
+| PIPE-051 | BACKLOG: пересмотр HFT-фильтра (единичный пик за 90 дней дропает 41/43; кандидат-метрика: доля сделок в burst-окнах) | | BACKLOG |
 
 ---
 

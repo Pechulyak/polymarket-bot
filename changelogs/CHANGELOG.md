@@ -3,6 +3,13 @@
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
+| 2026-07-11 | PIPE-049 | Fetch кандидатов из 9 категорий leaderboard (POLITICS, ESPORTS, CRYPTO, CULTURE, MENTIONS, WEATHER, ECONOMICS, TECH, FINANCE; TOP_N_PER_CATEGORY=5). Migration pipe_049: добавлены колонки best_category VARCHAR(32) и categories TEXT в leaderboard_candidates. Fetch: 43 кандидата с best_category IS NOT NULL. Воронка: 8 is_lp=TRUE, 41 is_hft_burst=TRUE, 7 оба, 1 прошёл оба фильтра (252, POLITICS; is_lp=NULL = проверен, не LP). Кросс-категория: donthackme и balthazar (TECH+FINANCE). |
+| 2026-07-11 | PIPE-050 | NULL-guard в score_leaderboard_candidates.py: close_price IS NULL или open_price IS NULL → treat as OPEN (pnl_status="OPEN", gross_pnl/net_pnl=NULL). Root cause: SELL-группы с size_usd=0 → NULLIF(0,0)=NULL в weighted average. 11 групп обработано как OPEN. |
+
+## 2026-07-11
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
 | 2026-07-11 | FARM-033-fix | condition_id lookup для рынков вне status='active' (DB_QUERY_BY_TOKEN, rotated-out рынки сохраняют реальные cid/gamma_id/name). Верификация: 09.07 Σ=3.107 сходится с API, 10.07 Σ=3.577. Cron на S2 12:35 UTC. |
 | 2026-07-11 | FARM-035 | BACKLOG: HOLD-путь не восстанавливает недостающую ногу (ASK skipped по locked_sell при requote, Phillies 9ч на ⅓ score). |
 | 2026-07-11 | FARM-036 | BACKLOG: алерт-латч 🟢/🟡 сбрасывается на API-ошибке get_open_orders → ложные «Обе стороны». |

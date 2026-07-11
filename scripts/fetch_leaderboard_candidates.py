@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-PIPE-045: Fetch leaderboard candidates + LP/HFT filters
+PIPE-045 / PIPE-049: Fetch leaderboard candidates + LP/HFT filters (category-based)
 
-Fetches top20 traders from Polymarket leaderboard, filters out LP market makers
+Fetches top-N traders per leaderboard category (timePeriod=MONTH, orderBy=PNL),
+deduplicates wallets across categories, filters out LP market makers
 and HFT burst traders, stores raw trades for scoring pipeline.
+
+PIPE-049: OVERALL and SPORTS categories excluded (recon 2026-07-11:
+OVERALL top-10 identical to SPORTS top-10; sports profile is non-copyable).
 """
 
 import asyncio
@@ -24,6 +28,22 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL")
 LEADERBOARD_API = "https://data-api.polymarket.com/v1/leaderboard"
 ACTIVITY_API = "https://data-api.polymarket.com/activity"
+
+# PIPE-049: категории leaderboard. OVERALL и SPORTS исключены намеренно
+# (OVERALL == SPORTS по составу; спортивный профиль некопируемый).
+CATEGORIES = [
+    "POLITICS",
+    "ESPORTS",
+    "CRYPTO",
+    "CULTURE",
+    "MENTIONS",
+    "WEATHER",
+    "ECONOMICS",
+    "TECH",
+    "FINANCE",
+]
+TOP_N_PER_CATEGORY = 5
+TIME_PERIOD = "MONTH"
 
 
 async def fetch_json(session: Optional[aiohttp.ClientSession], url: str, params: dict) -> Optional[list]:
@@ -58,20 +78,26 @@ async def upsert_candidate(conn: asyncpg.Connection, candidate: dict) -> None:
         """
         INSERT INTO leaderboard_candidates (
             wallet_address, username, leaderboard_period,
-            leaderboard_rank, leaderboard_pnl_usd, created_at, updated_at
+            leaderboard_rank, leaderboard_pnl_usd,
+            best_category, categories, created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
         ON CONFLICT (wallet_address) DO UPDATE SET
-            leaderboard_rank = EXCLUDED.leaderboard_rank,
-            leaderboard_pnl_usd  = EXCLUDED.leaderboard_pnl_usd,
-            username             = EXCLUDED.username,
+            leaderboard_rank    = EXCLUDED.leaderboard_rank,
+            leaderboard_pnl_usd = EXCLUDED.leaderboard_pnl_usd,
+            username            = EXCLUDED.username,
+            leaderboard_period  = EXCLUDED.leaderboard_period,
+            best_category       = EXCLUDED.best_category,
+            categories          = EXCLUDED.categories,
             updated_at          = NOW()
         """,
         candidate["wallet_address"],
         candidate.get("username"),
-        candidate.get("leaderboard_period", "ALL"),
+        candidate.get("leaderboard_period", TIME_PERIOD),
         candidate["leaderboard_rank"],
         candidate.get("leaderboard_pnl_usd"),
+        candidate.get("best_category"),
+        candidate.get("categories"),
     )
 
 
@@ -197,12 +223,8 @@ async def fetch_trades_paginated(
         data = [t for t in data if t.get("timestamp", 0) >= cutoff]
         if not data:
             break
-        if not data:
-            break
 
         count = len(data)
-        if count == 0:
-            break
 
         # Log field names from first trade
         if offset == 0 and data:
@@ -399,49 +421,85 @@ async def main() -> None:
     conn = await asyncpg.connect(DATABASE_URL)
 
     # Обнуляем leaderboard_rank для непроверенных кандидатов перед новым прогоном
-    await conn.execute("UPDATE leaderboard_candidates SET leaderboard_rank = NULL WHERE reviewed_at IS NULL")
-    print("[leaderboard] Сброшены leaderboard_rank для непроверенных кандидатов")
-
-    # Fetch leaderboard
-    print("[leaderboard] Fetching top 20 traders from leaderboard...")
-    leaderboard_data = await fetch_json(
-        None,
-        LEADERBOARD_API,
-        {"timePeriod": "MONTH", "limit": 50},
+    await conn.execute(
+        "UPDATE leaderboard_candidates "
+        "SET leaderboard_rank = NULL, best_category = NULL, categories = NULL "
+        "WHERE reviewed_at IS NULL"
     )
-    if not leaderboard_data:
-        print("[leaderboard] ERROR: No data from leaderboard API")
+    print("[leaderboard] Сброшены leaderboard_rank/category для непроверенных кандидатов")
+
+    # PIPE-049: Fetch top-N per category, dedup across categories
+    print(f"[leaderboard] Fetching top-{TOP_N_PER_CATEGORY} per category "
+          f"({len(CATEGORIES)} categories, timePeriod={TIME_PERIOD}, orderBy=PNL)...")
+
+    # wallet -> {username, hits: [(category, rank, pnl)]}
+    collected: dict[str, dict[str, Any]] = {}
+
+    for category in CATEGORIES:
+        data = await fetch_json(
+            None,
+            LEADERBOARD_API,
+            {
+                "category": category,
+                "timePeriod": TIME_PERIOD,
+                "orderBy": "PNL",
+                "limit": TOP_N_PER_CATEGORY,
+            },
+        )
+        if not data:
+            print(f"[leaderboard] WARN: нет данных для категории {category}, пропуск")
+            await asyncio.sleep(0.3)
+            continue
+
+        print(f"[leaderboard] {category}: {len(data)} записей")
+
+        for rank, entry in enumerate(data, 1):
+            wallet = entry.get("proxyWallet")
+            if not wallet:
+                print(f"[leaderboard] {category}: пропуск rank={rank}, нет wallet")
+                continue
+            pnl = entry.get("pnl") or 0
+            if wallet not in collected:
+                collected[wallet] = {
+                    "username": entry.get("userName") or wallet[:10],
+                    "hits": [],
+                }
+            collected[wallet]["hits"].append((category, rank, pnl))
+
+        await asyncio.sleep(0.3)
+
+    if not collected:
+        print("[leaderboard] ERROR: ни одна категория не вернула данных")
         await conn.close()
         sys.exit(1)
 
-    # Log field names from first entry
-    print(f"[leaderboard] Поля первой записи leaderboard: {list(leaderboard_data[0].keys())}")
-    print(f"[leaderboard] pnl type: {type(leaderboard_data[0].get('pnl'))}")
-
-    # Take top 20
-    top_20 = leaderboard_data[:20]
-    print(f"[leaderboard] Обрабатываем {len(top_20)} кандидатов")
+    total = len(collected)
+    multi_cat = sum(1 for c in collected.values() if len(c["hits"]) > 1)
+    print(f"[leaderboard] Уникальных кандидатов после дедупа: {total} "
+          f"(в 2+ категориях: {multi_cat})")
 
     # Prepare async HTTP session
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        for i, entry in enumerate(top_20, 1):
-            wallet = entry.get("proxyWallet")
-            if not wallet:
-                print(f"[leaderboard] Пропуск записи {i}: нет wallet address")
-                continue
+        for i, (wallet, info) in enumerate(collected.items(), 1):
+            # best category = максимальный pnl среди попаданий
+            best_cat, best_rank, best_pnl = max(info["hits"], key=lambda h: h[2])
+            categories_csv = ",".join(f"{c}:{r}" for c, r, _ in info["hits"])
 
             candidate = {
                 "wallet_address": wallet,
-                "username": entry.get("userName") or wallet[:10],
-                "leaderboard_period": "ALL",
-                "leaderboard_rank": i,
-                "leaderboard_pnl_usd": entry.get("pnl") or 0,
+                "username": info["username"],
+                "leaderboard_period": TIME_PERIOD,
+                "leaderboard_rank": best_rank,
+                "leaderboard_pnl_usd": best_pnl,
+                "best_category": best_cat,
+                "categories": categories_csv,
             }
 
             # Upsert candidate
             await upsert_candidate(conn, candidate)
-            print(f"[leaderboard] [{i}/20] {candidate['username']} — rank={i}, pnl={candidate['leaderboard_pnl_usd']}")
+            print(f"[leaderboard] [{i}/{total}] {candidate['username']} — "
+                  f"best={best_cat} rank={best_rank}, pnl={best_pnl}, cats=[{categories_csv}]")
 
             # Process candidate (LP filter → trades → HFT filter)
             await process_candidate(session, conn, candidate)

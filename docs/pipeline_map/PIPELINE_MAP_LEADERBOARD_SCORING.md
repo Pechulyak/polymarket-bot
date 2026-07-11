@@ -3,7 +3,7 @@
 **Статус документа:** ACTIVE  
 **Дата верификации:** 2026-06-08  
 **Эталон формата:** `PIPELINE_MAP_3A_roundtrip_open.md`  
-**Связанные задачи:** PIPE-044, PIPE-045, PIPE-046
+**Связанные задачи:** PIPE-044, PIPE-045, PIPE-046, PIPE-049, PIPE-050
 
 ---
 
@@ -71,7 +71,7 @@ python3 scripts/score_leaderboard_candidates.py
 
 **Последовательность `main()`:**
 
-1. **Fetch leaderboard** — `data-api.polymarket.com/v1/leaderboard`, параметры `{"timePeriod": "MONTH", "limit": 50}`, берётся `[:20]` (`:375`).
+1. **Fetch leaderboard** — `data-api.polymarket.com/v1/leaderboard`, итерация по 9 категориям (POLITICS, ESPORTS, CRYPTO, CULTURE, MENTIONS, WEATHER, ECONOMICS, TECH, FINANCE), TOP_N_PER_CATEGORY=5. OVERALL и SPORTS исключены. Параметры `{"timePeriod": "MONTH", "limit": 50}` (`:375`).
 2. **Upsert в `leaderboard_candidates`** — `ON CONFLICT (wallet_address) DO UPDATE` (`:71–90`). Адрес из поля `proxyWallet` (`:379`).
 3. **`process_candidate()` для каждого из 20:**
    - **LP-фильтр**: `/activity?user=<wallet>&limit=20` (без фильтра type). Если `type == "REWARD"` → UPDATE `is_lp=TRUE, filter_reason='lp_market_maker'`. Сделки загружаются независимо от результата (`:252–258`).
@@ -235,6 +235,8 @@ CREATE INDEX idx_lcr_wallet_status ON leaderboard_candidate_roundtrips(wallet_ad
 
 **Отличия от `whale_trade_roundtrips`:** нет `position_key`, `whale_id`, `open_trade_id`/`close_trade_id`, `market_title`/`market_category`, `matching_method`/`matching_confidence`, `fees_usd`. UNIQUE-ключ — `(wallet_address, market_id, outcome)` вместо `position_key`.
 
+**NULL-guard (PIPE-050):** В `score_leaderboard_candidates.py` добавлены проверки `close_price IS NULL` и `open_price IS NULL` — группа с NULL-ценой переводится в `status=OPEN`, `pnl_status="OPEN"`, `gross_pnl=net_pnl=NULL`. Root cause: SELL-группы с `size_usd=0` дают `NULLIF(0,0)=NULL` в weighted average. Паттерн согласован с веткой `sell_count==0`.
+
 ---
 
 ## 10. Условия успеха / неуспеха
@@ -310,6 +312,8 @@ FROM leaderboard_candidates ORDER BY calc_pnl_usd DESC NULLS LAST;
 ### RF5 — UNIQUE `(wallet, market, outcome)`: повторные позиции не моделируются
 
 DDL `leaderboard_candidate_roundtrips`: `UNIQUE(wallet_address, market_id, outcome)`. Если кандидат открыл позицию, закрыл и открыл снова — второй цикл перезапишет первый через `ON CONFLICT DO UPDATE`. Ограничение по сравнению с `whale_trade_roundtrips`.
+
+**Миграция 2026-07-11:** `scripts/migrations/pipe_049_leaderboard_categories.sql` — добавлены `best_category VARCHAR(32)` и `categories TEXT` в `leaderboard_candidates`. Поля заполняются в fetch: `best_category` = категория с максимальным `leaderboard_pnl_usd`; `categories` = CSV `CATEGORY:rank` для всех категорий кандидата.
 
 ---
 
