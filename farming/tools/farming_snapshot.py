@@ -392,6 +392,11 @@ DB_QUERY_TOKEN_BY_CONDITION = """
     SELECT token_id FROM farming_active_markets WHERE condition_id = %s
 """
 
+DB_QUERY_BY_TOKEN = """
+    SELECT condition_id, gamma_id, name
+    FROM farming_active_markets WHERE token_id = %s
+"""
+
 
 def collect_snapshot(date_str: str) -> list:
     """Collect snapshot data for all active markets on given date."""
@@ -463,8 +468,15 @@ def collect_snapshot(date_str: str) -> list:
                 break
         
         if condition_id is None:
-            # This is a market from earnings but not in active list
-            condition_id = token_id
+            # Not in status='active' list; look up full table
+            # (rotated-out markets keep real condition_id/gamma_id/name)
+            cur.execute(DB_QUERY_BY_TOKEN, (token_id,))
+            row = cur.fetchone()
+            if row:
+                condition_id, gamma_id, name = row[0], row[1], row[2]
+            else:
+                # True orphan: earnings cid absent from table entirely
+                condition_id = token_id
             is_not_in_active = True
         
         log(f"Processing market: {name or condition_id[:20]}... ({condition_id[:20]}...)")
