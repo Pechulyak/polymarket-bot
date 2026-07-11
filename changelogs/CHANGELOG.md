@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-11
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-11 | FARM-033-fix | condition_id lookup для рынков вне status='active' (DB_QUERY_BY_TOKEN, rotated-out рынки сохраняют реальные cid/gamma_id/name). Верификация: 09.07 Σ=3.107 сходится с API, 10.07 Σ=3.577. Cron на S2 12:35 UTC. |
+
 ## 2026-07-10
 
 | Дата | TASK_ID | Описание |
