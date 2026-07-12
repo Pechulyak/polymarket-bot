@@ -281,6 +281,7 @@
 | INFRA-048 | Watchdog live_copy_daemon heartbeat: edge-trigger, порог 180s, alert_state в system_state | feature:live-execution | DONE |
 | INFRA-049 | filled_size для maker-пути (taker готов, maker ждёт образца get_order) | feature:live-execution | TODO |
 | INFRA-050 | farming-daemon.service отсутствует в репо — добавить в deploy/ (по аналогии с polymarket-copy-live-daemon.service) | feature:systemd | BACKLOG |
+| INFRA-051 | Cron protection: эталон crontab в git (docs/crontab.reference) + проверка живости cron в pipeline_monitor (diff crontab -l vs эталон + свежесть маркер-файла) | | TODO |
 
 ---
 
