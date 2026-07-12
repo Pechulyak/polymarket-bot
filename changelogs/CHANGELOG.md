@@ -5,6 +5,7 @@
 |------|---------|----------|
 | 2026-07-11 | PIPE-049 | Fetch кандидатов из 9 категорий leaderboard (POLITICS, ESPORTS, CRYPTO, CULTURE, MENTIONS, WEATHER, ECONOMICS, TECH, FINANCE; TOP_N_PER_CATEGORY=5). Migration pipe_049: добавлены колонки best_category VARCHAR(32) и categories TEXT в leaderboard_candidates. Fetch: 43 кандидата с best_category IS NOT NULL. Воронка: 8 is_lp=TRUE, 41 is_hft_burst=TRUE, 7 оба, 1 прошёл оба фильтра (252, POLITICS; is_lp=NULL = проверен, не LP). Кросс-категория: donthackme и balthazar (TECH+FINANCE). |
 | 2026-07-11 | PIPE-050 | NULL-guard в score_leaderboard_candidates.py: close_price IS NULL или open_price IS NULL → treat as OPEN (pnl_status="OPEN", gross_pnl/net_pnl=NULL). Root cause: SELL-группы с size_usd=0 → NULLIF(0,0)=NULL в weighted average. 11 групп обработано как OPEN. |
+| 2026-07-12 | HYG | PART D выделен в live_004d, retention перенесён в migrations/, черновик live004 удалён; push-канал live_copy существует в БД, текущий live-executor работает pull-моделью. |
 
 ## 2026-07-11
 
