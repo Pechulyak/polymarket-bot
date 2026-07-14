@@ -33,7 +33,7 @@
 2. Strategy формирует изменение через ORCHESTRATOR TASK PACK.
 3. Ручное редактирование TASK_BOARD.md запрещено.
 4. TASK_BOARD.html является производным файлом и не редактируется вручную.
-5. TASK_ID привязан к EPIC-префиксу: PIPE-*, TRD-*, DATA-*, ANA-*, SEC-*, INFRA-*, HYG-*, DOC-*, BUG-*.
+5. TASK_ID привязан к EPIC-префиксу: PIPE-*, TRD-*, DATA-*, ANA-*, SEC-*, INFRA-*, HYG-*, DOC-*, BUG-*, ACT-*.
 
 ---
 
@@ -334,6 +334,16 @@
 
 ---
 
+## EPIC: ACT — Account Activity / Portfolio Tracking
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| ACT-001 | Probe /activity + /positions API (schema recon) | | DONE |
+| ACT-002 | account_activity + account_positions_snapshot: DDL + fetch + backfill | | DONE |
+| ACT-003 | Cron: daily fetch both scripts (env-pattern + flock) | | TODO |
+
+---
+
 ## EPIC: FARM — Liquidity Farming
 
 | ID | Задача | Тег | Статус |
@@ -388,4 +398,4 @@
 
 ---
 
-*Обновлено: 2026-07-09*
+*Обновлено: 2026-07-14*

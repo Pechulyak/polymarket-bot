@@ -1,5 +1,10 @@
 # CHANGELOG
-## 2026-07-11
+## 2026-07-14
+
+| Дата | TASK_ID | Описание |
+|------|---------|---------|
+| 2026-07-14 | ACT-002 | Таблицы account_activity + account_positions_snapshot (DDL: partial-unique индексы по trade-key и redeem-key). Fetch-скрипты: fetch_account_activity.py, fetch_account_positions_snapshot.py. Бэкфилл: PechaArt 88 + Justfuuun 220 = 308 строк. Known limitation: несколько on-chain fill'ов идентичного (size, price, side) в одном tx схлопываются в одну строку по trade-ключу. Счётчик collapsed (fetched − inserted) логируется каждым прогоном в stderr — считает и истинные API-дубли, и мультифилл-коллизии (неразличимы без on-chain log_index). Наблюдаемо ~0.5% farming-записей (1/221), 0% copy. Приемлемо для наблюдательного лога; при росте частоты пересмотреть → A-lite (log_index в ключ). MAKER_REBATE — обнаружен как незадокументированный тип (reward-класс). Reward-агрегат = REWARD + MAKER_REBATE. |
+| 2026-07-11
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|
