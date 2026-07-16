@@ -4,21 +4,29 @@
 Usage:
     python3 calc_farm_economics.py <token_id> [--sizes 50,100,200,300,400,600,800]
                                               [--offset-cents X]
+                                              [--our-bid P SIZE]
+                                              [--our-ask P SIZE]
 
-Логика (канон FARM-экономики):
+ЛОГИКА (upper-bound модель):
     score(order)  = size * ((max_spread - dist_cents) / max_spread)^2
-    book_pts      = min(bid_pts, ask_pts) по всему боку в окне max_spread
-                    (консервативно: конкуренты считаются двусторонними)
-    our_pts       = min(our_bid_score, our_ask_score)  (мы всегда two-sided)
-    our_share     = our_pts / (book_pts + our_pts)
-    our_daily_usd = our_share * pool
+    comp_pts      = min(bid_pts, ask_pts) + abs(bid_pts - ask_pts) / 3.0
+                    (paired two-sided + excess/3 как upper bound)
+    our_pts       = size * score_factor
+    share         = our_pts / (comp_pts + our_pts)
+    our_daily_usd = share * pool
 
     Размещение ноги по умолчанию: dist = min(spread/2, max_spread*0.9)
     (offset B'), переопределяется --offset-cents.
 
+    --our-bid/--our-ask вычитают квадратичный score наших ордеров
+    из соответствующей стороны книги ДО расчёта comp_pts.
+
 Капитал: BID-нога = size*mid pUSD + ASK-нога = size шер (оценка size*mid).
 Деградация: marginal $/day на каждый добавленный $100 капитала падает —
 таблица показывает, где прирост перестаёт окупаться.
+
+МОДЕЛЬ: upper-bound — uptime, PAUSE-эпизоды и внутридневной рост
+конкуренции не учтены; факт исторически ~0.3–0.4 от прогноза.
 
 Read-only, без SDK: raw urllib с User-Agent (паттерн S1).
 """
@@ -66,6 +74,14 @@ def side_pts(orders, mid, ms_cents, is_bid):
     return pts, depth_usd
 
 
+def our_order_score(price, size, mid, ms_cents, is_bid):
+    """Quadratic score одного нашего ордера."""
+    dist = (mid - price) * 100.0 if is_bid else (price - mid) * 100.0
+    if dist < 0 or dist > ms_cents:
+        return 0.0
+    return size * ((ms_cents - dist) / ms_cents) ** 2
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -73,10 +89,27 @@ def main():
     token_id = args[0]
     sizes = [50, 100, 150, 200, 300, 400, 600, 800, 1200]
     offset_override = None
-    if "--sizes" in args:
-        sizes = [int(x) for x in args[args.index("--sizes") + 1].split(",")]
-    if "--offset-cents" in args:
-        offset_override = float(args[args.index("--offset-cents") + 1])
+    our_bid_price, our_bid_size = None, None
+    our_ask_price, our_ask_size = None, None
+
+    i = 1
+    while i < len(args):
+        if args[i] == "--sizes" and i + 1 < len(args):
+            sizes = [int(x) for x in args[i + 1].split(",")]
+            i += 2
+        elif args[i] == "--offset-cents" and i + 1 < len(args):
+            offset_override = float(args[i + 1])
+            i += 2
+        elif args[i] == "--our-bid" and i + 2 < len(args):
+            our_bid_price = float(args[i + 1])
+            our_bid_size = float(args[i + 2])
+            i += 3
+        elif args[i] == "--our-ask" and i + 2 < len(args):
+            our_ask_price = float(args[i + 1])
+            our_ask_size = float(args[i + 2])
+            i += 3
+        else:
+            i += 1
 
     book, m, cid, pool, ms, mid = fetch_market_data(token_id)
     if pool <= 0 or ms <= 0:
@@ -86,7 +119,20 @@ def main():
     asks = book.get("asks") or []
     bid_pts, bid_depth = side_pts(bids, mid, ms, is_bid=True)
     ask_pts, ask_depth = side_pts(asks, mid, ms, is_bid=False)
-    book_pts = min(bid_pts, ask_pts)
+
+    # Вычитаем наши ордера из соответствующей стороны (не ниже 0)
+    if our_bid_price is not None and our_bid_size is not None:
+        our_bid_score = our_order_score(our_bid_price, our_bid_size, mid, ms, is_bid=True)
+        bid_pts = max(0.0, bid_pts - our_bid_score)
+        print(f"  [наш BID {our_bid_size}@{our_bid_price} вычтен: -{our_bid_score:.2f} pts]")
+
+    if our_ask_price is not None and our_ask_size is not None:
+        our_ask_score = our_order_score(our_ask_price, our_ask_size, mid, ms, is_bid=False)
+        ask_pts = max(0.0, ask_pts - our_ask_score)
+        print(f"  [наш ASK {our_ask_size}@{our_ask_price} вычтен: -{our_ask_score:.2f} pts]")
+
+    # comp_pts = paired + excess/3 (upper bound)
+    comp_pts = min(bid_pts, ask_pts) + abs(bid_pts - ask_pts) / 3.0
 
     # spread: best bid / best ask (asks приходят по убыванию — best = [-1])
     try:
@@ -107,7 +153,7 @@ def main():
     print(f"mid={mid:.4f}  spread={spread_c:.2f}c  max_spread={ms}c  "
           f"pool=${pool:.2f}/день")
     print(f"Книга в окне награды: bid_pts={bid_pts:.0f} (${bid_depth:.0f})  "
-          f"ask_pts={ask_pts:.0f} (${ask_depth:.0f})  -> book_pts={book_pts:.0f}")
+          f"ask_pts={ask_pts:.0f} (${ask_depth:.0f})  -> comp_pts={comp_pts:.0f}")
     print(f"Наша нога: dist={dist:.2f}c от мида, score_factor={score_factor:.3f}")
     if min(bid_depth, ask_depth) < 300:
         print("⚠ thin_book: слабая сторона < $300 — против FARM-023 фильтра")
@@ -120,7 +166,7 @@ def main():
     degraded_flag = False
     for s in sizes:
         our_pts = s * score_factor          # min(bid,ask) при равных ногах
-        share = our_pts / (book_pts + our_pts) if (book_pts + our_pts) > 0 else 0
+        share = our_pts / (comp_pts + our_pts) if (comp_pts + our_pts) > 0 else 0
         daily = share * pool
         cap = 2.0 * s * mid
         per100 = daily / cap * 100.0 if cap > 0 else 0
@@ -135,8 +181,7 @@ def main():
         print(f"{s:>9} | {cap:>9.0f} | {daily:>7.2f} | {per100:>11.3f} | "
               f"{marg_per100:>9.2f} | {pct:>4.0f}{note}")
         prev_daily, prev_cap = daily, cap
-    print("\nКонсерватизм: book_pts=min(сторон) — реальная доля может быть выше,")
-    print("если конкуренты односторонние (их score /3). Адверс-риск не учтён.")
+    print("\ncomp_pts = paired + excess/3; собственные ордера вычитайте через --our-bid/--our-ask.")
 
 
 if __name__ == "__main__":
