@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(scripts/mm.sh:*)",
+      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)",
+      "Bash(git add:*)", "Bash(git commit:*)", "Bash(git checkout -b:*)",
+      "Bash(docker exec polymarket_postgres psql*SELECT*)",
+      "Bash(pytest:*)", "Bash(python3 -m pytest:*)",
+      "Bash(python3:*)", "Bash(awk:*)",
+      "Bash(wc:*)", "Bash(grep:*)", "Bash(sed -n:*)", "Bash(head:*)", "Bash(tail:*)",
+      "Bash(crontab -l:*)", "Bash(crontab /root/polymarket-bot/*)"
+    ],
+    "deny": [
+      "Bash(git push:*)", "Bash(git add -A:*)", "Bash(git add .:*)",
+      "Bash(systemctl:*)", "Bash(service:*)",
+      "Bash(docker restart:*)", "Bash(docker stop:*)", "Bash(docker compose:*)",
+      "Read(.env)", "Read(**/secrets/**)", "Read(**/*private*)",
+      "Bash(*DROP *)", "Bash(*ALTER TABLE*)", "Bash(*DELETE FROM*)", "Bash(*TRUNCATE*)"
+    ]
+  }
+}
