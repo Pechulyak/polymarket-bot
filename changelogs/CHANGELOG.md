@@ -1,4 +1,11 @@
 # CHANGELOG
+## 2026-07-17
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-17 | ACT-003 | Cron для ежедневного fetch account_activity + account_positions_snapshot: обёртка scripts/run_account_activity_fetch.sh (env-pattern из .env, последовательный запуск обоих fetch-скриптов), крон-строка 10 4 * * * с flock -n (паттерн проекта, см. category_backfill/copy_live_sweep). Установлено в crontab. Верификация первого прогона — 2026-07-18. Попутно: политика доступа к crontab (deny→allow read-only + запись в repo-файлы) и протокол оркестрации Claude Code (CLAUDE.md, .claude/settings.json, субагенты reviewer/debugger, mm.sh executor). |
+| 2026-07-17 | SEC-504 (partial) | Ротация logs/mm_executor.log: size 50M/rotate 5/copytruncate в /etc/logrotate.d/polymarket (confirmed), вынесен из-под общего glob `*.log` через bracket-исключение — попутно найден и исправлен идентичный pre-existing дубль-баг для retention_cron.log (оба файла матчились и общим, и своим блоком → logrotate падал с "duplicate log entry", exit 1, каждый прогон). Бэкап: backups/logrotate_polymarket_bak_20260717_2038.txt. Фильтр scripts/mm_log_filter.py перед tee в scripts/mm.sh: оставляет только assistant/user/result, режет thinking, обрезает tool_result >2000 символов ([truncated]). cleanupPeriodDays=7 в .claude/settings.json. Journalctl/docker часть SEC-504 не затронута. |
+
 ## 2026-07-15
 
 | Дата | TASK_ID | Описание |
