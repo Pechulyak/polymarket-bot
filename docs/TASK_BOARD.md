@@ -133,7 +133,7 @@
 
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
-| TRD-401 | Аудит целостности таблицы trades | | BACKLOG |
+| TRD-401 | Аудит целостности таблицы trades | | CANCELLED |
 | TRD-402 | Исправление заполнения полей trades в execution pipeline | | DONE |
 | TRD-403 | Верификация settlement behaviour в portfolio view | | DONE |
 | TRD-404 | Верификация bankroll в portfolio view | | DONE |
@@ -167,7 +167,7 @@
 | TRD-436 | Переключение settlement engine с Gamma API на CLOB API | | DONE |
 | TRD-437 | Reconciliation bankroll после settlement + исправление event loop | | DONE |
 | TRD-438 | Аудит pnl_status UNAVAILABLE в whale_trade_roundtrips | | DONE |
-| TRD-439 | Запуск paper-trade pipeline для отобранных китов | | IN_PROGRESS |
+| TRD-439 | Запуск paper-trade pipeline для отобранных китов | | DONE |
 | TRD-440 | Исправление застрявших roundtrips — 37 OPEN при resolved markets | | DONE |
 | TRD-441 | Классификация и исключение китов | | DONE |
 | TRD-442 | DB-trigger закрытия paper-позиций на SELL | | CANCELLED |
@@ -224,8 +224,8 @@
 | SEC-501 | SSH Hardening + проверка инцидента 006.1 | | DONE |
 | SEC-502 | SSH hardening | | CANCELLED |
 | SEC-503 | Комплексная проверка безопасности | | DONE |
-| SEC-504 | Политика хранения логов — journalctl + docker + logrotate | | TODO |
-| SEC-505 | Исправление rsyslog suspend/resume flood | | TODO |
+| SEC-504 | Политика хранения логов — journalctl + docker + logrotate | | DONE |
+| SEC-505 | Исправление rsyslog suspend/resume flood | | DONE |
 
 ---
 
