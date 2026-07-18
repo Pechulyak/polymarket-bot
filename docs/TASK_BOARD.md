@@ -388,6 +388,7 @@
 | FARM-037 | Деплой US Soft Landing + Raquel Lyra (leg 100, override thin-вето soft landing, параметры 100/100/50/300, capital +$192) | feature:liquidity-farming | DONE |
 | FARM-038 | Фикс share-модели calc_farm_economics + farm_screen: comp_pts = min(bid,ask) + abs(bid−ask)/3 (модель Polymarket Qmin) вместо min-модели (calc, завышение 2-5x) и суммы сторон (screen, занижение 2-2.5x). Вычет собственных ордеров в calc (--our-bid/--our-ask). Метка upper-bound; калибровка факт/прогноз ~0.3-0.4. Паритет верифицирован (Alito 1388704, share=0.0304 в обоих). pts_k теперь = comp_pts/1000 — старые сканы несравнимы напрямую. | feature:liquidity-farming | DONE |
 | FARM-039 | farm_screen ингест: окна Gamma по liquidity (100/окно) теряют рынки (прецедент 15.07: Farage 2846103, Discord 2698822 выпали из прогона). Нужны полная пагинация + verbose-причина отсева per market. | feature:liquidity-farming | BACKLOG |
+| FARM-040 | Отключение дублирующего farm-degradation алертинга на S1 (K2 из FARM-022) | feature:liquidity-farming | DONE |
 
 ## EPIC: LIVE — Live Execution
 

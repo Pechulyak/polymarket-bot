@@ -1219,7 +1219,9 @@ def run_pipeline_checks():
     results["retention_deleted"] = check_retention_deleted_count()
 
     # Check 15: FARM-022 К2 — farm degradation watch (active markets)
-    check_farm_degradation(results)
+    # FARM-040: отключено — дублирует алертинг фарминг-контура на S2, шлёт
+    # ложные "восстановлена" на INIT→OK у только что добавленных рынков.
+    # check_farm_degradation(results)
 
     # Determine status based on results
     status, warnings, criticals = determine_status(results)
