@@ -1,0 +1,14 @@
+55 19 * * * "/root/.acme.sh"/acme.sh --cron --home "/root/.acme.sh" > /dev/null
+*/30 * * * * cd /root/polymarket-bot && /usr/bin/python3 scripts/pipeline_monitor.py >> logs/pipeline_monitor.log 2>&1
+0 */2 * * * /root/polymarket-bot/scripts/run_settlement.sh >> /root/polymarket-bot/logs/settlement_cron.log 2>&1
+15 * * * * /root/polymarket-bot/scripts/run_close_sell.sh >> /root/polymarket-bot/logs/close_sell_cron.log 2>&1
+15 */2 * * * /root/polymarket-bot/scripts/refresh_views.sh >> /root/polymarket-bot/logs/view_refresh.log 2>&1
+0 */2 * * * cd /root/polymarket-bot && /usr/bin/flock -n /tmp/category_backfill.lock /bin/sh -c 'cd /root/polymarket-bot && /usr/bin/python3 scripts/run_category_backfill.py >> logs/category_backfill.log 2>&1'
+0 3 * * * /root/polymarket-bot/scripts/backup_db.sh >> /var/log/polymarket/backup.log 2>&1
+0 8 * * * cd /root/polymarket-bot && /usr/bin/python3 scripts/run_daily_whale_alert.py >> logs/daily_whale_alert.log 2>&1
+0 9 * * 0 cd /root/polymarket-bot && /usr/bin/python3 scripts/run_weekly_whale_analysis.py >> logs/weekly_whale_analysis.log 2>&1
+*/15 * * * * cd /root/polymarket-bot && /usr/bin/flock -n /tmp/copy_live_sweep.lock /usr/bin/python3 scripts/copy_paper_to_live.py --sweep >> logs/copy_live_sweep.log 2>&1
+0 9,21 * * * cd /root/polymarket-bot && FARM_SCREEN_DB_WRITE=true ./scripts/run_farm_screen.sh >> logs/farm_screen_cron.log 2>&1 && python3 scripts/send_farm_screen_digest.py >> logs/farm_screen_cron.log 2>&1
+0 4 * * * /root/polymarket-bot/scripts/run_retention.sh >> /root/polymarket-bot/logs/retention_cron.log 2>&1
+10 4 * * * cd /root/polymarket-bot && flock -n /tmp/polymarket-bot-account-activity.lock ./scripts/run_account_activity_fetch.sh >> logs/account_activity_fetch.log 2>&1
+*/5 * * * * touch /root/polymarket-bot/logs/cron_heartbeat

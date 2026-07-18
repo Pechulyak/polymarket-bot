@@ -4,6 +4,7 @@
 Запуск: python3 scripts/pipeline_monitor.py
 Cron: */30 * * * * cd /root/polymarket-bot && python3 scripts/pipeline_monitor.py >> logs/pipeline_monitor.log 2>&1
 """
+import difflib
 import json
 import os
 import re
@@ -45,6 +46,12 @@ DAEMON_HEARTBEAT_STALE_SECONDS = 180
 
 # INFRA-047: stuck orders threshold
 STUCK_ORDER_SECONDS = 120
+
+# INFRA-051: cron canary heartbeat threshold (file touched by */5 cron)
+CRON_HEARTBEAT_STALE_SECONDS = 900
+
+# INFRA-051: canonical crontab reference file (mirrors live `crontab -l`)
+CRONTAB_REFERENCE_FILE = "/root/polymarket-bot/docs/crontab.reference"
 
 # Container names from docker-compose.yml
 CONTAINERS = [
@@ -854,6 +861,180 @@ def check_stuck_orders():
 
 
 # =============================================================================
+# INFRA-051: cron aliveness — canary heartbeat (file mtime) + crontab drift
+# =============================================================================
+
+CRON_HEARTBEAT_FILE = "/root/polymarket-bot/logs/cron_heartbeat"
+
+
+def check_cron_heartbeat():
+    """INFRA-051: edge-triggered — cron canary heartbeat freshness.
+
+    Источник: mtime файла logs/cron_heartbeat (touched by `*/5 * * * *` cron).
+    Не БД. Если файла нет — stale (age=None).
+    DB используется только для alert-state (cron_heartbeat_alert_state).
+    """
+    # Read mtime outside DB (file source-of-truth)
+    try:
+        mtime = os.path.getmtime(CRON_HEARTBEAT_FILE)
+        heartbeat_age_sec = round(time.time() - mtime, 1)
+    except (FileNotFoundError, OSError):
+        heartbeat_age_sec = None
+
+    current_state = "stale" if heartbeat_age_sec is None else (
+        "stale" if heartbeat_age_sec > CRON_HEARTBEAT_STALE_SECONDS else "ok"
+    )
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # Read last alerted state
+            cur.execute("""
+                SELECT status FROM system_state
+                WHERE component = 'cron_heartbeat_alert_state'
+            """)
+            alert_row = cur.fetchone()
+            last_alerted = alert_row[0] if alert_row else None
+
+            # First run: missing alert_state → treat as ok (no spurious recovered)
+            if last_alerted is None:
+                last_alerted = "ok"
+
+            # Edge-trigger: only alert on state transition
+            if current_state != last_alerted:
+                if current_state == "stale":
+                    age_repr = f"{heartbeat_age_sec}s" if heartbeat_age_sec is not None else "missing"
+                    msg = f"🚨 cron heartbeat STALE (age={age_repr}) — crond возможно не работает"
+                    send_telegram_message(msg)
+                    new_alert_state = "stale"
+                else:
+                    send_telegram_message("✅ cron heartbeat recovered")
+                    new_alert_state = "ok"
+
+                cur.execute("""
+                    INSERT INTO system_state (component, status, heartbeat_at, updated_at)
+                    VALUES ('cron_heartbeat_alert_state', %s, NOW(), NOW())
+                    ON CONFLICT (component) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        heartbeat_at = EXCLUDED.heartbeat_at,
+                        updated_at = EXCLUDED.updated_at
+                """, (new_alert_state,))
+                conn.commit()
+    except Exception as e:
+        print(f"[WARN] cron heartbeat check failed: {e}")
+    finally:
+        conn.close()
+
+
+def check_crontab_drift():
+    """INFRA-051: edge-triggered — drift между `crontab -l` и docs/crontab.reference.
+
+    Сравнение построчно: .strip() на каждой строке, отброс пустых строк с обеих сторон.
+    Если crontab -l падает (returncode != 0) — drift, в detail пишем stderr.
+    Alert-state компонент: crontab_drift_alert_state.
+    """
+    # 1. Получить живой crontab
+    live_lines = []
+    crontab_stderr = None
+    crontab_ok = True
+    try:
+        result = subprocess.run(
+            ["crontab", "-l"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            crontab_ok = False
+            crontab_stderr = result.stderr.strip()[:500]
+        else:
+            live_lines = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+    except Exception as e:
+        crontab_ok = False
+        crontab_stderr = f"subprocess exception: {type(e).__name__}: {e}"
+
+    # 2. Прочитать reference
+    ref_lines = []
+    ref_error = None
+    try:
+        with open(CRONTAB_REFERENCE_FILE, "r") as f:
+            ref_lines = [ln.strip() for ln in f.read().splitlines() if ln.strip()]
+    except FileNotFoundError:
+        ref_error = f"reference file missing: {CRONTAB_REFERENCE_FILE}"
+    except Exception as e:
+        ref_error = f"reference read error: {type(e).__name__}: {e}"
+
+    # 3. Сравнить
+    current_state = "ok"
+    diff_text = ""
+    detail_payload = None
+
+    if not crontab_ok:
+        current_state = "drift"
+        diff_text = f"crontab -l failed: {crontab_stderr or 'unknown error'}"
+        detail_payload = {"diff": diff_text[:2000]}
+    elif ref_error:
+        current_state = "drift"
+        diff_text = f"reference error: {ref_error}"
+        detail_payload = {"diff": diff_text[:2000]}
+    elif live_lines != ref_lines:
+        current_state = "drift"
+        # Unified diff, обрезанный до ~20 строк вывода
+        diff_iter = difflib.unified_diff(
+            ref_lines,
+            live_lines,
+            fromfile="docs/crontab.reference",
+            tofile="crontab -l",
+            lineterm="",
+        )
+        diff_lines = list(diff_iter)
+        diff_text = "\n".join(diff_lines[:20])
+        if len(diff_lines) > 20:
+            diff_text += f"\n... ({len(diff_lines) - 20} more lines truncated)"
+        detail_payload = {"diff": diff_text[:2000]}
+
+    # 4. Edge-trigger
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT status FROM system_state
+                WHERE component = 'crontab_drift_alert_state'
+            """)
+            alert_row = cur.fetchone()
+            last_alerted = alert_row[0] if alert_row else None
+
+            # First run: missing alert_state → treat as ok
+            if last_alerted is None:
+                last_alerted = "ok"
+
+            if current_state != last_alerted:
+                if current_state == "drift":
+                    msg = f"🚨 crontab DRIFT: живой crontab разошёлся с docs/crontab.reference\n{diff_text}"
+                    send_telegram_message(msg)
+                    new_alert_state = "drift"
+                else:
+                    send_telegram_message("✅ crontab drift resolved")
+                    new_alert_state = "ok"
+                    detail_payload = None
+
+                cur.execute("""
+                    INSERT INTO system_state (component, status, detail, heartbeat_at, updated_at)
+                    VALUES ('crontab_drift_alert_state', %s, %s, NOW(), NOW())
+                    ON CONFLICT (component) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        detail = EXCLUDED.detail,
+                        heartbeat_at = EXCLUDED.heartbeat_at,
+                        updated_at = EXCLUDED.updated_at
+                """, (new_alert_state, json.dumps(detail_payload) if detail_payload else None))
+                conn.commit()
+    except Exception as e:
+        print(f"[WARN] crontab drift check failed: {e}")
+    finally:
+        conn.close()
+
+
+# =============================================================================
 # Telegram alerts
 # =============================================================================
 
@@ -1227,6 +1408,9 @@ def main():
         check_live_copy_daemon_heartbeat()
         # INFRA-047: watchdog застрявших ордеров
         check_stuck_orders()
+        # INFRA-051: cron aliveness — canary heartbeat + crontab drift
+        check_cron_heartbeat()
+        check_crontab_drift()
 
         results = run_pipeline_checks()
         status = results["status"]
