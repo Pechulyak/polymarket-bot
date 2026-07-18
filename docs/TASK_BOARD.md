@@ -400,6 +400,8 @@
 | LIVE-005 | on-chain balance-gate + фикс $1 | feature:live-execution | DONE |
 | LIVE-006 | Версионирование executor-кода: папка executor/ в репо) | feature:live-execution | DONE |
 | LIVE-007 | live-киты не поллились (fetch WHERE только paper/tracked): добавлен 'live' в paper-ветку fetch | feature:live-execution | DONE |
+| LIVE-008 | Дедуп live-ордеров по позиции (аналог PIPE-052) | feature:live-execution | TODO |
+| LIVE-009 | submit_taker всегда шлёт side=BUY, игнорируя SELL-intent | feature:live-execution | TODO |
 
 ---
 
