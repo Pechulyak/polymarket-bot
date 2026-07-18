@@ -97,9 +97,13 @@
 
 - Таблица live_orders
   status: OK
-  updated: 2026-06-30
-  task: LIVE-004
+  updated: 2026-07-18
+  task: LIVE-004, LIVE-008
   note: pull-model live copy активен, token_id NOT NULL, демон+watchdog на S1.
+    LIVE-008: process_one() в scripts/copy_paper_to_live.py дедуплицирует по
+    позиции (whale+market+outcome+side+price, окно 6ч, failed/rejected не
+    считаются) перед созданием live_orders intent — один live-ордер на
+    позицию вместо одного на каждую строку paper_trades.
 
 - Таблица bankroll
   status: OK

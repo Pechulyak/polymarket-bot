@@ -59,6 +59,12 @@ HEARTBEAT_INTERVAL_SECONDS = 60
 # Sweep window (hours) — look back this far for missed notifications
 SWEEP_WINDOW_HOURS = 6
 
+# Position dedup window (hours) — trades matching an already-covered position
+# (whale+market+outcome+side+price) within this window are skipped. Bounded,
+# not permanent: a genuinely fresh re-entry days later at the same price
+# should still get a live order.
+LIVE_ORDER_DEDUP_WINDOW_HOURS = 6
+
 # Logging
 LOGS_DIR = Path("/root/polymarket-bot/logs")
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -159,6 +165,52 @@ def get_paper_trade(conn, trade_id: int) -> dict | None:
     }
 
 
+def has_live_intent_for_position(conn, trade: dict) -> bool:
+    """
+    Check whether another paper_trades row for the same position
+    (whale_address, market_id, outcome, side, price), within the dedup
+    window, already has a non-failed live_orders intent.
+
+    paper_trades intentionally keeps every individual whale trade — a whale
+    building one position via many small trades produces many paper_trades
+    rows. Without this check, each row would get its own live order.
+    'failed'/'rejected' intents don't count: a failed attempt shouldn't
+    permanently block retrying the same signal.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM paper_trades pt2
+                JOIN live_orders lo ON lo.idempotency_key = ('pt_' || pt2.id)
+                WHERE pt2.whale_address = %(whale_address)s
+                  AND pt2.market_id = %(market_id)s
+                  AND pt2.outcome = %(outcome)s
+                  AND pt2.side = %(side)s
+                  AND pt2.price = %(price)s
+                  AND pt2.id != %(trade_id)s
+                  AND pt2.created_at BETWEEN %(created_at)s - (%(window_hours)s || ' hours')::interval
+                                          AND %(created_at)s + (%(window_hours)s || ' hours')::interval
+                  AND lo.status NOT IN ('failed', 'rejected')
+            )
+            """,
+            {
+                "whale_address": trade["whale_address"],
+                "market_id": trade["market_id"],
+                "outcome": trade["outcome"],
+                "side": trade["side"],
+                "price": trade["price"],
+                "trade_id": trade["id"],
+                "created_at": trade["created_at"],
+                "window_hours": LIVE_ORDER_DEDUP_WINDOW_HOURS,
+            }
+        )
+        (exists,) = cur.fetchone()
+    conn.commit()
+    return bool(exists)
+
+
 def insert_live_order(conn, trade: dict, token_id: str) -> bool:
     """
     INSERT a row into live_orders with status='intent'.
@@ -237,6 +289,14 @@ def process_one(conn, trade_id: int) -> None:
     token_id = trade.get("token_id")
     if not token_id:
         log(f"trade_id={trade_id}: token_id is NULL/empty — intent NOT created (historical/categorical trade)", "ERROR")
+        return
+
+    # Gate 5: same position (whale+market+outcome+side+price) already has a
+    # live intent within the dedup window — skip, one order per position
+    if has_live_intent_for_position(conn, trade):
+        log(f"trade_id={trade_id}: duplicate position (whale={trade['whale_address']}, "
+            f"market={trade['market_id']}, outcome={trade['outcome']}, side={trade['side']}, "
+            f"price={trade['price']}) already has a live intent — skipped")
         return
 
     # Insert intent into live_orders
