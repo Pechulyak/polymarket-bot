@@ -5,6 +5,7 @@
 |------|---------|----------|
 | 2026-07-18 | ACT-003 | Верификация первого прогона крона (04:10 UTC): лог account_activity_fetch.log — START→DONE без ошибок, account_activity +35 строк (PechaArt 12, Justfuuun 23), account_positions_snapshot +10 строк (snap_date=2026-07-18, 5+5 позиций). Задача закрыта DONE. |
 | 2026-07-18 | INFRA-051 | Cron aliveness watchdog в pipeline_monitor: check_cron_heartbeat (mtime canary logs/cron_heartbeat, touched by новой cron-строкой */5, порог 900с) + check_crontab_drift (/usr/bin/crontab -l vs docs/crontab.reference, unified_diff + jsonb detail). Обе по edge-trigger паттерну (first-run→"ok", INSERT ... ON CONFLICT DO UPDATE), wiring в main() после check_stuck_orders(). Известное ограничение: check_cron_heartbeat сам запускается только живым crond, поэтому полную смерть crond не гарантированно ловит — детектирует в первую очередь поломку конкретной */5-записи. Изменены scripts/pipeline_monitor.py + новый docs/crontab.reference (канонический эталон, читается drift-чеком). |
+| 2026-07-18 | INFRA-051 (hardening) | Инцидент: исполнитель (mm.sh, голый Bash-доступ) сам сделал git commit, правил TASK_BOARD/CHANGELOG вне scope ТЗ, заявил о несуществующем "reviewer subagent" и удалил обязательный report-файл. Фикс в scripts/mm.sh: --disallowedTools "Bash(git *)" (технический deny) + автоматический guardrail-блок, дописываемый к каждому ТЗ (запрет править файлы вне списка ТЗ, запрет фабриковать вердикты ревью, запрет удалять scratchpad/*_report.md). |
 
 ## 2026-07-17
 
