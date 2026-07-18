@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PIPE-045 / PIPE-049: Fetch leaderboard candidates + LP/HFT filters (category-based)
+PIPE-045 / PIPE-049 / PIPE-051: Fetch leaderboard candidates + LP/HFT filters (category-based)
 
 Fetches top-N traders per leaderboard category (timePeriod=MONTH, orderBy=PNL),
 deduplicates wallets across categories, filters out LP market makers
@@ -8,6 +8,11 @@ and HFT burst traders, stores raw trades for scoring pipeline.
 
 PIPE-049: OVERALL and SPORTS categories excluded (recon 2026-07-11:
 OVERALL top-10 identical to SPORTS top-10; sports profile is non-copyable).
+
+PIPE-051: HFT-фильтр ужесточён — is_hft_burst теперь срабатывает только если
+peak_trades_per_15min > 20 AND burst_trade_pct > 50.0 (доля сделок в
+burst-окнах от 90d total). Одинокий всплеск больше не флагует обычного
+трейдера. Детали и пороги — в scratchpad/pipe051_burst_analysis_report.md.
 """
 
 import asyncio
@@ -204,17 +209,34 @@ async def fetch_trades_paginated(
     conn: asyncpg.Connection,
     wallet: str,
 ) -> int:
-    """Fetch all trades for wallet with pagination. Returns total trades fetched."""
+    """Fetch all trades for wallet with pagination. Returns total trades fetched.
+
+    PIPE-051: на HTTP-ошибку (fetch_json вернул None) делаем до 2 повторных
+    попыток с паузой 1 сек; если не помогло — печатаем WARNING и break,
+    чтобы остаток истории кошелька не терялся молча, но и валидация
+    дальнейших кошельков не падала.
+    """
     total_trades = 0
     offset = 0
     max_trades = 10000
 
     while offset < max_trades:
-        data = await fetch_json(
-            session,
-            ACTIVITY_API,
-            {"type": "TRADE", "user": wallet, "limit": 500, "offset": offset},
-        )
+        # PIPE-051: различаем data is None (ошибка) и data == [] (конец истории)
+        data = None
+        for attempt in range(3):  # 1 основная + 2 повтора
+            data = await fetch_json(
+                session,
+                ACTIVITY_API,
+                {"type": "TRADE", "user": wallet, "limit": 500, "offset": offset},
+            )
+            if data is not None:
+                break
+            if attempt < 2:
+                await asyncio.sleep(1.0)
+        if data is None:
+            print(f"[fetch] WARNING: {wallet} — история обрезана на "
+                  f"offset={offset}, HFT-метрики могут быть неполными")
+            break
         if not data:
             break
 
@@ -246,8 +268,17 @@ async def fetch_trades_paginated(
     return total_trades
 
 
-async def check_hft_filter(conn: asyncpg.Connection, wallet: str) -> tuple[int, int, float]:
-    """Check HFT burst filter. Returns (peak_trades_per_15min, top_market_count, top_market_vol_pct)."""
+async def check_hft_filter(conn: asyncpg.Connection, wallet: str) -> tuple[int, int, float, Optional[float]]:
+    """Check HFT burst filter.
+
+    Returns (peak_trades_per_15min, top_market_count, top_market_vol_pct, burst_trade_pct).
+
+    PIPE-051: burst_trade_pct — доля сделок кошелька, попавших в "burst-окна"
+    (15-мин интервалы с count > 20), от общего числа сделок за 90 дней.
+    Эмпирический разрыв: 7 явных не-ботов — 0.97-31.25%, 5 явных ботов —
+    78.73-99.44%. Порог 50% лежит в разрыве с запасом. Если total trades = 0,
+    возвращается None (фильтр не применим).
+    """
     # Peak trades per 15-min window
     row = await conn.fetchrow(
         """
@@ -304,49 +335,38 @@ async def check_hft_filter(conn: asyncpg.Connection, wallet: str) -> tuple[int, 
     )
     top_market_vol_pct = float(row3["top_vol_pct"]) if row3 and row3["top_vol_pct"] else 0.0
 
-    return peak, top_market_count, top_market_vol_pct
-
-
-async def mark_hft_candidate(
-    conn: asyncpg.Connection,
-    wallet: str,
-    username: str,
-    peak: int,
-) -> None:
-    """Mark candidate as HFT burst."""
-    await conn.execute(
+    # PIPE-051: burst_trade_pct — (сумма cnt по окнам с cnt > 20) / total_trades * 100
+    burst_row = await conn.fetchrow(
         """
-        UPDATE leaderboard_candidates SET
-            is_hft_burst = TRUE,
-            is_copyable = FALSE,
-            filter_reason = 'hft_burst',
-            updated_at = NOW()
-        WHERE wallet_address = $1
+        WITH windows AS (
+            SELECT
+                date_trunc('hour', traded_at) +
+                (EXTRACT(MINUTE FROM traded_at)::int / 15)
+                    * interval '15 minutes' AS window_15,
+                COUNT(*) AS cnt
+            FROM leaderboard_candidate_trades
+            WHERE wallet_address = $1
+            GROUP BY window_15
+        ),
+        totals AS (
+            SELECT COUNT(*) AS total FROM leaderboard_candidate_trades
+            WHERE wallet_address = $1
+        )
+        SELECT
+            (SELECT COALESCE(SUM(cnt), 0) FROM windows WHERE cnt > 20) AS burst_trades,
+            (SELECT total FROM totals) AS total_trades
         """,
         wallet,
     )
-    print(f"[hft_filter] {username} — peak={peak}, ДРОП")
+    if burst_row is None or not burst_row["total_trades"]:
+        burst_trade_pct: Optional[float] = None
+    else:
+        burst_trade_pct = round(
+            float(burst_row["burst_trades"]) / float(burst_row["total_trades"]) * 100,
+            2,
+        )
 
-
-async def mark_passed_filter(
-    conn: asyncpg.Connection,
-    wallet: str,
-    username: str,
-    peak: int,
-) -> None:
-    """Mark candidate as passed filters (awaiting scoring)."""
-    await conn.execute(
-        """
-        UPDATE leaderboard_candidates SET
-            is_hft_burst = FALSE,
-            is_lp = FALSE,
-            is_copyable = NULL,
-            updated_at = NOW()
-        WHERE wallet_address = $1
-        """,
-        wallet,
-    )
-    print(f"[hft_filter] {username} — peak={peak}, ПРОШЁЛ")
+    return peak, top_market_count, top_market_vol_pct, burst_trade_pct
 
 
 async def process_candidate(
@@ -384,7 +404,16 @@ async def process_candidate(
     await update_candidate_stats(conn, wallet)
 
     # Step D: HFT filter - always set is_copyable = NULL
-    peak, top_market_count, top_market_vol_pct = await check_hft_filter(conn, wallet)
+    peak, top_market_count, top_market_vol_pct, burst_trade_pct = await check_hft_filter(conn, wallet)
+
+    # PIPE-051: is_hft_burst срабатывает только если peak > 20 AND burst_trade_pct > 50.0.
+    # Одинокий всплеск (peak чуть выше 20 при burst_trade_pct < 50%) больше не флагует обычного
+    # трейдера как HFT. Если burst_trade_pct == None (нет сделок) — тоже не флагуем.
+    is_hft_burst = (
+        peak > 20
+        and burst_trade_pct is not None
+        and burst_trade_pct > 50.0
+    )
 
     # Update HFT metrics and always set is_copyable = NULL
     await conn.execute(
@@ -393,7 +422,8 @@ async def process_candidate(
             peak_trades_per_15min = $2,
             top_market_trade_count = $3,
             top_market_vol_pct = $4,
-            is_hft_burst = $5,
+            burst_trade_pct = $5,
+            is_hft_burst = $6,
             is_copyable = NULL,
             updated_at = NOW()
         WHERE wallet_address = $1
@@ -402,13 +432,14 @@ async def process_candidate(
         peak,
         top_market_count,
         top_market_vol_pct,
-        peak > 20,
+        burst_trade_pct,
+        is_hft_burst,
     )
 
-    if peak > 20:
-        print(f"[hft_filter] {username} — peak={peak}, ДРОП (is_copyable=NULL)")
+    if is_hft_burst:
+        print(f"[hft_filter] {username} — peak={peak}, burst_pct={burst_trade_pct}, ДРОП (is_copyable=NULL)")
     else:
-        print(f"[hft_filter] {username} — peak={peak}, ПРОШЁЛ (is_copyable=NULL)")
+        print(f"[hft_filter] {username} — peak={peak}, burst_pct={burst_trade_pct}, ПРОШЁЛ (is_copyable=NULL)")
 
 
 async def main() -> None:

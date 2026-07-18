@@ -76,8 +76,8 @@ python3 scripts/score_leaderboard_candidates.py
 3. **`process_candidate()` для каждого из 20:**
    - **LP-фильтр**: `/activity?user=<wallet>&limit=20` (без фильтра type). Если `type == "REWARD"` → UPDATE `is_lp=TRUE, filter_reason='lp_market_maker'`. Сделки загружаются независимо от результата (`:252–258`).
    - **Fetch сделок**: `/activity?type=TRADE&user=<wallet>&limit=500&offset=N`, пагинация, cutoff 90 дней (`:168`). Дедупликация `ON CONFLICT (tx_hash) DO NOTHING`.
-   - **HFT-фильтр**: SQL peak за 15-минутные окна — `date_trunc('hour') + (EXTRACT(MINUTE)/15) * interval '15 minutes'` (`:200–218`).
-   - **UPDATE**: `is_hft_burst = (peak > 20)`, `is_copyable = NULL` для всех кандидатов (`:290–302`).
+   - **HFT-фильтр**: SQL peak за 15-минутные окна — `date_trunc('hour') + (EXTRACT(MINUTE)/15) * interval '15 minutes'` (`:200–218`). PIPE-051 (2026-07-18): добавлена `burst_trade_pct` — доля 90-дневных сделок кошелька, попавших в окна с `cnt > 20`, от общего числа сделок.
+   - **UPDATE**: `is_hft_burst = (peak > 20 AND burst_trade_pct > 50.0)`, `is_copyable = NULL` для всех кандидатов (`:290–302`). До PIPE-051 правило было `is_hft_burst = (peak > 20)` — единичный всплеск за 90 дней ложно флагал обычных трейдеров наравне с ботами (см. RF3 ниже).
 
 **Ключевое:** `is_copyable` остаётся `NULL` для всех — включая LP и HFT. Оба флага информационные.
 
@@ -159,6 +159,7 @@ CREATE TABLE leaderboard_candidates (
     is_lp                   BOOLEAN,
     is_hft_burst            BOOLEAN,
     peak_trades_per_15min   INTEGER,
+    burst_trade_pct         NUMERIC(5,2),  -- PIPE-051
     top_market_trade_count  INTEGER,
     top_market_vol_pct      NUMERIC(5,2),
     filter_reason           VARCHAR(128),
@@ -301,9 +302,11 @@ FROM leaderboard_candidates ORDER BY calc_pnl_usd DESC NULLS LAST;
 
 Код `fetch_leaderboard_candidates.py:290–302` устанавливает `is_copyable = NULL` для всех кандидатов, включая LP и HFT. `score_leaderboard_candidates.py` также оставляет `is_copyable = NULL`. Ничто в коде не препятствует оператору установить `approved_for_tracking = TRUE` для кандидата с `is_lp = TRUE` или `is_hft_burst = TRUE`.
 
-### RF3 — Прогон 2026-06-08: 0 кандидатов рекомендованы
+### RF3 — ЗАКРЫТО (PIPE-051, 2026-07-18): порог пересмотрен
 
-9 кандидатов `is_lp=TRUE`, 11 `is_hft_burst=TRUE` (CHANGELOG 2026-06-08). Из 20 кандидатов leaderboard `timePeriod=MONTH` ни один не прошёл оба фильтра одновременно. Вопрос о пересмотре порога (20 сделок/15 мин) или `timePeriod` требует решения STRATEGY.
+Было: прогон 2026-06-08 — 9 `is_lp=TRUE`, 11 `is_hft_burst=TRUE` из 20, ни один не прошёл оба фильтра. Позже подтверждено на прогоне 2026-07-11: 41 из 43 кандидатов `is_hft_burst=TRUE`. Причина — единичный 15-минутный всплеск за всю 90-дневную историю флагал кандидата наравне с непрерывно торгующим ботом.
+
+Фикс: новая метрика `burst_trade_pct` (доля 90-дневных сделок в окнах с count>20). Эмпирически на 13-24 живых кошельках — чистый разрыв: обычные трейдеры со случайным всплеском 0.97–31.25%, реальные боты 78.73–99.44%. Порог 50.0 в разрыве. Новое правило: `is_hft_burst = peak > 20 AND burst_trade_pct > 50.0`. На тестовой выборке 24 кошельков HFT-флаг снят с 16 из 22 ранее флагованных. Порог эмпирический на малой выборке — при накоплении данных подлежит перекалибровке.
 
 ### RF4 — Settlement через HTTP CLOB API, не через production SQL-механизм
 
