@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-18
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-18 | ACT-003 | Верификация первого прогона крона (04:10 UTC): лог account_activity_fetch.log — START→DONE без ошибок, account_activity +35 строк (PechaArt 12, Justfuuun 23), account_positions_snapshot +10 строк (snap_date=2026-07-18, 5+5 позиций). Задача закрыта DONE. |
+
 ## 2026-07-17
 
 | Дата | TASK_ID | Описание |

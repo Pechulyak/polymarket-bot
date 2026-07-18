@@ -340,7 +340,7 @@
 |----|--------|-----|--------|
 | ACT-001 | Probe /activity + /positions API (schema recon) | | DONE |
 | ACT-002 | account_activity + account_positions_snapshot: DDL + fetch + backfill | | DONE |
-| ACT-003 | Cron: daily fetch both scripts (env-pattern + flock) | | TODO |
+| ACT-003 | Cron: daily fetch both scripts (env-pattern + flock) | | DONE |
 
 ---
 
