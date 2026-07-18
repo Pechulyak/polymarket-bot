@@ -737,6 +737,82 @@ def check_live_executor_heartbeat():
 
 
 # =============================================================================
+# INFRA-042: watchdog docker healthcheck (edge-trigger)
+# =============================================================================
+
+def check_container_health():
+    """INFRA-042: edge-triggered Telegram alert on docker healthcheck status.
+
+    Reads .State.Health.Status per container; alerts on ok->unhealthy and
+    unhealthy->ok. Complements check_container_restarts (fires only on
+    restart_count>3) — catches a container that goes unhealthy silently
+    without restarting (bot/roundtrip have no autoheal label).
+    """
+    conn = get_db_connection()
+    try:
+        for container in CONTAINERS:
+            try:
+                result = subprocess.run(
+                    ["docker", "inspect",
+                     "--format={{.State.Health.Status}}", container],
+                    capture_output=True, text=True, timeout=10)
+            except Exception as e:
+                print(f"[WARN] container health inspect failed for {container}: {e}")
+                continue
+            if result.returncode != 0:
+                # container missing / inspect error -> skip, do NOT flip alert
+                # state (rc!=0 must not read as a spurious 'recovered').
+                print(f"[WARN] docker inspect rc={result.returncode} for {container}")
+                continue
+            raw = result.stdout.strip()
+
+            # Map docker statuses. Only healthy/unhealthy are decisive.
+            # "starting" is transient (during a restart) -> skip, so we never emit
+            # a premature 'recovered' in the unhealthy->starting->healthy sequence.
+            # "" = container without a healthcheck -> nothing to monitor -> ok.
+            if raw == "unhealthy":
+                current_state = "unhealthy"
+            elif raw in ("healthy", ""):
+                current_state = "ok"
+            elif raw == "starting":
+                continue
+            else:
+                print(f"[WARN] unexpected health status for {container}: {raw!r}")
+                continue
+
+            component = f"container_health_alert_state_{container}"
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT status FROM system_state WHERE component = %s",
+                    (component,))
+                r = cur.fetchone()
+                # First run (no row) -> last_alerted='ok' (no spurious recovered).
+                last_alerted = r[0] if r else "ok"
+
+                if current_state != last_alerted:
+                    if current_state == "unhealthy":
+                        send_telegram_message(
+                            f"🚨 {container} UNHEALTHY (docker healthcheck)")
+                    else:
+                        send_telegram_message(
+                            f"✅ {container} health recovered")
+
+                    cur.execute("""
+                        INSERT INTO system_state (component, status, heartbeat_at, updated_at)
+                        VALUES (%s, %s, NOW(), NOW())
+                        ON CONFLICT (component) DO UPDATE SET
+                            status = EXCLUDED.status,
+                            heartbeat_at = EXCLUDED.heartbeat_at,
+                            updated_at = EXCLUDED.updated_at
+                    """, (component, current_state))
+                    conn.commit()
+    except Exception as e:
+        print(f"[WARN] container health check failed: {e}")
+    finally:
+        conn.close()
+
+
+# =============================================================================
 # INFRA-048: watchdog live_copy_daemon (edge-trigger)
 # =============================================================================
 
@@ -1413,6 +1489,8 @@ def main():
         # INFRA-051: cron aliveness — canary heartbeat + crontab drift
         check_cron_heartbeat()
         check_crontab_drift()
+        # INFRA-042: container health (docker healthcheck) -> Telegram, edge-trigger
+        check_container_health()
 
         results = run_pipeline_checks()
         status = results["status"]
