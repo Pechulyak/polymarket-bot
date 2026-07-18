@@ -187,9 +187,12 @@
 
 - whale_detector.py
   status: ACTIVE
-  updated: 2026-04-02
-  task: PIPE-002
-  note: записи через WhaleTradesRepo
+  updated: 2026-07-18
+  task: PIPE-002, DATA-412
+  note: записи через WhaleTradesRepo. DATA-412: outcome_index в
+    _fetch_single_paper_whale/_fetch_single_tracked_whale теперь берётся из
+    src/data/storage/market_tokens_cache.py (позиция token_id в CLOB
+    tokens[]), а не из ненадёжного per-trade поля API.
 
 - whale_tracker.py
   status: OK

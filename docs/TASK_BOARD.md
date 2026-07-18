@@ -193,7 +193,7 @@
 | DATA-409 | Миграция fetch_trader_trades на /activity endpoint | feature:activity-endpoint | DONE |
 | DATA-410 | Whitelist для точечного включения /activity endpoint | feature:activity-endpoint | DONE |
 | DATA-411 | Глобальное переключение всех китов на /activity | feature:activity-endpoint | DONE |
-| DATA-412 | Outcome по token_id вместо outcome_index | feature:whale-detection | TODO |
+| DATA-412 | Outcome по token_id вместо outcome_index | feature:whale-detection | DONE |
 
 ---
 

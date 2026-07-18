@@ -33,6 +33,7 @@ from sqlalchemy.orm import sessionmaker
 
 from src.data.storage.market_category_cache import get_market_category
 from src.data.storage.market_title_cache import get_market_title
+from src.data.storage.market_tokens_cache import get_token_outcome_index
 from src.data.storage.category_backfill import backfill_market_categories
 from src.research.polymarket_data_client import (
     PolymarketDataClient,
@@ -1704,12 +1705,12 @@ class WhaleDetector:
                 try:
                     new, dupes = await asyncio.wait_for(
                         self._fetch_single_paper_whale(address),
-                        timeout=30  # Max 30 sec per whale
+                        timeout=45  # Max 45 sec per whale (raised from 30s: cold-cache token-outcome lookups add per-trade I/O)
                     )
                     new_trades_count += new
                     duplicates_count += dupes
                 except asyncio.TimeoutError:
-                    logger.warning("paper_whale_timeout", address=address[:10], timeout_sec=30)
+                    logger.warning("paper_whale_timeout", address=address[:10], timeout_sec=45)
                     continue
                 except Exception as e:
                     logger.warning("paper_whale_error", address=address[:10], error=str(e))
@@ -1751,10 +1752,11 @@ class WhaleDetector:
                 trade_price = Decimal(str(trade.price))
                 size_usd = size_shares * trade_price
 
-                # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
-                # Use outcomeIndex for reliable binary mapping
-                outcome_index = None
-                if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
+                # Derive outcome_index from token_id (ground truth via cached CLOB
+                # tokens[]) instead of trusting the API's per-trade outcomeIndex,
+                # which can disagree with token_id for the same trade.
+                outcome_index = await get_token_outcome_index(trade.condition_id, trade.asset)
+                if outcome_index is None and hasattr(trade, 'outcome_index'):
                     outcome_index = trade.outcome_index
 
                 normalized_outcome = normalize_outcome(
@@ -1886,10 +1888,11 @@ class WhaleDetector:
                 trade_price = Decimal(str(trade.price))
                 size_usd = size_shares * trade_price
 
-                # Normalize outcome: outcomeIndex 0 = Yes, 1 = No
-                # Use outcomeIndex for reliable binary mapping
-                outcome_index = None
-                if hasattr(trade, 'outcome_index') and trade.outcome_index is not None:
+                # Derive outcome_index from token_id (ground truth via cached CLOB
+                # tokens[]) instead of trusting the API's per-trade outcomeIndex,
+                # which can disagree with token_id for the same trade.
+                outcome_index = await get_token_outcome_index(trade.condition_id, trade.asset)
+                if outcome_index is None and hasattr(trade, 'outcome_index'):
                     outcome_index = trade.outcome_index
 
                 normalized_outcome = normalize_outcome(
