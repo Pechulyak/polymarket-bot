@@ -94,3 +94,4 @@ executor/*.pyc
 executor/venv/
 executor/*.bak.*
 executor/logs/
+scratchpad/
