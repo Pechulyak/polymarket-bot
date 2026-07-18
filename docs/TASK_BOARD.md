@@ -125,6 +125,7 @@
 | PIPE-049 | Fetch кандидатов из 9 категорий leaderboard + populate best_category/categories | | DONE |
 | PIPE-050 | NULL-guard в score_leaderboard_candidates.py: 11 групп с NULL price → OPEN (PIPE-050) | | DONE |
 | PIPE-051 | BACKLOG: пересмотр HFT-фильтра (единичный пик за 90 дней дропает 41/43; кандидат-метрика: доля сделок в burst-окнах) | | BACKLOG |
+| PIPE-052 | Дедуп paper_trade_notifications по whale+market+outcome+side+price в notify_paper_trade() (11 дублей-алертов на одну цену подтверждены на живых данных) | | DONE |
 
 ---
 

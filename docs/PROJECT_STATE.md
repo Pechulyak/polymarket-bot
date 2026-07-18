@@ -77,9 +77,11 @@
 
 - Таблица paper_trades
   status: OK
-  updated: 2026-06-19
-  task: PIPE-048
-  note: триггер AFTER INSERT → notify_paper_trade (PIPE-048), paper_trade_notifications с status-машиной
+  updated: 2026-07-18
+  task: PIPE-048, PIPE-052
+  note: триггер AFTER INSERT → notify_paper_trade (PIPE-048), paper_trade_notifications с status-машиной.
+    PIPE-052: notify_paper_trade() дедуплицирует по (whale_address, market_id, outcome, side, price)
+    перед INSERT в paper_trade_notifications — paper_trades сам не дедуплицируется, пишет все сделки.
 
 - Таблица trades
   status: OK
