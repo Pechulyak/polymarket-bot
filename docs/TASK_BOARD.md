@@ -223,7 +223,7 @@
 | SEC-404 | Ограничить Qdrant только localhost | | DONE |
 | SEC-501 | SSH Hardening + проверка инцидента 006.1 | | DONE |
 | SEC-502 | SSH hardening | | CANCELLED |
-| SEC-503 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | | TODO |
+| SEC-503 | PRE-PROD-SECRETS-ROTATION: Ротация секретов перед переключением paper → live | | DONE |
 | SEC-504 | Политика хранения логов — journalctl + docker + logrotate | | TODO |
 | SEC-505 | Исправление rsyslog suspend/resume flood | | TODO |
 
