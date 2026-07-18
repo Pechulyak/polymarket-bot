@@ -904,7 +904,7 @@ def check_cron_heartbeat():
             if current_state != last_alerted:
                 if current_state == "stale":
                     age_repr = f"{heartbeat_age_sec}s" if heartbeat_age_sec is not None else "missing"
-                    msg = f"🚨 cron heartbeat STALE (age={age_repr}) — crond возможно не работает"
+                    msg = f"🚨 cron heartbeat STALE (age={age_repr}) — */5 touch-строка не отрабатывает (crond целиком мёртв, либо сломана эта запись; сам этот чек требует живого crond, поэтому полная смерть crond не гарантированно поймается)"
                     send_telegram_message(msg)
                     new_alert_state = "stale"
                 else:
@@ -939,7 +939,7 @@ def check_crontab_drift():
     crontab_ok = True
     try:
         result = subprocess.run(
-            ["crontab", "-l"],
+            ["/usr/bin/crontab", "-l"],
             capture_output=True,
             text=True,
             timeout=10,
