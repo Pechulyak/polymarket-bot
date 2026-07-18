@@ -280,6 +280,17 @@ def process_one(conn, trade_id: int) -> None:
         log(f"trade_id={trade_id}: whale {trade['whale_address']} copy_status={trade['copy_status']}, expected live — skipped")
         return
 
+    # Gate 2b: only BUY is supported on the live path (LIVE-009).
+    # The executor below claim_intent is BUY-only (balance-gate, $1/best_bid
+    # sizing, taker amount=USD). A SELL intent would be mis-executed as a BUY
+    # (wrong-direction real-money order) via taker_direct/taker_fallback.
+    # Block SELL here so it never enters the live queue; the executor also has
+    # a fail-closed guard (defense-in-depth). Real sell-copy is deferred debt.
+    if str(trade["side"]).upper() != "BUY":
+        log(f"trade_id={trade_id}: side={trade['side']} not supported on live path "
+            f"(only BUY) — intent NOT created (LIVE-009)", "WARN")
+        return
+
     # Gate 3: must have kelly_size > 0
     if not trade["kelly_size"] or float(trade["kelly_size"]) <= 0:
         log(f"trade_id={trade_id}: kelly_size={trade['kelly_size']} <= 0, skipped")

@@ -402,7 +402,8 @@
 | LIVE-006 | Версионирование executor-кода: папка executor/ в репо) | feature:live-execution | DONE |
 | LIVE-007 | live-киты не поллились (fetch WHERE только paper/tracked): добавлен 'live' в paper-ветку fetch | feature:live-execution | DONE |
 | LIVE-008 | Дедуп live-ордеров по позиции (аналог PIPE-052) | feature:live-execution | DONE |
-| LIVE-009 | submit_taker всегда шлёт side=BUY, игнорируя SELL-intent | feature:live-execution | TODO |
+| LIVE-009 | submit_taker всегда шлёт side=BUY, игнорируя SELL-intent | feature:live-execution | DONE |
+| LIVE-010 | SELL-support для live-пути (сейчас SELL блокируется, LIVE-009) | feature:live-execution | BACKLOG |
 
 ---
 

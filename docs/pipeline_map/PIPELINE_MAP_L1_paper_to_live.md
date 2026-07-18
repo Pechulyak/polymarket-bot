@@ -51,7 +51,7 @@ L1 — **первое звено live-исполнения**: путь от по
 │ copy_paper_to_live.py (S1)                                       │
 │   LISTEN mode (демон, systemd polymarket-copy-live-daemon)       │
 │   OR --sweep (cron */15, flock, gap-fill 6h окно)                │
-│   process_one(): 4 гейта → INSERT live_orders (status='intent')  │
+│   process_one(): 6 гейтов → INSERT live_orders (status='intent') │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ pull-model
                             ▼
@@ -134,14 +134,16 @@ L1 превращает сделку live-кита в готовый к испо
 
 AFTER INSERT ON paper_trades → `pg_notify('live_copy', paper_trade_id)`. (Тело функции не дампилось в этой сессии — DDL-верификация функции остаётся открытым пунктом, см. §16.)
 
-### 6.4 process_one() в copy_paper_to_live.py (4 гейта, из полного файла)
+### 6.4 process_one() в copy_paper_to_live.py (6 гейтов, из полного файла)
 
 1. **Gate 1 — kill-switch:** свежий `SELECT value FROM strategy_config WHERE key='live_whale_copy'`, без кэша. `!= 1.0` → skip.
 2. Fetch `paper_trades` JOIN `whales` по `wallet_address` (не по whale_id) с `copy_status`.
 3. **Gate 2 — copy_status:** `!= 'live'` → skip. **Здесь live обязателен** (в отличие от триггера, где `IN paper,live`). Live-кит проходит, paper-кит отсекается — live_orders создаётся только для live.
-4. **Gate 3 — kelly_size:** `<= 0` → skip.
-5. **Gate 4 — token_id:** NULL/пусто → skip (fail-closed для исторических/категориальных сделок).
-6. `insert_live_order()`: INSERT в `live_orders` (token_id, condition_id=market_id, market_title, outcome, side=UPPER, size_usd=kelly_size, idempotency_key=`pt_<id>`, status='intent'), `ON CONFLICT (idempotency_key) DO NOTHING`.
+4. **Gate 2b — side (LIVE-009):** `side.upper() != 'BUY'` → skip, intent не создаётся. Executor BUY-only; SELL блокируется до очереди (второй слой — guard в executor). Долг: LIVE-010.
+5. **Gate 3 — kelly_size:** `<= 0` → skip.
+6. **Gate 4 — token_id:** NULL/пусто → skip (fail-closed для исторических/категориальных сделок).
+7. **Gate 5 — дедуп позиции (LIVE-008):** `has_live_intent_for_position()` — та же позиция (whale+market+outcome+side+price) в окне 6ч уже имеет не-failed/rejected intent → skip.
+8. `insert_live_order()`: INSERT в `live_orders` (token_id, condition_id=market_id, market_title, outcome, side=UPPER, size_usd=kelly_size, idempotency_key=`pt_<id>`, status='intent'), `ON CONFLICT (idempotency_key) DO NOTHING`.
 
 ### 6.5 sweep_mode() (cron fallback)
 

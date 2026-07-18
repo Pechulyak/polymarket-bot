@@ -327,6 +327,21 @@ def main():
             log(f"CLAIMED id={row['id']} market={row['condition_id']} "
                 f"outcome={row['outcome']} side={row['side']} size={row['size_usd']}")
 
+            # SELL GUARD (LIVE-009) — fail-closed, before balance-gate/book/submit.
+            # This executor is BUY-only: taker sends side=BUY unconditionally and
+            # sizing/balance-gate are BUY-semantics. Anything that is not exactly
+            # BUY (SELL, NULL, garbage) is rejected here so it can never reach
+            # submit_taker/maker as a wrong-direction real-money order.
+            if str(row['side']).upper() != 'BUY':
+                set_status(conn, row['id'], 'rejected', error='sell_not_supported')
+                throttled_log(
+                    "sell_not_supported",
+                    f"⚠️ REJECTED non-BUY intent id={row['id']} side={row['side']} "
+                    f"(sell_not_supported, LIVE-009)",
+                    notify_too=True, seconds=300)
+                conn.close()
+                continue
+
             token_id = row['token_id']
             # STAGE: фикс $1 — size_usd из БД не используется ни для суммы ордера, ни для routing
             # size_usd = row['size_usd']
