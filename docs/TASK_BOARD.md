@@ -283,6 +283,7 @@
 | INFRA-049 | filled_size для maker-пути (taker готов, maker ждёт образца get_order) | feature:live-execution | TODO |
 | INFRA-050 | farming-daemon.service отсутствует в репо — добавить в deploy/ (по аналогии с polymarket-copy-live-daemon.service) | feature:systemd | BACKLOG |
 | INFRA-051 | Cron protection: эталон crontab в git (docs/crontab.reference) + проверка живости cron в pipeline_monitor (diff crontab -l vs эталон + свежесть маркер-файла) | | DONE |
+| INFRA-052 | mm.sh: claude -p подхватывал CLAUDE.md + кастомных субагентов (cwd=repo) → исполнитель изображал оркестратора (TaskCreate себе подзадач, рекурсивный вызов mm.sh на себя, Agent-тул debugger), завис в цикле. Фикс: --safe-mode (без изменения авторизации) + technical deny на самовызов mm.sh/claude/Agent | | DONE |
 
 ---
 
