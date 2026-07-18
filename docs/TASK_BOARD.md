@@ -178,6 +178,7 @@
 | TRD-447 | Исправление rate-limit bug в _fetch_and_group_sell_trades +_close_roundtrips |  | CANCELLED |
 | TRD-448 | Учёт комиссии Polymarket в расчёте PnL | | DONE |
 | TRD-449 | Ценовой фильтр входа: отсечка whale-сделок с price > max_entry_price (0.97) | | DONE |
+| TRD-450 | Расхождение our_WR/whale_WR у 0xbacd00c9 (paper): наша копи-симуляция WR=40.16% vs WR кита 60.99% (post-reset). Гипотеза про слияние рынков с разными датами резолюции в один market_id проверена и не подтвердилась (нет (market_id,outcome) с разными close_type) — причина не установлена, нужен отдельный debug | | BACKLOG |
 
 ---
 
@@ -404,6 +405,7 @@
 | LIVE-008 | Дедуп live-ордеров по позиции (аналог PIPE-052) | feature:live-execution | DONE |
 | LIVE-009 | submit_taker всегда шлёт side=BUY, игнорируя SELL-intent | feature:live-execution | DONE |
 | LIVE-010 | SELL-support для live-пути (сейчас SELL блокируется, LIVE-009) | feature:live-execution | BACKLOG |
+| LIVE-011 | 28% (15 из 53) live_orders со status='failed' — расследовать причину отказов исполнения | feature:live-execution | BACKLOG |
 
 ---
 
