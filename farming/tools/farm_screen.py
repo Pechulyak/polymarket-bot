@@ -70,6 +70,24 @@ def get_db_connection():
     return psycopg2.connect(url)
 
 
+def get_active_tokens():
+    """Токены уже в активном фарминге - исключить из скана: (а) не нужно
+    скринить то, что уже держим; (б) их resting-ордера в книге искажают
+    comp_pts (двойной счёт через our_daily без --our-bid/--our-ask)."""
+    if not HAS_PG:
+        return set()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT token_id FROM farming_active_markets WHERE status = %s", ("active",))
+        toks = {r[0] for r in cur.fetchall()}
+        conn.close()
+        return toks
+    except Exception as e:
+        print(f"[get_active_tokens warning] БД недоступна или ошибка запроса: {e}", file=sys.stderr)
+        return set()
+
+
 def generate_scan_run_id():
     return str(uuid.uuid4())
 
@@ -322,6 +340,11 @@ for m in gm:
                  "days_to_end": dte,
                  })
 print(f"phase A filter skips: {skipped}")
+active_tokens = get_active_tokens()
+_pre_active = len(cand)
+cand = [c for c in cand if c["token"] not in active_tokens]
+print(f"candidates после исключения уже активных: {len(cand)} "
+      f"(исключено {_pre_active - len(cand)} - уже в farming_active_markets)")
 cand.sort(key=lambda x: -x["pool"])
 cand = cand[:TOP_N_BY_POOL]
 print(f"phase A candidates: {len(cand)}")
