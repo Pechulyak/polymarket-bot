@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Unit test for FARM-036: reconcile_orders() must not let a get_open_orders()
-API error masquerade as a confirmed "two-sided" book.
+"""Unit tests for executor/farming_daemon.py internals that don't need a live
+CLOB connection:
+
+  - FARM-036: reconcile_orders() must not let a get_open_orders() API error
+    masquerade as a confirmed "two-sided" book.
+  - FARM-039 p.5: enter_pause() (circuit breaker / adverse-fill reaction)
+    must NOT cancel the auto-unload SELL order — only the quoting legs.
+    Inventory should keep draining via the resting unload order through a
+    quoting pause, not stall for the whole pause window.
 
 farming_daemon.py imports py_clob_client_v2 at module level, which is not
 installed in this (S1) environment. We stub the minimal surface it needs
@@ -127,3 +134,49 @@ def test_reconcile_orders_first_tick_no_error_flag(farming_daemon):
     st = {"ids": None, "unload_id": None}
     out = farming_daemon.reconcile_orders(_OkClient(), "tok1", st, min_size=100)
     assert not out.get("error")
+
+
+# ─── FARM-039 p.5: enter_pause() must not cancel the auto-unload order ───────
+
+def test_enter_pause_cancels_legs_but_not_unload(farming_daemon, monkeypatch):
+    """[FARM-039 p.5] Circuit-breaker / adverse-fill pause cancels the tracked
+    BID/ASK legs, but the auto-unload SELL must be left resting so inventory
+    keeps draining through the pause window (prior behavior cancelled it too,
+    treating it as 'bait' same as the legs -- reversed per operator direction)."""
+    cancelled_batches = []
+    monkeypatch.setattr(farming_daemon, "cancel_quotes",
+                        lambda c, ids: cancelled_batches.append(tuple(ids or ())))
+    monkeypatch.setattr(farming_daemon, "notify", lambda *a, **k: None)
+
+    st = {"ids": ("bid_1", "ask_1"), "unload_id": "unload_1", "pause_until": 0}
+    mkt = {"name": "Test Market", "token": "tok1"}
+
+    farming_daemon.enter_pause(object(), st, mkt, 60, "test reason")
+
+    # Only ONE cancel_quotes call, and it's the legs -- unload_id was never
+    # passed to cancel_quotes at all.
+    assert cancelled_batches == [("bid_1", "ask_1")]
+    assert st["ids"] is None
+    assert st["center"] is None
+    # unload_id survives the pause untouched -- still tracked for the next
+    # un-paused tick's reconcile_orders() drift-discipline.
+    assert st["unload_id"] == "unload_1"
+    assert st["pause_until"] > 0
+
+
+def test_enter_pause_no_unload_is_noop_for_unload(farming_daemon, monkeypatch):
+    """No unload order pending (unload_id=None) -> nothing unload-related
+    happens, and only the legs batch is cancelled -- no accidental second
+    cancel_quotes call with an empty/None id."""
+    cancelled_batches = []
+    monkeypatch.setattr(farming_daemon, "cancel_quotes",
+                        lambda c, ids: cancelled_batches.append(tuple(ids or ())))
+    monkeypatch.setattr(farming_daemon, "notify", lambda *a, **k: None)
+
+    st = {"ids": ("bid_1", "ask_1"), "unload_id": None, "pause_until": 0}
+    mkt = {"name": "Test Market", "token": "tok1"}
+
+    farming_daemon.enter_pause(object(), st, mkt, 60, "test reason")
+
+    assert cancelled_batches == [("bid_1", "ask_1")]
+    assert st["unload_id"] is None

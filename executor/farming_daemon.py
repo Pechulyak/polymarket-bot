@@ -713,9 +713,18 @@ def _prune_mid_hist(hist, now=None):
 
 def enter_pause(c, st, mkt, duration_sec, reason):
     """[FARM-011/012] Enter (or extend) quoting pause on a market:
-      - cancel tracked legs AND the auto-unload order (a maker SELL resting
-        through a storm is adverse-fill bait, same as the legs);
-      - clear ids/center/unload_id so resume starts from a fresh quote;
+      - cancel the tracked BID/ASK legs (the market-making quotes are what
+        exposes us to adverse-fill risk through a storm);
+      - [FARM-039] the auto-unload SELL is left resting, NOT cancelled: it is
+        rewardless excess-inventory unwind, not a reward-farming leg, and
+        inventory should keep draining even while quoting is paused. (Prior
+        behavior cancelled it too, treating it as "bait" like the legs — this
+        stopped unwind for the whole pause window, which can be tens of
+        minutes; reversed per operator direction.) reconcile_orders() still
+        drift-manages/re-anchors it on the next un-paused tick as before —
+        it is simply not touched WHILE paused (the pause-gate below skips
+        reconcile_orders() entirely for paused ticks anyway);
+      - clear ids/center so resume starts from a fresh two-sided quote;
       - pause_until = max(current, now + duration): pauses MERGE, never stack.
     Alert: onset via edge_notify latch (live only; DRY logs only). Extension of
     an already-active pause logs but does not re-notify (latch stays bad).
@@ -725,9 +734,6 @@ def enter_pause(c, st, mkt, duration_sec, reason):
         if st.get("ids") is not None:
             cancel_quotes(c, st["ids"])
             st["ids"] = None
-        if st.get("unload_id"):
-            cancel_quotes(c, (st["unload_id"],))
-            st["unload_id"] = None
         st["center"] = None
         prev_until = float(st.get("pause_until") or 0)
         new_until = max(prev_until, now + duration_sec)
