@@ -112,6 +112,16 @@ def fetch_exchange_snapshots(conn):
     return out
 
 
+def fetch_clob_price_history(conn):
+    """asset -> {date: price} (ACT-007 backfill, lowest-priority mark source)."""
+    out = defaultdict(dict)
+    with conn.cursor() as cur:
+        cur.execute("SELECT asset, price_date, price FROM market_price_history")
+        for asset, price_date, price in cur.fetchall():
+            out[asset][price_date] = float(price)
+    return out
+
+
 def fetch_market_resolutions(conn):
     """condition_id -> (is_closed, winner_index, tokens)"""
     out = {}
@@ -124,7 +134,7 @@ def fetch_market_resolutions(conn):
     return out
 
 
-def process_position(trades, farming_by_condition, snapshots_by_key, redeems, resolutions):
+def process_position(trades, farming_by_condition, snapshots_by_key, clob_prices, redeems, resolutions):
     """trades: list of dicts for one (account, condition_id, asset), time-ordered."""
     account = trades[0]["account"]
     condition_id = trades[0]["condition_id"]
@@ -238,6 +248,10 @@ def process_position(trades, farming_by_condition, snapshots_by_key, redeems, re
                 mark_price, mark_source = snap, "exchange_snapshot"
             elif d in farm_dates and farm_dates[d][2] is not None:
                 mark_price, mark_source = farm_dates[d][2], "farm_mid"
+            else:
+                clob_price = clob_prices.get(asset, {}).get(d)
+                if clob_price is not None:
+                    mark_price, mark_source = clob_price, "clob_history"
 
         buy_fee = sell_fee = None
         fee_source = None
@@ -288,6 +302,7 @@ def build(conn):
     trades = fetch_trades(conn)
     farming_by_condition = fetch_farming_daily(conn)
     snapshots_by_key = fetch_exchange_snapshots(conn)
+    clob_prices = fetch_clob_price_history(conn)
     redeem_events = fetch_redeem_events(conn)
     resolutions = fetch_market_resolutions(conn)
     redeems = set(redeem_events.keys())
@@ -325,7 +340,7 @@ def build(conn):
     all_rows = []
     for key, group_trades in groups.items():
         all_rows.extend(
-            process_position(group_trades, farming_by_condition, snapshots_by_key, redeems, resolutions)
+            process_position(group_trades, farming_by_condition, snapshots_by_key, clob_prices, redeems, resolutions)
         )
     return all_rows
 
