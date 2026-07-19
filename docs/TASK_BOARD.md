@@ -383,15 +383,16 @@
 | FARM-027 | Нормализация marginal в calc_farm_economics (%ср, порог 70%) | feature:liquidity-farming | DONE |
 | FARM-028 | quote_size отдельным полем конфига, развязать с min_size | feature:liquidity-farming | BACKLOG |
 | FARM-029 | Автокалькуляция center/deadband/max_inv от quote_size (center=quote_size, dead=0.5×quote_size, max_inv=2×center+нога) | feature:liquidity-farming | BACKLOG |
-| FARM-030 | /status контрол-бота — динамический список рынков + отображение halted | feature:liquidity-farming | BACKLOG |
+| FARM-030 | /status контрол-бота — динамический список рынков + отображение halted | feature:liquidity-farming | DONE |
 | FARM-031 | check_fills — фильтровать собственные taker-сделки (3 ложные адверс-паузы 09.07) | feature:liquidity-farming | BACKLOG |
 | FARM-033 | Дневной снапшот фарминга: таблица farming_daily_snapshot (migration_farm033.sql) + сборщик farming_snapshot.py. Источники: earnings API (c.get_earnings_for_user_for_day), on-chain inv (ERC-1155 balanceOf), trades fees (taker-only, TRD-448 formula). legs_state/hours_both реконструкция из fills + open orders + halted. UPSERT по (snap_date, token). Деплой на S2 + cron отдельно. | feature:liquidity-farming | DONE |
 | FARM-035 | Recover недостающей ноги из HOLD (ASK skipped по locked_sell при requote) | feature:liquidity-farming | BACKLOG |
-| FARM-036 | Алерт-латч не сбрасывать на API-ошибке get_open_orders | feature:liquidity-farming | BACKLOG |
+| FARM-036 | Алерт-латч не сбрасывать на API-ошибке get_open_orders | feature:liquidity-farming | DONE |
 | FARM-037 | Деплой US Soft Landing + Raquel Lyra (leg 100, override thin-вето soft landing, параметры 100/100/50/300, capital +$192) | feature:liquidity-farming | DONE |
 | FARM-038 | Фикс share-модели calc_farm_economics + farm_screen: comp_pts = min(bid,ask) + abs(bid−ask)/3 (модель Polymarket Qmin) вместо min-модели (calc, завышение 2-5x) и суммы сторон (screen, занижение 2-2.5x). Вычет собственных ордеров в calc (--our-bid/--our-ask). Метка upper-bound; калибровка факт/прогноз ~0.3-0.4. Паритет верифицирован (Alito 1388704, share=0.0304 в обоих). pts_k теперь = comp_pts/1000 — старые сканы несравнимы напрямую. | feature:liquidity-farming | DONE |
 | FARM-039 | farm_screen ингест: окна Gamma по liquidity (100/окно) теряют рынки (прецедент 15.07: Farage 2846103, Discord 2698822 выпали из прогона). Нужны полная пагинация + verbose-причина отсева per market. | feature:liquidity-farming | BACKLOG |
 | FARM-040 | Отключение дублирующего farm-degradation алертинга на S1 (K2 из FARM-022) | feature:liquidity-farming | DONE |
+| FARM-041 | Рестарт-пакет демона фарминга: markets.json из БД вместо хардкода (генератор для S2 + загрузка в демоне/control-боте с fallback) + circuit breaker не отменяет unload-ордер | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
 
 ## EPIC: LIVE — Live Execution
 
