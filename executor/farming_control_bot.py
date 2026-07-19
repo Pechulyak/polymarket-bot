@@ -20,6 +20,11 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+# [FARM-039] Shared markets loader — sibling-import (executor/ is deployed
+# flat on S2, no package). Подгружаем на каждый /status — файл может
+# обновиться между вызовами, и бот должен видеть актуальный список.
+from markets_config import load_markets_file
+
 # ─── Timezone ────────────────────────────────────────────────────────────────
 UTC_PLUS_3 = timezone(timedelta(hours=3))
 LOG_TS_FMT = "%Y-%m-%d %H:%M:%S %Z"
@@ -59,23 +64,8 @@ FARMING_DAEMON_UNIT = "farming-daemon.service"
 
 CONFIRM_TIMEOUT_SEC = 60
 
-# ─── Market Definitions (mirrors farming_daemon.py MARKETS) ──────────────────
-MARKETS = [
-    {
-        "name": "New People 2nd seats",
-        "token": "16812776081734673413618925676070790303458587814000834940389189903201996256784",
-    },
-    {
-        "name": "Phillies NL East",
-        "token": "39412648633128959688152763881401048225314774593465497054882544514059472489266",
-    },
-    {
-        "name": "AI 1530 Arena by Sep30",
-        "token": "54893086053865884845869248787484771799795088600261085229269223835220342300136",
-    },
-]
-
-TOKEN_TO_NAME = {m["token"]: m["name"] for m in MARKETS}
+# [FARM-039] Список рынков больше не хардкодится — подгружается на каждый
+# /status из markets.json (см. load_markets_file() в build_status_report).
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
 logger = logging.getLogger("farming_control_bot")
@@ -221,6 +211,21 @@ def build_status_report() -> str:
     status_icon = "🟢" if active else "🔴"
     lines = [f"{status_icon} <b>farming-daemon</b>: {'ACTIVE' if active else 'INACTIVE'}"]
 
+    # [FARM-039] Подгружаем рынки из markets.json на КАЖДЫЙ /status — файл
+    # может обновиться между вызовами, бот должен видеть актуальный список.
+    # Если файл сломан — markets_error, пустой список, и секция Markets/Alerts
+    # пропускается (алерты по неизвестным токенам всё равно попадут в stale).
+    try:
+        markets = load_markets_file()
+    except Exception as e:
+        markets = []
+        markets_error = str(e)
+    else:
+        markets_error = None
+
+    if markets_error:
+        lines.append(f"⚠️ markets.json: {html.escape(markets_error)}")
+
     # Load state
     try:
         with open(FARMING_STATE_FILE) as f:
@@ -234,12 +239,18 @@ def build_status_report() -> str:
         lines.append(html.escape(f"&lt;state read error: {e}&gt;"))
         return "\n".join(lines)
 
+    # Если markets.json недоступен — пропускаем per-market секцию и алерты
+    # (последние потеряют осмысленность без маппинга token->name).
+    if markets_error:
+        return "\n".join(lines)
+
     alerts = state.get("_alerts", {})
+    token_to_name = {m["token"]: m["name"] for m in markets}
 
     lines.append("")
     lines.append("<b>Markets:</b>")
 
-    for mkt in MARKETS:
+    for mkt in markets:
         token = mkt["token"]
         name = mkt["name"]
         mstate = state.get(token, {})
@@ -259,10 +270,19 @@ def build_status_report() -> str:
         else:
             pause_str = "▶ active"
 
+        # [FARM-030] halted — отдельный персистентный флаг, не зависит от
+        # pause_until. Демон сам себя останавливает, оператор должен
+        # /stop -> снять halted из farming_state.json -> /start.
+        if mstate.get("halted"):
+            status_line = ("⛔ HALTED (нужен ручной /stop → снять halted из "
+                           "farming_state.json → /start)")
+        else:
+            status_line = pause_str
+
         # Last log line for this market
         last_log = get_last_market_log(token, name)
 
-        lines.append(f"  <b>{html.escape(name)}</b>  {pause_str}")
+        lines.append(f"  <b>{html.escape(name)}</b>  {status_line}")
 
         if last_ts > 0:
             last_dt = datetime.fromtimestamp(last_ts, tz=timezone.utc).astimezone(UTC_PLUS_3)
@@ -285,8 +305,8 @@ def build_status_report() -> str:
         if ":" in alert_key:
             alert_type, token_candidate = alert_key.rsplit(":", 1)
             # Check if it's a known token
-            if token_candidate in TOKEN_TO_NAME:
-                mkt_name = TOKEN_TO_NAME[token_candidate]
+            if token_candidate in token_to_name:
+                mkt_name = token_to_name[token_candidate]
                 if mkt_name not in current_alerts_by_market:
                     current_alerts_by_market[mkt_name] = []
                 current_alerts_by_market[mkt_name].append(alert_type)

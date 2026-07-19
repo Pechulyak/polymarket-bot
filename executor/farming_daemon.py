@@ -22,6 +22,11 @@ from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP
 from datetime import datetime, timezone
 from web3 import Web3
 
+# [FARM-039] Shared markets loader — sibling-import because executor/ is
+# deployed flat on S2 (no package). Demons and the control bot both pull
+# MARKETS_FILE here; fallback below if the file is missing/invalid.
+from markets_config import load_markets_file, MARKETS_FILE
+
 # ─────────────────────────── CONFIGURATION ───────────────────────────
 # [REUSE] client/auth pattern from copy-daemon, but Account 2 funder.
 ENV_PATH = "/opt/executor/app/accounts/account2.env"  # PRIVATE_KEY=0x... (chmod 600) — confirmed working acc2 creds
@@ -78,12 +83,14 @@ CB_RECOVERY_MIN_SPAN    = 300   # need >= this много history (sec) to judge
 FILL_PAUSE_SEC          = 120   # pause after adverse fill / missing tracked leg
 
 # Target markets. size = shares per leg.
-# [FARM-039] Live sync 2026-07-19: содержимое = farming_active_markets
-# (status='active') на момент синка, сверено с S2 (см. docs/TASK_BOARD.md
-# FARM-039). Источник истины для этого списка теперь БД, не этот файл —
-# см. FARM-039 п.1-2 (markets.json + startup-загрузка), после деплоя которых
-# этот блок становится fallback-списком на случай недоступности markets.json.
-MARKETS = [
+# [FARM-039] fallback-список, используется только если markets.json
+# недоступен/невалиден (load_markets_file() упал в main()). В нормальном
+# режиме демон работает со списком из markets.json, который генерируется
+# farming/tools/farming_markets_sync.py из farming_active_markets. Содержимое
+# = farming_active_markets (status='active') на момент live sync 2026-07-19,
+# сверено с S2 (см. docs/TASK_BOARD.md FARM-039). После деплоя markets.json
+# этот блок — только safety-net.
+_FALLBACK_MARKETS = [
     {
         "name":  "Raquel Lyra Pernambuco",
         "token": "105368625795655432964190496754546650270881070451655430684110166613065601984894",
@@ -125,6 +132,13 @@ MARKETS = [
         "max_inv": 300,
     },
 ]
+
+# [FARM-039] Module-level alias: сторонние импортёры (executor/check_scoring.py,
+# executor/farm_smoke.py делают `from farming_daemon import MARKETS` на уровне
+# модуля, до вызова main()) должны получить рабочий список сразу при импорте.
+# main() при старте демона переопределяет глобальный MARKETS результатом
+# load_markets_file() — этот алиас лишь безопасный дефолт до той точки.
+MARKETS = _FALLBACK_MARKETS
 
 
 # ─────────────────────────── UTIL [REUSE] ────────────────────────────
@@ -1136,6 +1150,18 @@ def _graceful_shutdown(c, state):
 
 # ─────────────────────────── MAIN LOOP ────────────────────────────────
 def main():
+    # [FARM-039] Pull MARKETS from markets.json at startup. Если файла нет
+    # или он невалиден — fallback на _FALLBACK_MARKETS (тот же список, что
+    # был захардкожен до FARM-039). Любая проблема с файлом — алертим в TG,
+    # но НЕ валим демон: фарминг должен жить даже при сломанном sync.
+    global MARKETS
+    try:
+        MARKETS = load_markets_file()
+        log(f"[FARM-039] MARKETS загружен из {MARKETS_FILE}: {len(MARKETS)} рынков")
+    except Exception as e:
+        notify(f"⚠️ markets.json недоступен/невалиден ({e}) -> fallback на встроенный список ({len(_FALLBACK_MARKETS)} рынков)")
+        MARKETS = _FALLBACK_MARKETS
+
     if '--diag' in sys.argv:
         log(f"DRY_RUN={DRY_RUN}")
         try:
