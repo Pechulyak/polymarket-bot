@@ -227,6 +227,7 @@ def load_state_file():
 def save_state_file(state):
     """[FARM-003] Atomic write (tmp+replace) of per-token cursors + alert latch.
     Never raises."""
+    global _alert_state
     try:
         # [FARM-016] preserve cursors for tokens NOT in current MARKETS:
         # removing a market from the list must not drop its last_ts, or
@@ -249,6 +250,17 @@ def save_state_file(state):
                             # [FARM-025] last adverse fill price/side/ts for level-gate.
                             "last_adverse_fill": st.get("last_adverse_fill")}
                       for tok, st in state.items()})
+        # [FARM-042] Prune alert-latch keys for tokens no longer in MARKETS.
+        # Unlike token cursors (FARM-016 above, preserved deliberately since
+        # dropping them replays trade history as fresh fills on re-add), a
+        # stale alert latch has no such cost — worst case a token rotates
+        # back in and its first real onset re-notifies once. Left unpruned,
+        # every rotated-out market's latches (halted/auto_unload/pause/...)
+        # accumulate in _alerts forever, inflating the bot's /status
+        # "stale" counter without bound.
+        current_tokens = {m["token"] for m in MARKETS}
+        _alert_state = {k: v for k, v in _alert_state.items()
+                         if ":" not in k or k.rsplit(":", 1)[-1] in current_tokens}
         # Alert latch: only the bool state (not _alert_last_bad timestamps)
         alert_data = {"_alerts": dict(_alert_state)}
         data = {**token_data, **alert_data}
@@ -1256,6 +1268,17 @@ def main():
                         seconds=300)
                     continue
 
+                # [FARM-042] halted recovery: st["halted"] only clears via manual
+                # operator edit of farming_state.json (FARM-025 by design) followed
+                # by a restart. edge_notify never otherwise sees that False
+                # transition, so without this the _alerts["halted:token"] latch
+                # (and anything reading it, e.g. the control bot's Alerts section)
+                # keeps reporting HALTED forever even after a legitimate manual
+                # clear. Cheap/idempotent: only notifies on an actual True->False
+                # edge, silent otherwise.
+                edge_notify(f"halted:{token}", False, "",
+                            f"\U0001F7E2 HALT снят ({mkt['name']})", cooldown=0)
+
                 # 1. reward params + corridor margin (refresh periodically)      [NEW]
                 if st["params"] is None or tick_n % PARAM_REFRESH == 0:
                     p = load_reward_params(c, mkt)
@@ -1401,6 +1424,15 @@ def main():
                                 f"[FARM-025] {mkt_name} halted: mid {mid:.4f} outside fill "
                                 f"level {fp:.4f}±1t ({laf.get('side')})",
                                 seconds=300)
+                            # [FARM-042] persist halted NOW, don't wait for the
+                            # batched end-of-tick save (main loop line ~1725):
+                            # that save is skipped whole-tick if ANY market
+                            # later in this same iteration raises, and an
+                            # unclean daemon restart in that window would
+                            # silently drop halted, bypassing the FARM-025
+                            # gate on the next boot (root cause of the
+                            # Cleitinho TICK-1 BID incident, 19.07 16:39).
+                            save_state_file(state)
                             continue
                     # level OK or no fill recorded — штатный RESUME; clear last_adverse_fill
                     st.pop("last_adverse_fill", None)

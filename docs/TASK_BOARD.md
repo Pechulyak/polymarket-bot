@@ -398,6 +398,7 @@
 | FARM-039 | farm_screen ингест: окна Gamma по liquidity (100/окно) теряют рынки (прецедент 15.07: Farage 2846103, Discord 2698822 выпали из прогона). Нужны полная пагинация + verbose-причина отсева per market. | feature:liquidity-farming | BACKLOG |
 | FARM-040 | Отключение дублирующего farm-degradation алертинга на S1 (K2 из FARM-022) | feature:liquidity-farming | DONE |
 | FARM-041 | Рестарт-пакет демона фарминга: markets.json из БД вместо хардкода (генератор для S2 + загрузка в демоне/control-боте с fallback) + circuit breaker не отменяет unload-ордер | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
+| FARM-042 | _alerts фантомы/stale в /status + обход halted-gate после рестарта | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
 
 ## EPIC: LIVE — Live Execution
 

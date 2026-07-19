@@ -180,3 +180,85 @@ def test_enter_pause_no_unload_is_noop_for_unload(farming_daemon, monkeypatch):
 
     assert cancelled_batches == [("bid_1", "ask_1")]
     assert st["unload_id"] is None
+
+
+# ─── FARM-042: _alerts pruning + halted recovery latch ───────────────────────
+
+def test_save_state_file_prunes_alerts_for_rotated_out_tokens(
+    farming_daemon, monkeypatch, tmp_path
+):
+    """[FARM-042] A token no longer in MARKETS (rotated out) must not keep its
+    alert-latch keys in _alerts forever -- that's exactly how phantom entries
+    accumulate and inflate the bot's /status 'stale' counter without bound."""
+    state_file = tmp_path / "farming_state.json"
+    monkeypatch.setattr(farming_daemon, "STATE_FILE", str(state_file))
+    monkeypatch.setattr(farming_daemon, "MARKETS", [{"token": "current_tok"}])
+    monkeypatch.setattr(farming_daemon, "_alert_state", {
+        "halted:current_tok": True,
+        "halted:rotated_out_tok": True,
+        "auto_unload:rotated_out_tok": True,
+    })
+
+    farming_daemon.save_state_file({})
+
+    import json
+    with open(state_file) as f:
+        saved = json.load(f)
+    assert saved["_alerts"] == {"halted:current_tok": True}
+    # In-memory latch is pruned too, not just what's written to disk.
+    assert farming_daemon._alert_state == {"halted:current_tok": True}
+
+
+def test_save_state_file_keeps_colon_free_keys(farming_daemon, monkeypatch, tmp_path):
+    """Defensive: a key with no ':' (not the current halted/pause/auto_unload/
+    balance_reject naming convention) is kept, not treated as phantom -- the
+    prune only removes keys whose token suffix is identifiably gone."""
+    state_file = tmp_path / "farming_state.json"
+    monkeypatch.setattr(farming_daemon, "STATE_FILE", str(state_file))
+    monkeypatch.setattr(farming_daemon, "MARKETS", [{"token": "current_tok"}])
+    monkeypatch.setattr(farming_daemon, "_alert_state", {"no_colon_key": True})
+
+    farming_daemon.save_state_file({})
+
+    import json
+    with open(state_file) as f:
+        saved = json.load(f)
+    assert saved["_alerts"] == {"no_colon_key": True}
+
+
+def test_edge_notify_halted_recovery_fires_on_true_to_false(farming_daemon):
+    """[FARM-042] The recovery call added at the non-halted fall-through
+    (mirrors the daemon's own manual-clear-then-restart path: st['halted']
+    goes True -> False only via an operator JSON edit + restart) must produce
+    a recovery notification and flip the latch, exactly like any other
+    edge_notify onset/recovery pair."""
+    sent = []
+    farming_daemon._alert_state.clear()
+    farming_daemon._alert_state["halted:tokX"] = True
+    orig_notify = farming_daemon.notify
+    farming_daemon.notify = lambda msg: sent.append(msg)
+    try:
+        farming_daemon.edge_notify(
+            "halted:tokX", False, "", "\U0001F7E2 HALT снят (Test)", cooldown=0)
+    finally:
+        farming_daemon.notify = orig_notify
+
+    assert sent == ["\U0001F7E2 HALT снят (Test)"]
+    assert farming_daemon._alert_state["halted:tokX"] is False
+
+
+def test_edge_notify_halted_recovery_silent_when_already_clear(farming_daemon):
+    """Calling the same recovery edge every non-halted tick must stay silent
+    once already recovered (prev is False/None) -- it's meant to be cheap and
+    idempotent, not a per-tick spam source."""
+    sent = []
+    farming_daemon._alert_state.clear()
+    farming_daemon._alert_state["halted:tokY"] = False
+    orig_notify = farming_daemon.notify
+    farming_daemon.notify = lambda msg: sent.append(msg)
+    try:
+        farming_daemon.edge_notify("halted:tokY", False, "", "recovered", cooldown=0)
+    finally:
+        farming_daemon.notify = orig_notify
+
+    assert sent == []

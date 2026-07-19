@@ -237,6 +237,74 @@ def test_status_report_marks_error_on_bad_markets_json(tmp_path, monkeypatch, ca
     assert "<b>Alerts:</b>" not in report
 
 
+def test_status_report_alerts_halted_is_live_not_latch(tmp_path, monkeypatch):
+    """[FARM-042] Alerts section must reflect current per-token state, not a
+    possibly-stale _alerts latch: _alerts says halted=True for the normal
+    market (pretend leftover from before a manual clear+restart) while the
+    live token-state says halted=False -> Alerts must NOT show it."""
+    state = {
+        M_TOKEN_HALTED: {"last_ts": 1700000000, "pause_until": 0, "halted": True},
+        M_TOKEN_NORMAL: {"last_ts": 1700000000, "pause_until": 0, "halted": False},
+        "_alerts": {f"halted:{M_TOKEN_NORMAL}": True},
+    }
+    state_path = tmp_path / "farming_state.json"
+    state_path.write_text(json.dumps(state))
+    monkeypatch.setattr(farming_control_bot, "FARMING_STATE_FILE", str(state_path))
+    monkeypatch.setattr(farming_control_bot, "load_markets_file",
+                        lambda: _build_markets_payload())
+
+    report = farming_control_bot.build_status_report()
+    alerts_section = report.split("<b>Alerts:</b>")[1]
+    assert M_NAME_HALTED in alerts_section  # live halted=True -> shown
+    assert "halted" in alerts_section
+    assert M_NAME_NORMAL not in alerts_section  # stale latch must not surface
+
+
+def test_status_report_alerts_auto_unload_and_pause_are_live(tmp_path, monkeypatch):
+    """[FARM-042] auto_unload / pause alert types come from unload_id /
+    pause_until directly, with no _alerts entry needed at all."""
+    future_pause = 9999999999.0
+    state = {
+        M_TOKEN_HALTED: {"last_ts": 0, "pause_until": future_pause, "halted": False},
+        M_TOKEN_NORMAL: {"last_ts": 0, "pause_until": 0, "halted": False,
+                          "unload_id": "unload_abc"},
+    }
+    state_path = tmp_path / "farming_state.json"
+    state_path.write_text(json.dumps(state))
+    monkeypatch.setattr(farming_control_bot, "FARMING_STATE_FILE", str(state_path))
+    monkeypatch.setattr(farming_control_bot, "load_markets_file",
+                        lambda: _build_markets_payload())
+
+    report = farming_control_bot.build_status_report()
+    alerts_section = report.split("<b>Alerts:</b>")[1]
+    assert f"<b>{M_NAME_HALTED}</b>: pause" in alerts_section
+    assert f"<b>{M_NAME_NORMAL}</b>: auto_unload" in alerts_section
+
+
+def test_status_report_alerts_stale_excludes_live_types(tmp_path, monkeypatch):
+    """[FARM-042] A phantom _alerts key for a rotated-out token still counts
+    as 'stale', but only for non-live alert types -- halted/pause/auto_unload
+    are skipped entirely in the latch scan (live section owns them), so a
+    phantom 'halted:<rotated>' key must not double-count into stale on top of
+    not being shown as current."""
+    state = {
+        M_TOKEN_HALTED: {"last_ts": 0, "pause_until": 0, "halted": False},
+        M_TOKEN_NORMAL: {"last_ts": 0, "pause_until": 0, "halted": False},
+        "_alerts": {
+            "halted:some_rotated_out_token": True,   # live type -> ignored, not stale
+            "drift:some_rotated_out_token": True,     # non-live type -> stale
+        },
+    }
+    state_path = tmp_path / "farming_state.json"
+    state_path.write_text(json.dumps(state))
+    monkeypatch.setattr(farming_control_bot, "FARMING_STATE_FILE", str(state_path))
+    monkeypatch.setattr(farming_control_bot, "load_markets_file",
+                        lambda: _build_markets_payload())
+
+    report = farming_control_bot.build_status_report()
+    assert "stale: 1" in report
+
+
 def test_status_report_uses_dynamic_markets_not_module_level(
     tmp_path, monkeypatch
 ):

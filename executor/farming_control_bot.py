@@ -294,9 +294,32 @@ def build_status_report() -> str:
     lines.append("")
     lines.append("<b>Alerts:</b>")
 
+    # [FARM-042] halted / pause / auto_unload each have a dedicated,
+    # always-current per-token state field (halted, pause_until, unload_id).
+    # Read those directly instead of the _alerts latch: the latch can lag
+    # reality (halted only recovered on a live daemon tick pre-FARM-042, so a
+    # manual clear+restart left it stuck true forever) or point at a token
+    # that rotated out of MARKETS entirely (phantom). The remaining alert
+    # types (balance_reject / ask_balance_reject / drift / scoring) have no
+    # equivalent live field and stay latch-derived below.
+    LIVE_ALERT_TYPES = {"halted", "pause", "auto_unload"}
+    live_alerts_by_market: dict[str, list[str]] = {}
+    for mkt in markets:
+        mstate = state.get(mkt["token"], {})
+        types = []
+        if mstate.get("halted"):
+            types.append("halted")
+        if mstate.get("pause_until", 0) > time.time():
+            types.append("pause")
+        if mstate.get("unload_id"):
+            types.append("auto_unload")
+        if types:
+            live_alerts_by_market[mkt["name"]] = types
+
     active_raw = [(k, v) for k, v in alerts.items() if v is True]
 
-    # Separate stale (unknown token) from current markets
+    # Separate stale (unknown/rotated-out token) from current markets.
+    # halted/pause/auto_unload are skipped here -- covered live above.
     stale_alerts = []
     current_alerts_by_market: dict[str, list[str]] = {}
 
@@ -304,6 +327,8 @@ def build_status_report() -> str:
         alert_key = key[0]  # key is (key, True) tuple, alert_key = key[0]
         if ":" in alert_key:
             alert_type, token_candidate = alert_key.rsplit(":", 1)
+            if alert_type in LIVE_ALERT_TYPES:
+                continue
             # Check if it's a known token
             if token_candidate in token_to_name:
                 mkt_name = token_to_name[token_candidate]
@@ -315,9 +340,12 @@ def build_status_report() -> str:
         else:
             stale_alerts.append(alert_key)
 
-    if current_alerts_by_market:
-        for mkt_name, alert_types in sorted(current_alerts_by_market.items()):
-            unique_types = sorted(set(alert_types))
+    all_names = set(live_alerts_by_market) | set(current_alerts_by_market)
+    if all_names:
+        for mkt_name in sorted(all_names):
+            types = (live_alerts_by_market.get(mkt_name, [])
+                     + current_alerts_by_market.get(mkt_name, []))
+            unique_types = sorted(set(types))
             types_str = ", ".join(unique_types)
             lines.append(f"  <b>{html.escape(mkt_name)}</b>: {types_str}")
     else:
