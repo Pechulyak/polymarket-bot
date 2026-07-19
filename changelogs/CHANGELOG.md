@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-19
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-19 | ACT-004 | Сверка account_activity (Justfuuun) с CSV-экспортом Polymarket-History. Совпадение точное по REDEEM/REWARD/MAKER_REBATE. TRADE/BUY: 2 сделки в CSV моложе последнего крон-прогона — не расхождение, догонит на следующем цикле. TRADE/SELL: +1 строка/+148 USDC в CSV объяснена дублем на стороне CSV (байт-идентичная задвоенная строка), БД корректна — подтверждено независимым ревью. Deposit: data-api депозиты не отдаёт, в БД их не было; из CSV извлечено 6 депозитов (3/10/280/110.024838/20/35 USDC, 2026-06-21…2026-07-12). DDL: ADD COLUMN source (default 'api', backfill существующих строк), condition_id/slug → nullable (депозит не привязан к рынку), partial-unique индекс (account, tx_hash) WHERE event_type='DEPOSIT'. Бэкфилл 6 строк source='csv'. Confirmed оператором перед DDL+INSERT. Исполнитель сверки: mm.sh/MiniMax-M3, независимая проверка методологии — субагент reviewer, APPROVE. DDL/DML — вручную оркестратором (money-adjacent). |
+
 ## 2026-07-18
 
 | Дата | TASK_ID | Описание |
