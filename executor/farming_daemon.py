@@ -77,46 +77,13 @@ CB_RECOVERY_MIN_SPAN    = 300   # need >= this много history (sec) to judge
 #    (never stack). Risk (accepted): pause zeroes reward score for its duration.
 FILL_PAUSE_SEC          = 120   # pause after adverse fill / missing tracked leg
 
-# Target markets (from Step A/B recon). size = shares per leg.
-# TODO CONFIRM: sizing, market selection, whether Fed#2 included alongside US x Iran.
+# Target markets. size = shares per leg.
+# [FARM-039] Live sync 2026-07-19: содержимое = farming_active_markets
+# (status='active') на момент синка, сверено с S2 (см. docs/TASK_BOARD.md
+# FARM-039). Источник истины для этого списка теперь БД, не этот файл —
+# см. FARM-039 п.1-2 (markets.json + startup-загрузка), после деплоя которых
+# этот блок становится fallback-списком на случай недоступности markets.json.
 MARKETS = [
-    # 2026-07-06: single market. New People (NL) 2nd-most seats, Duma.
-    # Live /book: book_pts=1569, two-sided leg200 share=0.073 -> $1.17/d,
-    # mv2c=0/169h, range7d=4c, neg_risk, mid=0.21. end 2026-09-20.
-    # Netanyahu removed (resolved/exited 2026-07-06); cursors preserved FARM-016.
-    # 2026-07-06: market #2. Phillies NL East title. farm_screen v4.8 (FARM-018):
-    # pool=$17/d, leg100 share=0.063 -> $1.08/d screen, mv2c=3, rng7=10.5,
-    # mid=0.375, tick 1c, fee=Y (sports 0.03), reward min=20, ms=4.5. end 2026-10-11.
-    {
-        "name":  "Phillies NL East",
-        "token": "39412648633128959688152763881401048225314774593465497054882544514059472489266",
-        "min_size": 200,
-        "inv_center": 200,
-        "inv_deadband": 100,
-        "max_inv": 500,
-    },
-    {
-        "name":  "Requiao Parana Gov",
-        "token": "60755671257194524215403626055586076048149890192804409412736579332211541797129",
-        "min_size": 300,
-        "inv_center": 300,
-        "inv_deadband": 150,
-        "max_inv": 600,
-    },
-    # 2026-07-11: market #4. US soft landing end-2026. calc_farm_economics:
-    # pool=$23/d, leg100 -> ~$5.5/d, mv2c=2, rng7=4.0, mid=0.395, end 2027-01-31.
-    # thin ask ($255<$300 FARM-023) — deliberate operator override, small size.
-    {
-        "name":  "US Soft Landing 2026",
-        "token": "46312529158416609898079553446176504311993678139330779840129310682124759689495",
-        "min_size": 100,
-        "inv_center": 100,
-        "inv_deadband": 50,
-        "max_inv": 300,
-    },
-    # 2026-07-11: market #5. Raquel Lyra Pernambuco Gov. Screener #4:
-    # pool=$26/d, leg100 -> ~$5.4/d, mv2c=4, rng7=26.5 (watch), mid=0.565,
-    # neg_risk, end 2026-10-04.
     {
         "name":  "Raquel Lyra Pernambuco",
         "token": "105368625795655432964190496754546650270881070451655430684110166613065601984894",
@@ -126,12 +93,36 @@ MARKETS = [
         "max_inv": 300,
     },
     {
-        "name":  "AI 1530 Arena by Sep30",
-        "token": "54893086053865884845869248787484771799795088600261085229269223835220342300136",
+        "name":  "Will Nigel Farage win 60–70% of votes in the Clacton parliamentary by-election?",
+        "token": "112153701407126881897198126846545868602226176278010881763414572813335127166950",
+        "min_size": 100,
+        "inv_center": 100,
+        "inv_deadband": 50,
+        "max_inv": 300,
+    },
+    {
+        "name":  "AI 1560 Coding Arena Score",
+        "token": "105680218117075138401571382654526387308645112933494890253537724262500863032862",
         "min_size": 200,
         "inv_center": 200,
         "inv_deadband": 100,
-        "max_inv": 400,
+        "max_inv": 600,
+    },
+    {
+        "name":  "Will Colorado Avalanche be the 2027 NHL Western Conference Champion?",
+        "token": "68982070431527263286632459687039982419169405724138836396354952630560729099859",
+        "min_size": 300,
+        "inv_center": 300,
+        "inv_deadband": 150,
+        "max_inv": 900,
+    },
+    {
+        "name":  "Cleitinho Azevedo Minas Gerais",
+        "token": "54664556200324793449929245163617063512863172456904840088634813156464291518709",
+        "min_size": 100,
+        "inv_center": 100,
+        "inv_deadband": 50,
+        "max_inv": 300,
     },
 ]
 
