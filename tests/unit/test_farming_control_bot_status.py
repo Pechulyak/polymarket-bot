@@ -22,8 +22,13 @@ Deploy-замечание: executor/ на S2 — flat-каталог без __in
 farming_control_bot.py делает sibling-импорт `from markets_config import ...`.
 На S2 это работает потому, что systemd запускает бота с
 WorkingDirectory=/opt/executor/app, и script-dir автоматически попадает в
-sys.path[0]. В тестах executor/ добавляется в sys.path через этот модуль —
-иначе `from markets_config import ...` падает с ModuleNotFoundError.
+sys.path[0]. Здесь executor/ временно добавляется в sys.path ТОЛЬКО на время
+exec_module() (см. _load_farming_control_bot) и сразу убирается — иначе
+исполняемая модификация sys.path на уровне импорта этого тест-файла делает
+имя `executor` резолвящимся в executor/executor.py (там py_clob_client_v2,
+не установлен здесь) для ЛЮБОГО другого теста, собираемого позже в этом же
+pytest-прогоне (FARM-036 review: `pytest tests/unit/` без явного списка
+файлов падал коллекцией test_markets_config.py из-за именно этой утечки).
 """
 
 import importlib.util
@@ -44,8 +49,6 @@ from pathlib import Path
 # переписывание исходника до загрузки (compile-and-exec не сработает:
 # LOG_FILE = "..." перезапишет monkeypatch).
 _EXECUTOR_DIR = Path(__file__).resolve().parent.parent.parent / "executor"
-if str(_EXECUTOR_DIR) not in sys.path:
-    sys.path.insert(0, str(_EXECUTOR_DIR))
 
 
 def _load_farming_control_bot() -> "module":
@@ -72,7 +75,21 @@ def _load_farming_control_bot() -> "module":
         "farming_control_bot", tmp_path
     )
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    # executor/ нужен на sys.path ТОЛЬКО на время exec_module() — внутри него
+    # выполняется `from markets_config import ...` (sibling-импорт). Сразу
+    # после — убираем, чтобы не подсовывать executor/executor.py как
+    # содержимое пакета "executor" при коллекции других тестовых файлов.
+    path_inserted = str(_EXECUTOR_DIR) not in sys.path
+    if path_inserted:
+        sys.path.insert(0, str(_EXECUTOR_DIR))
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        if path_inserted:
+            try:
+                sys.path.remove(str(_EXECUTOR_DIR))
+            except ValueError:
+                pass
     sys.modules["farming_control_bot"] = mod
     return mod
 

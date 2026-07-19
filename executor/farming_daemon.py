@@ -797,6 +797,12 @@ def reconcile_orders(c, token, st, min_size, mid=None):
         throttled_log(f"reconcile_err:{token}",
                       f"[reconcile] get_open_orders error (raw, not auto-fixed): {e}",
                       seconds=300)
+        # [FARM-036] out["one_sided"] default (False) must NOT be read by the
+        # caller as "confirmed two-sided" — we simply failed to check the book.
+        # error=True lets the call site skip the alert-latch update this tick
+        # instead of falsely firing a "🟢 Обе стороны" recovery on a book we
+        # never actually saw (incident: latch reset on get_open_orders errors).
+        out["error"] = True
         return out
     tracked = set(x for x in (st["ids"] or ()) if x and not str(x).startswith("dry_"))
     # [FARM-004g B1] also track auto_unload order so it's not cancelled as orphan
@@ -1653,7 +1659,11 @@ def main():
                         # ids_before_reseed is not None means we had tracked orders going into
                         # this tick → reconcile actually checked the book.
                         # If reconcile early-returned (ids_before_reseed is None) → don't touch latch.
-                        if ids_before_reseed is not None:
+                        # [FARM-036] rec["error"] means get_open_orders() failed this tick —
+                        # rec["one_sided"] is the unchecked default (False), NOT a confirmed
+                        # book read. Skip the latch update entirely rather than falsely
+                        # reporting "both sides OK" on an API error.
+                        if ids_before_reseed is not None and not rec.get("error"):
                             edge_notify(
                                 f"one_sided:{token}", rec["one_sided"],
                                 f"🟡 Одна сторона ({mkt['name']}) / Котирую только BID. "
