@@ -346,6 +346,7 @@
 | ACT-002 | account_activity + account_positions_snapshot: DDL + fetch + backfill | | DONE |
 | ACT-003 | Cron: daily fetch both scripts (env-pattern + flock) | | DONE |
 | ACT-004 | Сверка account_activity с CSV + backfill deposit-событий | | DONE |
+| ACT-005 | Grafana-дашборды Farming Daily + Position Lifecycle (SQL-слой) | | DONE |
 
 ---
 

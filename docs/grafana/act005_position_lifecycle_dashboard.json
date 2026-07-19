@@ -1,0 +1,74 @@
+{
+  "title": "Position Lifecycle",
+  "uid": "act005-position-lifecycle",
+  "tags": ["farming", "act-005"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1h",
+  "time": { "from": "now-90d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_POSTGRES",
+        "type": "datasource",
+        "query": "postgres",
+        "label": "Postgres S1",
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Позиции: вход/выход, цены, reward/fees/net, статус",
+      "type": "table",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "avg_buy_price" }, "properties": [ { "id": "unit", "value": "currencyUSD" } ] },
+          { "matcher": { "id": "byName", "options": "avg_sell_price" }, "properties": [ { "id": "unit", "value": "currencyUSD" } ] },
+          { "matcher": { "id": "byName", "options": "reward_usd" }, "properties": [ { "id": "unit", "value": "currencyUSD" } ] },
+          { "matcher": { "id": "byName", "options": "fees_usd" }, "properties": [ { "id": "unit", "value": "currencyUSD" } ] },
+          { "matcher": { "id": "byName", "options": "trading_pnl_usd" }, "properties": [ { "id": "unit", "value": "currencyUSD" } ] },
+          { "matcher": { "id": "byName", "options": "net_usd" }, "properties": [ { "id": "unit", "value": "currencyUSD" }, { "id": "custom.cellOptions", "value": { "type": "color-background" } } ] },
+          { "matcher": { "id": "byName", "options": "status" }, "properties": [ { "id": "custom.cellOptions", "value": { "type": "color-text" } }, { "id": "mappings", "value": [
+            { "type": "value", "options": { "OPEN": { "color": "blue", "index": 0 } } },
+            { "type": "value", "options": { "CLOSED_SOLD": { "color": "orange", "index": 1 } } },
+            { "type": "value", "options": { "REDEEMED": { "color": "green", "index": 2 } } }
+          ] } ] }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT\n    account,\n    title,\n    status,\n    first_buy_ts,\n    exit_ts,\n    days_held,\n    avg_buy_price,\n    avg_sell_price,\n    reward_usd,\n    fees_usd,\n    trading_pnl_usd,\n    net_usd,\n    current_size,\n    redeemable,\n    condition_id\nFROM v_position_lifecycle\nORDER BY first_buy_ts DESC;"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Scatter: net позиции vs дней удержания",
+      "type": "xychart",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 14 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "options": {
+        "seriesMapping": "auto",
+        "mapping": { "x": { "matcher": { "id": "byName", "options": "days_held" } }, "y": { "matcher": { "id": "byName", "options": "net_usd" } } }
+      },
+      "fieldConfig": {
+        "defaults": { "custom": { "pointSize": { "fixed": 8 }, "show": "points" }, "unit": "currencyUSD" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT\n    days_held,\n    net_usd,\n    status,\n    title,\n    account\nFROM v_position_lifecycle\nWHERE days_held IS NOT NULL\nORDER BY days_held;"
+        }
+      ]
+    }
+  ]
+}
