@@ -22,7 +22,10 @@ from datetime import date
 import psycopg2
 import psycopg2.extras
 
-EPSILON = 1e-4
+EPSILON = 0.05  # dust threshold; Polymarket minimum_order_size is ~5 shares,
+# so residuals this small are float-accumulation dust from many fills, not
+# a real open position (confirmed against live data - largest observed
+# dust residual on a 98-trade position was 0.0015)
 FEE_RATE = 0.03  # TRD-448 universal factor, confirmed non-category-dependent
 
 DB_HOST = os.getenv("PGHOST", "localhost")
