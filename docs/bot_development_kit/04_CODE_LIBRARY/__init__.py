@@ -6,7 +6,6 @@ Ready-to-use Python modules for building a $100 capital trading bot.
 Modules:
 - polymarket_client: Polymarket CLOB API wrapper
 - websocket_manager: Real-time data feeds
-- copy_trading_engine: Whale following logic
 - arbitrage_detector: Cross-platform opportunity detection
 - risk_manager: Unified risk control
 - order_executor: Trade execution (REST + Raw TX)
@@ -25,7 +24,6 @@ __author__ = "Polymarket Research Project"
 
 from .polymarket_client import PolymarketClient
 from .websocket_manager import WebSocketManager
-from .copy_trading_engine import CopyTradingEngine
 from .arbitrage_detector import ArbitrageDetector
 from .risk_manager import RiskManager, RiskLimits
 from .order_executor import OrderExecutor
@@ -34,7 +32,6 @@ from .telegram_alerts import TelegramAlerter
 __all__ = [
     "PolymarketClient",
     "WebSocketManager",
-    "CopyTradingEngine",
     "ArbitrageDetector",
     "RiskManager",
     "RiskLimits",

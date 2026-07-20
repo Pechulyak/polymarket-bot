@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run tests and verify DB persistence for v0.4.0 testing.
 
-- Runs unit tests for VirtualBankroll and PaperTrading and the integration DB test.
+- Runs the remaining unit/integration tests after HYG-017 removal of dead VB files.
 - If tests pass, connects to PostgreSQL (via SQLAlchemy) and prints counts
-  of records in virtual_trades and virtual_bankroll_history.
+  of records in core tables (paper_trades, whale_trades, whales).
 """
 
 import subprocess
@@ -15,9 +15,7 @@ def run_tests() -> bool:
     cmd = [
         "pytest",
         "-q",
-        "tests/unit/test_virtual_bankroll.py",
-        "tests/unit/test_paper_trading.py",
-        "tests/integration/test_virtual_bankroll_db.py",
+        "tests/",
     ]
     print("Running tests:", " ".join(cmd))
     result = subprocess.run(
@@ -35,12 +33,12 @@ def check_db() -> None:
     engine = create_engine(db_url)
     with engine.connect() as conn:
         try:
-            r1 = conn.execute(text("SELECT COUNT(*) FROM virtual_trades;"))
-            trades = int(r1.scalar() or 0)
-            r2 = conn.execute(text("SELECT COUNT(*) FROM virtual_bankroll_history;"))
-            histories = int(r2.scalar() or 0)
+            r1 = conn.execute(text("SELECT COUNT(*) FROM paper_trades;"))
+            paper = int(r1.scalar() or 0)
+            r2 = conn.execute(text("SELECT COUNT(*) FROM whale_trades;"))
+            whale = int(r2.scalar() or 0)
             print(
-                f"DB checks: virtual_trades={trades}, virtual_bankroll_history={histories}"
+                f"DB checks: paper_trades={paper}, whale_trades={whale}"
             )
         except Exception as e:
             print(f"DB check failed: {e}")

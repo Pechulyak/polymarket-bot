@@ -121,14 +121,10 @@ class InfrastructureTester:
         self.log("Checking PostgreSQL tables...", "info")
         
         expected_tables = [
-            "market_data",
-            "opportunities", 
-            "trades",
-            "positions",
-            "bankroll",
-            "risk_events",
-            "fee_schedule",
-            "api_health"
+            "whale_trades",
+            "paper_trades",
+            "whale_trade_roundtrips",
+            "whales",
         ]
         
         try:
@@ -179,12 +175,7 @@ class InfrastructureTester:
             else:
                 self.log(f"All {len(expected_tables)} tables found", "success")
                 result = True
-            
-            # Check bankroll record
-            cursor.execute("SELECT COUNT(*) FROM bankroll;")
-            bankroll_count = cursor.fetchone()[0]
-            self.log(f"Bankroll records: {bankroll_count}", "success" if bankroll_count > 0 else "warning")
-            
+
             cursor.close()
             conn.close()
             

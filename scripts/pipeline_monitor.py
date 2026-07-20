@@ -167,18 +167,6 @@ def check_roundtrips_24h():
     return execute_query(query)
 
 
-def check_virtual_trades_1h():
-    """Phase 2B: Check VIRTUAL trades count in last 1 hour.
-    
-    Expected: 0 — если появились VIRTUAL trades, значит VB включили обратно без согласования.
-    """
-    query = """
-        SELECT COUNT(*) FROM trades
-        WHERE executed_at > NOW() - INTERVAL '1 hour' AND exchange = 'VIRTUAL'
-    """
-    return execute_query(query)
-
-
 def check_container_restarts():
     """Check restart count for each container."""
     restart_counts = {}

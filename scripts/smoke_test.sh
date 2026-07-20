@@ -114,14 +114,6 @@ fi
 #############################################
 print_header "2. ПРОВЕРКА PYTHON ИМПОРТОВ"
 
-# Paper Position Settlement Engine
-print_check "import" "src.strategy.paper_position_settlement.PaperPositionSettlementEngine"
-if docker compose exec -T bot python -c "from src.strategy.paper_position_settlement import PaperPositionSettlementEngine" 2>/dev/null; then
-    print_pass
-else
-    print_fail "Не удалось импортировать PaperPositionSettlementEngine"
-fi
-
 # RoundtripBuilder (ожидаемо FAIL)
 print_check "import" "src.strategy.roundtrip_builder.RoundtripBuilder (expected FAIL)"
 if docker compose exec -T bot python -c "from src.strategy.roundtrip_builder import RoundtripBuilder" 2>/dev/null; then
@@ -178,22 +170,6 @@ else
     print_fail "Таблица whale_trade_roundtrips не существует или недоступна"
 fi
 
-# Phase 2B: Verify VirtualBankroll is disabled (no new VIRTUAL trades)
-# Ожидаем: 0 — если появились VIRTUAL trades, значит VB включили обратно
-print_check "table" "trades (VirtualBankroll disabled)"
-if $DB_CMD "SELECT COUNT(*) FROM trades WHERE executed_at > NOW() - INTERVAL '1 hour' AND exchange = 'VIRTUAL'" 2>/dev/null | xargs | grep -q "^0$"; then
-    print_pass
-else
-    print_fail "Обнаружены VIRTUAL trades за последний час — VirtualBankroll возможно включён!"
-fi
-
-# Проверка таблицы trades
-print_check "table" "trades"
-if $DB_CMD "SELECT 1 FROM trades LIMIT 1" >/dev/null 2>&1; then
-    print_pass
-else
-    print_fail "Таблица trades не существует или недоступна"
-fi
 
 #############################################
 # 4. ПРОВЕРКА ЛОГОВ

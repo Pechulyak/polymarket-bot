@@ -3,7 +3,7 @@
 Daily Data Audit Snapshot Script
 
 Performs daily audit of key database tables:
-- whales, whale_trades, paper_trades, paper_trade_notifications, trades, bankroll
+- whales, whale_trades, paper_trades, paper_trade_notifications
 
 Collects:
 - row counts
@@ -208,70 +208,6 @@ FROM (
             'rows_last_48h': int(parts[4].strip()) if parts[4].strip() else 0,
             'null_market_title': int(parts[5].strip()) if parts[5].strip() else 0,
             'latest_notification_timestamp': parts[6].strip(),
-        }
-    return {}
-
-
-def get_trades_audit():
-    """Audit trades table."""
-    query = """
-SELECT row_count, first_row_timestamp, last_row_timestamp, virtual_rows, open_trades, closed_trades
-FROM (
-    SELECT 
-        COUNT(*) as row_count,
-        MIN(executed_at)::text as first_row_timestamp,
-        MAX(executed_at)::text as last_row_timestamp,
-        COUNT(*) FILTER (WHERE exchange = 'VIRTUAL') as virtual_rows,
-        COUNT(*) FILTER (WHERE status = 'open') as open_trades,
-        COUNT(*) FILTER (WHERE status = 'closed') as closed_trades
-    FROM trades
-) t
-"""
-    output = run_sql(query)
-    if not output:
-        return {}
-    parts = output.split("|")
-    if len(parts) >= 6:
-        return {
-            'row_count': int(parts[0].strip()) if parts[0].strip() else 0,
-            'first_row_timestamp': parts[1].strip(),
-            'last_row_timestamp': parts[2].strip(),
-            'virtual_rows': int(parts[3].strip()) if parts[3].strip() else 0,
-            'open_trades': int(parts[4].strip()) if parts[4].strip() else 0,
-            'closed_trades': int(parts[5].strip()) if parts[5].strip() else 0,
-        }
-    return {}
-
-
-def get_bankroll_audit():
-    """Audit bankroll table."""
-    query = """
-SELECT row_count, first_row_timestamp, last_row_timestamp, rows_last_24h, rows_last_48h, earliest_timestamp, latest_timestamp
-FROM (
-    SELECT 
-        COUNT(*) as row_count,
-        MIN(timestamp)::text as first_row_timestamp,
-        MAX(timestamp)::text as last_row_timestamp,
-        COUNT(*) FILTER (WHERE timestamp > NOW() - INTERVAL '24 hours') as rows_last_24h,
-        COUNT(*) FILTER (WHERE timestamp > NOW() - INTERVAL '48 hours') as rows_last_48h,
-        MIN(timestamp)::text as earliest_timestamp,
-        MAX(timestamp)::text as latest_timestamp
-    FROM bankroll
-) t
-"""
-    output = run_sql(query)
-    if not output:
-        return {}
-    parts = output.split("|")
-    if len(parts) >= 7:
-        return {
-            'row_count': int(parts[0].strip()) if parts[0].strip() else 0,
-            'first_row_timestamp': parts[1].strip(),
-            'last_row_timestamp': parts[2].strip(),
-            'rows_last_24h': int(parts[3].strip()) if parts[3].strip() else 0,
-            'rows_last_48h': int(parts[4].strip()) if parts[4].strip() else 0,
-            'earliest_timestamp': parts[5].strip(),
-            'latest_timestamp': parts[6].strip(),
         }
     return {}
 
@@ -612,8 +548,6 @@ def main():
         'whale_trades': get_whale_trades_audit(),
         'paper_trades': get_paper_trades_audit(),
         'paper_trade_notifications': get_paper_notifications_audit(),
-        'trades': get_trades_audit(),
-        'bankroll': get_bankroll_audit(),
     }
     
     cross_table_metrics = get_cross_table_metrics()

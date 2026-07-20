@@ -309,7 +309,7 @@
 | HYG-014 | Удаление deprecated Python SETTLEMENT path в roundtrip_builder.py | | DONE |
 | HYG-015 | Документировать семантику open_trade_id в whale_trade_roundtrips (= last fill of multi-fill order, не first) | | DONE |
 | HYG-016 | Удаление whale_trades_legacy | | DONE |
-| HYG-017 | Чистка проекта: temp/бэкапы, docker, DROP легаси-таблиц v1-схемы БД | | IN_PROGRESS |
+| HYG-017 | Чистка проекта: temp/бэкапы, docker, удаление мёртвой VB-подсистемы (8 таблиц + код) | | DONE |
 
 ---
 
