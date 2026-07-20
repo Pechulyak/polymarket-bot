@@ -61,6 +61,8 @@ RPC_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # ERC-1155 CTF contract for inventory reads
 CTF_CONTRACT = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
+# ERC-20 pUSD collateral (cash leg): free cash = balanceOf(FUNDER) / 1e6
+PUSD_CONTRACT = "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB"
 SHARE_DECIMALS = 6
 
 # Farming state file (on S2)
@@ -219,6 +221,37 @@ def read_erc1155_balance(token: str) -> Optional[float]:
             continue
     
     log(f"[WARN] read_erc1155_balance({token[:20]}) all RPCs failed")
+    return None
+
+
+def read_cash_balance() -> Optional[float]:
+    """Read pUSD (ERC-20) free cash balance for FUNDER on-chain.
+
+    Mirrors read_cash_balance() in executor/farming_daemon.py. Duplicated
+    rather than shared: the two files deploy to different paths on S2, a
+    shared module would complicate deployment for no benefit — same
+    rationale as the already-duplicated read_erc1155_balance.
+
+    selector keccak256("balanceOf(address)") = 0x70a08231
+    Returns free cash in pUSD (raw / 1e6), or None on total RPC failure.
+    None is NOT 0.0: 0.0 is a truly empty wallet, None is "unknown / RPC
+    down". Callers MUST NOT coerce None to 0 (critical for sizing).
+    """
+    selector = bytes.fromhex("70a08231")
+    last_error = None
+    for rpc_url in RPC_URLS:
+        try:
+            w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"headers": RPC_HEADERS}))
+            padded_addr = w3.to_bytes(hexstr=FUNDER).rjust(32, b"\x00")
+            calldata = selector + padded_addr
+            result = w3.eth.call({"to": PUSD_CONTRACT, "data": "0x" + calldata.hex()})
+            raw = int.from_bytes(result, "big")
+            return raw / (10 ** SHARE_DECIMALS)
+        except Exception as e:
+            last_error = e
+            continue
+
+    log(f"[WARN] read_cash_balance() all RPCs failed: {last_error}")
     return None
 
 
@@ -398,8 +431,12 @@ DB_QUERY_BY_TOKEN = """
 """
 
 
-def collect_snapshot(date_str: str) -> list:
-    """Collect snapshot data for all active markets on given date."""
+def collect_snapshot(date_str: str) -> tuple:
+    """Collect snapshot data for all active markets on given date.
+
+    Returns (results, free_cash): the per-token snapshot rows and the
+    portfolio-level free cash (pUSD, None on RPC failure — see read_cash_balance).
+    """
     date = parse_date(date_str)
     start_dt = date.replace(hour=0, minute=0, second=0)
     end_dt = date.replace(hour=23, minute=59, second=59)
@@ -413,7 +450,13 @@ def collect_snapshot(date_str: str) -> list:
     
     # Build CLOB client
     c = build_client()
-    
+
+    # [FARM-048] Free cash (pUSD ERC-20 balanceOf FUNDER), read once per run
+    # (portfolio-level, not per-token). None on RPC failure — must NOT be
+    # coerced to 0 (0 = empty wallet, critical for sizing).
+    free_cash = read_cash_balance()
+    log(f"Free cash (pUSD): {free_cash}")
+
     # Connect to DB
     conn = get_db_connection()
     cur = conn.cursor()
@@ -561,8 +604,8 @@ def collect_snapshot(date_str: str) -> list:
     
     cur.close()
     conn.close()
-    
-    return results
+
+    return results, free_cash
 
 
 def upsert_snapshot(data: list) -> None:
@@ -611,6 +654,31 @@ def upsert_snapshot(data: list) -> None:
     log(f"Successfully upserted {len(data)} rows")
 
 
+def upsert_cash(date_str: str, free_cash: Optional[float]) -> None:
+    """UPSERT portfolio-level free cash into farming_daily_cash (FARM-048).
+
+    One row per snap_date, written independently of per-token snapshot rows
+    so cash is recorded even on days with zero active positions. free_cash
+    may be None (RPC failure) — stored as SQL NULL, never coerced to 0.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    sql = """
+        INSERT INTO farming_daily_cash (snap_date, free_cash_pusd)
+        VALUES (%(snap_date)s, %(free_cash_pusd)s)
+        ON CONFLICT (snap_date) DO UPDATE SET
+            free_cash_pusd = EXCLUDED.free_cash_pusd
+    """
+    cur.execute(sql, {"snap_date": date_str, "free_cash_pusd": free_cash})
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    log(f"Upserted free_cash_pusd={free_cash} for {date_str}")
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -639,11 +707,12 @@ def main():
     
     log(f"Starting farming snapshot for {date_str}")
     
-    # Collect snapshot data
-    data = collect_snapshot(date_str)
-    
+    # Collect snapshot data (+ portfolio-level free cash)
+    data, free_cash = collect_snapshot(date_str)
+
     # Upsert to database
     upsert_snapshot(data)
+    upsert_cash(date_str, free_cash)
     
     log(f"Farming snapshot completed for {date_str}")
 

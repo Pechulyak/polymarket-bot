@@ -404,6 +404,7 @@
 | FARM-045 | Авто-аудит фарминга Ф3: генерация черновика TASK PACK по кнопке | feature:liquidity-farming | TODO (спека DRAFT) |
 | FARM-046 | Авто-аудит: audit-таблицы + отдельная DB-роль + бюджет-счётчик + kill-switch | feature:liquidity-farming | TODO (спека DRAFT) |
 | FARM-047 | Авто-аудит: episode→Postgres обогащение (демон S2, опционально) | feature:liquidity-farming | TODO (спека DRAFT) |
+| FARM-048 | free_cash_pusd в дневной снапшот фарминга (таблица farming_daily_cash) | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
 
 ## EPIC: LIVE — Live Execution
 
