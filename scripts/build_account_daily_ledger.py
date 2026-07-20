@@ -52,7 +52,7 @@ def fetch_trades(conn):
         cur.execute(
             """
             SELECT account, condition_id, asset, event_ts, event_ts::date AS event_date,
-                   side, size, usdc_size, price, title
+                   side, size, usdc_size, price, title, trade_role
             FROM account_activity
             WHERE event_type = 'TRADE' AND condition_id != ''
               AND asset IS NOT NULL AND asset != ''
@@ -153,8 +153,17 @@ def process_position(trades, farming_by_condition, snapshots_by_key, clob_prices
             daily[d] = {
                 "buy_size": 0.0, "buy_usdc": 0.0,
                 "sell_size": 0.0, "sell_usdc": 0.0,
-                "buy_notional_for_fee": 0.0, "sell_notional_for_fee": 0.0,
                 "buy_price_weighted_sum": 0.0, "sell_price_weighted_sum": 0.0,
+                # ACT-008: per-trade role-aware fee accumulation. Confirmed
+                # (role known) fees are exact; unmatched (~0.7% of trades,
+                # role NULL) fall back to the old worst-case-taker estimate
+                # over just that unmatched slice - see fee_for_day() below.
+                "buy_fee_confirmed": 0.0, "sell_fee_confirmed": 0.0,
+                "buy_unmatched_notional": 0.0, "sell_unmatched_notional": 0.0,
+                "buy_unmatched_size": 0.0, "sell_unmatched_size": 0.0,
+                "buy_unmatched_price_weighted_sum": 0.0, "sell_unmatched_price_weighted_sum": 0.0,
+                "buy_has_confirmed": False, "sell_has_confirmed": False,
+                "buy_has_unmatched": False, "sell_has_unmatched": False,
             }
         return daily[d]
 
@@ -168,6 +177,8 @@ def process_position(trades, farming_by_condition, snapshots_by_key, clob_prices
         size = float(t["size"])
         usdc = float(t["usdc_size"])
 
+        role = t.get("trade_role")  # ACT-008: 'MAKER' | 'TAKER' | None (unmatched)
+
         if t["side"] == "BUY":
             if abs(balance) < EPSILON:
                 epoch_buy_usdc = 0.0
@@ -179,12 +190,36 @@ def process_position(trades, farming_by_condition, snapshots_by_key, clob_prices
             b["buy_usdc"] += usdc
             if price is not None:
                 b["buy_price_weighted_sum"] += price * size
+            if role == "MAKER":
+                b["buy_has_confirmed"] = True  # $0 fee, TRD-448
+            elif role == "TAKER":
+                b["buy_has_confirmed"] = True
+                if price is not None:
+                    b["buy_fee_confirmed"] += fee_for(price, usdc)
+            else:
+                b["buy_has_unmatched"] = True
+                b["buy_unmatched_notional"] += usdc
+                b["buy_unmatched_size"] += size
+                if price is not None:
+                    b["buy_unmatched_price_weighted_sum"] += price * size
         else:  # SELL
             balance -= size
             b["sell_size"] += size
             b["sell_usdc"] += usdc
             if price is not None:
                 b["sell_price_weighted_sum"] += price * size
+            if role in ("MAKER", "REDEEM"):
+                b["sell_has_confirmed"] = True  # REDEEM: confirmed $0 fee, TRD-448
+            elif role == "TAKER":
+                b["sell_has_confirmed"] = True
+                if price is not None:
+                    b["sell_fee_confirmed"] += fee_for(price, usdc)
+            else:
+                b["sell_has_unmatched"] = True
+                b["sell_unmatched_notional"] += usdc
+                b["sell_unmatched_size"] += size
+                if price is not None:
+                    b["sell_unmatched_price_weighted_sum"] += price * size
 
         avg_cost = (epoch_buy_usdc / epoch_buy_size) if epoch_buy_size > EPSILON else None
         day_end_state[d] = (balance, avg_cost)
@@ -253,15 +288,39 @@ def process_position(trades, farming_by_condition, snapshots_by_key, clob_prices
                 if clob_price is not None:
                     mark_price, mark_source = clob_price, "clob_history"
 
+        # ACT-008: fee is confirmed (MAKER=$0, TAKER=TRD-448 formula) per trade
+        # where trade_role is known; only the small unmatched slice (~0.7% of
+        # trades, no on-chain role match) falls back to the old worst-case
+        # estimate. fee_source reflects which mode actually applied that day.
         buy_fee = sell_fee = None
-        fee_source = None
+        has_confirmed = has_unmatched = False
         if b["buy_size"] > 0:
-            avg_buy_price = b["buy_price_weighted_sum"] / b["buy_size"] if b["buy_size"] else None
-            buy_fee = fee_for(avg_buy_price, b["buy_usdc"])
-            fee_source = "estimated_universal_rate"
+            buy_fee = b["buy_fee_confirmed"]
+            if b["buy_has_unmatched"]:
+                avg_unmatched_price = (
+                    b["buy_unmatched_price_weighted_sum"] / b["buy_unmatched_size"]
+                    if b["buy_unmatched_size"] else None
+                )
+                buy_fee += fee_for(avg_unmatched_price, b["buy_unmatched_notional"]) or 0.0
+            has_confirmed |= b["buy_has_confirmed"]
+            has_unmatched |= b["buy_has_unmatched"]
         if b["sell_size"] > 0:
-            avg_sell_price = b["sell_price_weighted_sum"] / b["sell_size"] if b["sell_size"] else None
-            sell_fee = fee_for(avg_sell_price, b["sell_usdc"])
+            sell_fee = b["sell_fee_confirmed"]
+            if b["sell_has_unmatched"]:
+                avg_unmatched_price = (
+                    b["sell_unmatched_price_weighted_sum"] / b["sell_unmatched_size"]
+                    if b["sell_unmatched_size"] else None
+                )
+                sell_fee += fee_for(avg_unmatched_price, b["sell_unmatched_notional"]) or 0.0
+            has_confirmed |= b["sell_has_confirmed"]
+            has_unmatched |= b["sell_has_unmatched"]
+
+        fee_source = None
+        if has_confirmed and has_unmatched:
+            fee_source = "mixed"
+        elif has_confirmed:
+            fee_source = "clob_confirmed_role"
+        elif has_unmatched:
             fee_source = "estimated_universal_rate"
 
         status = "OPEN"
@@ -334,6 +393,7 @@ def build(conn):
                 "event_ts": ev["event_ts"], "event_date": ev["event_date"],
                 "side": "SELL", "size": float(ev["size"]), "usdc_size": float(ev["usdc_size"]),
                 "price": None, "title": title,
+                "trade_role": "REDEEM",  # confirmed $0 fee (TRD-448) - not an "unmatched" trade
             })
         groups[key].sort(key=lambda t: t["event_ts"])
 

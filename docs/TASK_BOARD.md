@@ -349,7 +349,7 @@
 | ACT-005 | Grafana-дашборды Farming Daily + Position Lifecycle (SQL-слой) | | DONE |
 | ACT-006 | account_daily_position_ledger — mark-to-market витрина позиций (замена ACT-005 view) | | DONE |
 | ACT-007 | Backfill CLOB /prices-history — дневная mark-цена вне farm/снапшот-окна | | DONE |
-| ACT-008 | CLOB /trades maker/taker matching — точные buy_fee/sell_fee | | BACKLOG |
+| ACT-008 | Подтверждённая роль maker/taker (on-chain OrderFilled) — точные buy_fee/sell_fee | | DONE |
 | ACT-009 | account_activity теряет сделки при коллизии дедуп-ключа (одинаковые tx_hash+size+price, разные ордера) | | DONE |
 | ACT-010 | Возможные непрослеженные позиции — Data-API не сообщает часть taker-сделок в транзакциях с чужой maker-активностью | | BACKLOG |
 
