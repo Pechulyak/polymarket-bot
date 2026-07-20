@@ -399,6 +399,11 @@
 | FARM-040 | Отключение дублирующего farm-degradation алертинга на S1 (K2 из FARM-022) | feature:liquidity-farming | DONE |
 | FARM-041 | Рестарт-пакет демона фарминга: markets.json из БД вместо хардкода (генератор для S2 + загрузка в демоне/control-боте с fallback) + circuit breaker не отменяет unload-ордер | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
 | FARM-042 | _alerts фантомы/stale в /status + обход halted-gate после рестарта | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
+| FARM-043 | Авто-аудит фарминга Ф1: S1-ассемблер дайджеста + OpenRouter + read-only TG-отчёт | feature:liquidity-farming | TODO (спека DRAFT) |
+| FARM-044 | Авто-аудит фарминга Ф2: inline-кнопки + callback в S2-боте + идемпотентность + канал S1↔S2 | feature:liquidity-farming | TODO (спека DRAFT) |
+| FARM-045 | Авто-аудит фарминга Ф3: генерация черновика TASK PACK по кнопке | feature:liquidity-farming | TODO (спека DRAFT) |
+| FARM-046 | Авто-аудит: audit-таблицы + отдельная DB-роль + бюджет-счётчик + kill-switch | feature:liquidity-farming | TODO (спека DRAFT) |
+| FARM-047 | Авто-аудит: episode→Postgres обогащение (демон S2, опционально) | feature:liquidity-farming | TODO (спека DRAFT) |
 
 ## EPIC: LIVE — Live Execution
 
