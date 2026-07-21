@@ -312,18 +312,30 @@ rewardsMaxSpread, closed, endDate, bestBid, bestAsk, question."
    ротации на S2) — демон успел переустановить ноги до снапшота. «Признаков
    нет» через эту эвристику НЕ равно «рестарта не было» — сверять с фактом
    ротации/деплоя в этом же чате, не только с эвристикой.
-8. Кандидаты с потенциалом доминирования (широкий спред + сонная книга +
-   тонкая сторона — потенциал 70-100% доли пула):
+8. Кандидаты с потенциалом доминирования (тонкая абсолютная глубина хотя бы
+   с одной стороны + уже высокий our_daily_usd — не спред/moves2c, см. ниже):
    docker exec ... -c "SELECT question, gamma_id, mid, best_bid, best_ask,
     ROUND((best_ask-best_bid)*100,2) AS spread_c, rewards_max_spread, moves2c,
     LEAST(bid_depth_usd, ask_depth_usd) AS weak_side_usd, thin_book, dead_book,
     our_daily_usd, days_to_end FROM farming_market_candidates WHERE
     scan_run_id = (SELECT scan_run_id FROM farming_market_candidates ORDER BY
-    scanned_at DESC LIMIT 1) AND moves2c <= 3 AND (best_ask-best_bid)*100 >=
-    rewards_max_spread * 0.6 AND dead_book = false ORDER BY weak_side_usd ASC;"
+    scanned_at DESC LIMIT 1) AND LEAST(bid_depth_usd, ask_depth_usd) < 1000
+    AND dead_book = false ORDER BY our_daily_usd DESC;"
    Найденное — кандидаты на FARM-023 override, НЕ автовход: явное решение
    оператора на каждый случай (концентрация риска в обе стороны — см.
    прецедент AI1560 20.07, скачок ×2.4 пока держали 100% инвентаря).
+   **Ретро-калибровка 21.07 (Colorado/Cleitinho/Farage, n=3, гипотеза не
+   железное правило):** широкий спред при входе и `moves2c<=3` — плохие
+   предикторы, отсеивают хорошие кандидаты (Farage при входе имел moves2c=8,
+   спред всего 22% от максимума — прежний фильтр исключил бы его, а он дал
+   лучший абсолютный результат, $11.95/д пик). Общий признак у всех трёх —
+   узкий спред при входе (18-44% от макс, НЕ широкий — широкий спред это
+   то, что происходит ПОСЛЕ входа, см. п.9) плюс тонкая абсолютная глубина
+   ($350-920 хотя бы с одной стороны) и уже высокий `our_daily_usd` ($6-21)
+   на момент скана — эта метрика уже объединяет спред+глубину+пул, отдельно
+   считать спред/moves2c избыточно. Colorado до "пробуждения" книги (глубина
+   ~$24.7k, our_daily_usd=$0.03) — пример нулевой возможности, наглядный
+   контраст.
 9. Концентрация на уже активных рынках (спред разъехался/конкуренты ушли
    post-entry — не видно в п.3/8, farm_screen исключает активные из скана):
    для каждого активного рынка из п.2 сравнить live-спред (Gamma bestAsk-bestBid,
