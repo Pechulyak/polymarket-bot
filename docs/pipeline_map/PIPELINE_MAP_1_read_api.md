@@ -23,6 +23,20 @@
 
 ## 2. Статус
 
+> ⚠️ **MIG-001 (2026-07-21): discovery + HOT/WARM ОСТАНОВЛЕНЫ.** Флаг
+> `WHALE_DISCOVERY_ENABLED=false` (docker-compose, сервис `whale-detector`)
+> пропускает `monitor.start()` целиком **и** `start_polymarket_polling()`.
+> Из 4 режимов НЕ работают: **Discovery** (`_polymarket_poll_loop`, 60s),
+> **HOT** (4ч) и **WARM** (24ч) tier-поллинг + tier-downgrade — все три внутри
+> `RealTimeWhaleMonitor.start()` (`real_time_whale_monitor.py:276-281`).
+> Работают только **targeted paper** (`_paper_poll_loop`, 30s) и **targeted
+> tracked** (`_tracked_poll_loop`, 5min) — питают копи-контур (15 китов).
+> **Как включить обратно:** discovery+HOT/WARM вместе — `WHALE_DISCOVERY_ENABLED=true`
+> + пересборка/рекриэйт whale-detector; только HOT/WARM при discovery=off — правка
+> кода: вынести `whale_poller.run_hot/warm/tier_downgrade` из
+> `RealTimeWhaleMonitor.start()` под отдельный флаг (отдельная задача).
+> Описание ниже — состояние ДО MIG-001.
+
 **CONFIRMED-ACTIVE** для основного канала (`PolymarketDataClient`): подтверждён триггер (docker-compose сервис `whale-detector`), точка входа, 5 циклов с верифицированными интервалами.
 
 | `whale_poller.py` | WhalePoller | ACTIVE — инстанцируется внутри `RealTimeWhaleMonitor` (`real_time_whale_monitor.py:222`), запускается через `whale-detector` сервис |

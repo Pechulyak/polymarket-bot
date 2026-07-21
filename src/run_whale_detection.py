@@ -222,35 +222,39 @@ async def main():
     print("\n🔄 Starting Whale Detector...")
     await detector.start()
 
-    print("🔄 Fetching active markets...")
-    token_ids = await fetch_active_token_ids(api_key)
+    discovery_enabled = os.getenv("WHALE_DISCOVERY_ENABLED", "true").lower() == "true"
+    if discovery_enabled:
+        print("🔄 Fetching active markets...")
+        token_ids = await fetch_active_token_ids(api_key)
 
-    print("🔄 Connecting to Polymarket WebSocket...")
-    try:
-        await monitor.start(token_ids=token_ids if token_ids else None)
-        if token_ids:
-            print(
-                f"   ✅ WebSocket connected and subscribed to {len(token_ids)} markets!"
-            )
-        else:
-            print("   ✅ WebSocket connected!")
-    except Exception as e:
-        print(f"   ⚠️ WebSocket failed: {e}")
-        print("   💡 Running in demo mode with test data...")
+        print("🔄 Connecting to Polymarket WebSocket...")
+        try:
+            await monitor.start(token_ids=token_ids if token_ids else None)
+            if token_ids:
+                print(
+                    f"   ✅ WebSocket connected and subscribed to {len(token_ids)} markets!"
+                )
+            else:
+                print("   ✅ WebSocket connected!")
+        except Exception as e:
+            print(f"   ⚠️ WebSocket failed: {e}")
+            print("   💡 Running in demo mode with test data...")
 
-        # Add demo trades
-        test_whale = "0x742d35Cc6634C0532925a3b844Bc9e7595f12345"
-        now = time.time()
-        for i in range(6):
-            await detector.process_trade(
-                trader=test_whale,
-                market_id="0x1234567890abcdef",
-                side="buy",
-                size_usd=Decimal("100"),
-                price=Decimal("0.55"),
-                timestamp=now - (i * 100),
-            )
-        print("   Added 6 test trades for demo")
+            # Add demo trades
+            test_whale = "0x742d35Cc6634C0532925a3b844Bc9e7595f12345"
+            now = time.time()
+            for i in range(6):
+                await detector.process_trade(
+                    trader=test_whale,
+                    market_id="0x1234567890abcdef",
+                    side="buy",
+                    size_usd=Decimal("100"),
+                    price=Decimal("0.55"),
+                    timestamp=now - (i * 100),
+                )
+            print("   Added 6 test trades for demo")
+    else:
+        print("🚫 WHALE_DISCOVERY_ENABLED=false — широкий WebSocket-discovery ОТКЛЮЧЁН. Только таргетированное копи-поллирование.")
 
     print("\n✅ Whale Detector is running!")
     print("   Press Ctrl+C to stop\n")

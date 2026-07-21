@@ -95,6 +95,9 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/polymarket
+      # MIG-whale-copy шаг 1: отключение широкого discovery (обратимо флагом).
+      # true/отсутствие — прежнее поведение; false — только таргетированное копи-поллирование.
+      - WHALE_DISCOVERY_ENABLED=false
     command: python src/run_whale_detection.py
     volumes:
       - whale_heartbeat:/tmp

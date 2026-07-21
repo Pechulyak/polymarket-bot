@@ -33,7 +33,7 @@
 2. Strategy формирует изменение через ORCHESTRATOR TASK PACK.
 3. Ручное редактирование TASK_BOARD.md запрещено.
 4. TASK_BOARD.html является производным файлом и не редактируется вручную.
-5. TASK_ID привязан к EPIC-префиксу: PIPE-*, TRD-*, DATA-*, ANA-*, SEC-*, INFRA-*, HYG-*, DOC-*, BUG-*, ACT-*.
+5. TASK_ID привязан к EPIC-префиксу: PIPE-*, TRD-*, DATA-*, ANA-*, SEC-*, INFRA-*, HYG-*, DOC-*, BUG-*, ACT-*, FARM-*, LIVE-*, MIG-*.
 
 ---
 
@@ -426,4 +426,18 @@
 
 ---
 
-*Обновлено: 2026-07-14*
+## EPIC: MIG — Миграция / оптимизация whale_copy контура
+
+Оптимизация whale_copy перед переездом на новый сервер (приоритет контура снижен,
+ключевое направление — farming). Полный план: docs/MIGRATION_PLAN_WHALE_COPY.md.
+
+| ID | Задача | Тег | Статус |
+|----|--------|-----|--------|
+| MIG-001 | Отключение широкого discovery флагом WHALE_DISCOVERY_ENABLED (обратимо) | migration:whale-copy | DONE |
+| MIG-002 | category_backfill: анализ и обходные способы получения категории (иначе отключение) | migration:whale-copy | TODO |
+| MIG-003 | Ужесточение retention whale_trades/roundtrips (по статусу + возрасту) | migration:whale-copy | TODO |
+| MIG-004 | Массовый перевод бесперспективных китов в excluded + удаление истории | migration:whale-copy | BACKLOG |
+
+---
+
+*Обновлено: 2026-07-21*

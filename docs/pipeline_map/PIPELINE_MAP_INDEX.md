@@ -1,5 +1,19 @@
 # PIPELINE_MAP_INDEX
 
+> 🚩 **MIG-001 (2026-07-21) — DISCOVERY-МАГИСТРАЛЬ ОСТАНОВЛЕНА (обратимо).**
+> Флаг `WHALE_DISCOVERY_ENABLED=false` (docker-compose, `whale-detector`) отключил
+> широкий discovery. Практически это останавливает верхнюю часть магистрали:
+> **шаг 1 discovery-режим** (`_polymarket_poll_loop`, 60s), **HOT/WARM tier-поллинг**
+> + tier-downgrade (внутри `RealTimeWhaleMonitor.start()`), **шаг 2A** (регистрация
+> китов — DORMANT), и 3 из 5 циклов записи шага **2B**. Живы: targeted-поллеры
+> **paper (30s)** и **tracked (300s)** → `whale_trades` по 15 копи-китам, далее
+> магистраль roundtrip→settlement→paper работает как прежде.
+> **Как включить обратно:** `WHALE_DISCOVERY_ENABLED=true` + пересборка/рекриэйт
+> whale-detector (discovery+HOT/WARM разом); только HOT/WARM при discovery=off —
+> отдельная задача (вынести `whale_poller.*` из `RealTimeWhaleMonitor.start()` под
+> свой флаг). Детали: PIPELINE_MAP_1_read_api.md §2, docs/MIGRATION_PLAN_WHALE_COPY.md.
+> Ниже по документу — описание магистрали в состоянии ДО MIG-001.
+
 **Статус документа:** обязательное первое чтение для любого чата, работающего над pipeline_map
 **Последнее обновление:** 2026-05-28 (шаг 3C `close_sell` переведён в ACTIVE по итогам аудита: host-cron `15 * * * *` запускает `python3 -m src.strategy.roundtrip_builder --close`, реактивация выполнена TRD-443; добавлен шаг 9 paper-ветки — три materialized view paper P&L, финальный шаг ветки; магистраль 6/6 + paper 3/3 описаны, P3 — NOT-PRESENT); 2026-07-05 (добавлены L1/L2 — live-ветка real execution через DB-trigger→daemon цепь, эпик LIVE-001..007; проведено различие с dormant BuilderClient 1C; poller LIVE-007 зафиксирован как upstream-зависимость L1)
 **Источник истины о магистрали сделки:** этот файл + связанные `PIPELINE_MAP_*.md`

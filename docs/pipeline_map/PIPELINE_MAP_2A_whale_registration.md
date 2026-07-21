@@ -24,6 +24,14 @@
 
 ## 2. Статус
 
+> ⚠️ **MIG-001 (2026-07-21): шаг 2A DORMANT (не выполняется).** Регистрация китов
+> идёт **только** в discovery-цикле (`_polymarket_poll_loop`), а он остановлен
+> флагом `WHALE_DISCOVERY_ENABLED=false`. Новые киты в каталог `whales` не
+> заносятся, метрики существующих через этот путь не обновляются. Targeted-циклы
+> (paper/tracked) шаг 2A и так пропускали — копи-контур не зависит от 2A.
+> **Включить обратно:** `WHALE_DISCOVERY_ENABLED=true` + пересборка whale-detector
+> (см. MIG-001 в PIPELINE_MAP_1_read_api.md §2). Описание ниже — состояние ДО MIG-001.
+
 **CONFIRMED-ACTIVE** для discovery-цикла (`_polymarket_poll_loop`): подтверждён триггер (docker-compose сервис `whale-detector`), точка входа (`run_whale_detection.py:189–194`), один производственный вызов `_save_whale_to_db()` в `_fetch_polymarket_whales()`.
 
 **NOT-PRESENT** для targeted-циклов: вызов `_save_whale_to_db()` отсутствует во всех 6 проверенных точках (`_paper_poll_loop`, `_fetch_paper_whale_trades`, `_tracked_poll_loop`, `_fetch_tracked_whale_trades`, `WhalePoller.run_hot_polling`, `WhalePoller.run_warm_polling`). См. §11 (Зависимости).

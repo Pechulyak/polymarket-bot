@@ -20,6 +20,7 @@ Example:
 """
 
 import asyncio
+import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -309,7 +310,14 @@ class WhaleDetector:
                 logger.info("continuing_without_bootstrap")
 
         if self.polymarket_client:
-            await self.start_polymarket_polling()
+            discovery_enabled = os.getenv("WHALE_DISCOVERY_ENABLED", "true").lower() == "true"
+            if discovery_enabled:
+                await self.start_polymarket_polling()
+            else:
+                logger.info(
+                    "whale_discovery_disabled",
+                    reason="WHALE_DISCOVERY_ENABLED=false — broad polymarket polling skipped",
+                )
 
         # TRD-420 v2: Independent copy polling loops - SEPARATED (BUG-502)
         # Paper: every 30 sec (critical path)

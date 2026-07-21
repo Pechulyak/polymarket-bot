@@ -1,15 +1,20 @@
-DISCOVERY (whale-detector, каждые 60с)
+DISCOVERY (whale-detector) — ⛔ ОСТАНОВЛЕН (MIG-001, 2026-07-21)
 │
-│ Polymarket Data API → новые адреса
-│ INSERT INTO whales (qualification_status, tier)
-│ INSERT INTO whale_trades (source=POLLER)
+│ Отключён флагом WHALE_DISCOVERY_ENABLED=false (обратимо).
+│ Не работают: WebSocket-monitor (все рынки) + _polymarket_poll_loop.
+│ Ранее: Polymarket Data API → новые адреса; INSERT INTO whales;
+│        INSERT INTO whale_trades (source=POLLER).
+│ Сейчас whale_trades пополняется ТОЛЬКО таргетированными поллерами
+│ paper/tracked/live (см. блок PAPER/TRACKED POLLING ниже).
 │
 ↓
-TIER MANAGEMENT (whale-detector, каждый час)
+TIER MANAGEMENT (whale-detector) — ⛔ ОСТАНОВЛЕН (MIG-001, 2026-07-21)
 │
-│ HOT polling  → каждые 4ч  (whale_poller.py)
-│ WARM polling → каждые 24ч (whale_poller.py)
-│ Ranking update → каждый час
+│ HOT/WARM/tier-downgrade живут внутри RealTimeWhaleMonitor.start(),
+│ который MIG-001 не запускает (WHALE_DISCOVERY_ENABLED=false) → остановлены.
+│ Ранее: HOT polling → 4ч; WARM polling → 24ч; Ranking update → 1ч.
+│ Обслуживали тир-ранжирование discovered-китов, копированию не нужны.
+│ Включить: WHALE_DISCOVERY_ENABLED=true + пересборка whale-detector.
 │
 ↓
 ROUNDTRIP BUILDER (standalone container, каждые 2ч)

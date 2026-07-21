@@ -24,10 +24,18 @@
 
 ## 2. Статус
 
-**CONFIRMED-ACTIVE** для всех 5 циклов записи:
-- `WhaleDetector._polymarket_poll_loop` (discovery, 60s) → `save_trade_to_db` (`whale_detector.py:1237`) → `WhaleTradesRepo.save_trade()`
-- `WhaleDetector._paper_poll_loop` (paper, 30s) → `save_trade_to_db` → `save_trade()`
-- `WhaleDetector._tracked_poll_loop` (tracked, 300s) → `save_trade_to_db` → `save_trade()`
+> ⚠️ **MIG-001 (2026-07-21): из 5 циклов записи активны только 2.** Флаг
+> `WHALE_DISCOVERY_ENABLED=false` остановил **discovery (60s)**, **HOT (4ч)** и
+> **WARM (24ч)** циклы. `whale_trades` теперь пополняется ТОЛЬКО двумя targeted-
+> циклами: **paper (30s)** и **tracked (300s)** — по 15 копи-китам (`copy_status IN
+> ('paper','live','tracked')`). Проверено: 6277 сделок/24ч, свежесть ~0 мин.
+> **Включить обратно:** `WHALE_DISCOVERY_ENABLED=true` + пересборка whale-detector
+> (см. MIG-001 в PIPELINE_MAP_1_read_api.md §2). Описание ниже — состояние ДО MIG-001.
+
+**CONFIRMED-ACTIVE** для всех 5 циклов записи (⚠️ 3 из них остановлены MIG-001, см. баннер выше):
+- `WhaleDetector._polymarket_poll_loop` (discovery, 60s) → `save_trade_to_db` (`whale_detector.py:1237`) → `WhaleTradesRepo.save_trade()` — ⛔ MIG-001
+- `WhaleDetector._paper_poll_loop` (paper, 30s) → `save_trade_to_db` → `save_trade()` — ✅ активен
+- `WhaleDetector._tracked_poll_loop` (tracked, 300s) → `save_trade_to_db` → `save_trade()` — ✅ активен
 - `WhalePoller.run_hot_polling` (HOT, 4h) → `_save_whale_trade` (`whale_poller.py:294`) → `save_trade()`
 - `WhalePoller.run_warm_polling` (WARM, 24h) → `_save_whale_trade` → `save_trade()`
 

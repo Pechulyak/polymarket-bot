@@ -157,9 +157,11 @@
 
 - whale_detector
   status: ACTIVE
-  updated: 2026-04-02
-  task: TRD-434
-  note: paper+tracked polling, duplicate detection fixed
+  updated: 2026-07-21
+  task: TRD-434, MIG-001
+  note: paper+tracked polling, duplicate detection fixed. MIG-001: широкий
+    discovery отключён (WHALE_DISCOVERY_ENABLED=false) — контейнер жив,
+    heartbeat от paper-поллера, ingestion только по 15 копи-китам.
 
 - bot (main)
   status: PARTIAL
@@ -257,10 +259,17 @@
   note: cron weekly, Telegram recommendations
 
 - Discovery pipeline
-  status: IN_WORK
-  updated: 2026-03-23
-  task: TRD-420
-  note: redesign staged
+  status: FROZEN
+  updated: 2026-07-21
+  task: MIG-001
+  note: отключён флагом WHALE_DISCOVERY_ENABLED=false (обратимо). Пропуск
+    monitor.start() + start_polymarket_polling() останавливает широкий discovery
+    (WebSocket по всем рынкам + _polymarket_poll_loop 60s) И HOT/WARM tier-поллинг
+    + tier-downgrade (живут внутри RealTimeWhaleMonitor.start()). Таргетированные
+    поллеры paper(30s)/tracked(5m) для 15 копи-китов работают. Причина —
+    оптимизация whale_copy перед миграцией. Включить обратно: discovery+HOT/WARM
+    разом — WHALE_DISCOVERY_ENABLED=true + пересборка whale-detector; только
+    HOT/WARM при discovery=off — правка кода (отдельный флаг для whale_poller.*).
 
 - Qualification pipeline
   status: PARTIAL
