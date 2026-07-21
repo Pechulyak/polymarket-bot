@@ -43,7 +43,7 @@ INSERT INTO account_activity (
     to_timestamp(%(event_ts)s),
     %(tx_hash)s, %(raw_json)s
 )
-ON CONFLICT (tx_hash, condition_id, event_type, side, size, price)
+ON CONFLICT (tx_hash, condition_id, event_type, side, size, price, fill_seq)
     WHERE side IS NOT NULL
 DO NOTHING;
 """
@@ -61,7 +61,7 @@ INSERT INTO account_activity (
     to_timestamp(%(event_ts)s),
     %(tx_hash)s, %(raw_json)s
 )
-ON CONFLICT (tx_hash, condition_id, event_type, size)
+ON CONFLICT (tx_hash, condition_id, event_type, size, fill_seq)
     WHERE side IS NULL
 DO NOTHING;
 """

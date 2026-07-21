@@ -353,6 +353,7 @@
 | ACT-008 | Подтверждённая роль maker/taker (on-chain OrderFilled) — точные buy_fee/sell_fee | | DONE |
 | ACT-009 | account_activity теряет сделки при коллизии дедуп-ключа (одинаковые tx_hash+size+price, разные ордера) | | DONE |
 | ACT-010 | Возможные непрослеженные позиции — Data-API не сообщает часть taker-сделок в транзакциях с чужой maker-активностью | | CLOSED (известное ограничение аналитики, частично проверено) |
+| ACT-011 | fetch_account_activity.py: ON CONFLICT рассинхрон с индексами после ACT-009 | | DONE |
 
 ---
 

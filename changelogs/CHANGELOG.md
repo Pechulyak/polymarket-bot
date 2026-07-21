@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-21
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-21 | ACT-011 | Крон account_activity_fetch падал 2 дня подряд (20.07, 21.07) с psycopg2.errors.InvalidColumnReference на первой REDEEM/REWARD-записи — обрывал весь прогон до второго аккаунта включительно. Причина: миграция ACT-009 пересоздала уникальные индексы account_activity с колонкой fill_seq, но scripts/fetch_account_activity.py не обновили — ON CONFLICT в INSERT_TRADE и INSERT_REDEEM ссылался на старый состав колонок. DDL не потребовался (индексы уже верные, подтверждено \d account_activity) — фикс чисто в коде, обе ON CONFLICT цели дополнены fill_seq. Прогон на обоих аккаунтах (PechaArt, Justfuuun) без traceback, проверено дважды (исполнителем и оркестратором). Исполнитель: mm.sh/MiniMax-M3 (правка + прогон), диагностика и приёмка — оркестратором. |
+
 ## 2026-07-20
 
 | Дата | TASK_ID | Описание |
