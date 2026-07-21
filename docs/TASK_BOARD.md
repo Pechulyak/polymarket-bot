@@ -407,6 +407,7 @@
 | FARM-046 | Авто-аудит: audit-таблицы + отдельная DB-роль + бюджет-счётчик + kill-switch | feature:liquidity-farming | TODO (спека DRAFT) |
 | FARM-047 | Авто-аудит: episode→Postgres обогащение (демон S2, опционально) | feature:liquidity-farming | TODO (спека DRAFT) |
 | FARM-048 | free_cash_pusd в дневной снапшот фарминга (таблица farming_daily_cash) | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
+| FARM-049 | Сбор+калибровка Gamma-поля competitive: код готов, калибровка не подтвердила пользу для фильтра п.8 | feature:liquidity-farming | DONE (ALTER TABLE — ждёт confirmed) |
 
 ## EPIC: LIVE — Live Execution
 
