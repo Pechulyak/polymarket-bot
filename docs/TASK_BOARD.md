@@ -434,7 +434,7 @@
 | ID | Задача | Тег | Статус |
 |----|--------|-----|--------|
 | MIG-001 | Отключение широкого discovery флагом WHALE_DISCOVERY_ENABLED (обратимо) | migration:whale-copy | DONE |
-| MIG-002 | category_backfill: остановка холостого churn по мёртвым рынкам + автокатегоризация без API | migration:whale-copy | IN_PROGRESS |
+| MIG-002 | category_backfill: остановка холостого churn (convergence + фильтр length=66) + автокатегоризация | migration:whale-copy | DONE |
 | MIG-003 | Ужесточение retention whale_trades/roundtrips по статусу (не только возраст) | migration:whale-copy | TODO |
 | MIG-004 | Массовый excluded бесперспективных китов + удаление их истории (whale_comment=причина) | migration:whale-copy | BACKLOG |
 | MIG-003 | Ужесточение retention whale_trades/roundtrips (по статусу + возрасту) | migration:whale-copy | TODO |

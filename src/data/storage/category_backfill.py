@@ -72,105 +72,89 @@ async def backfill_market_categories(
         conn = await asyncpg.connect(db_url)
         
         try:
-            while True:
-                # Step 1: Get batch of DISTINCT market_ids where market_category is NULL, empty, or 'unknown'
-                rows = await conn.fetch("""
-                    SELECT market_id FROM (
-                        SELECT DISTINCT market_id 
-                        FROM whale_trades 
-                        WHERE market_category IS NULL 
-                           OR market_category = '' 
-                           OR market_category = 'unknown'
-                    ) t
-                    ORDER BY RANDOM()
-                    LIMIT $1
-                """, batch_size)
-                
-                if not rows:
-                    logger.info(
-                        "backfill_market_categories_complete",
-                        message="No more market_ids with NULL market_category",
-                        market_ids_processed=total_market_ids_processed,
-                        rows_updated=total_rows_updated,
-                    )
-                    break
-                
-                market_ids = [row["market_id"] for row in rows]
-                logger.info(
-                    "backfill_batch_start",
-                    batch_size=len(market_ids),
-                    total_processed=total_market_ids_processed,
-                )
-                
-                # Step 2: Process each market_id
-                for market_id in market_ids:
+            # MIG-002 convergence: снапшот целевых market_id ОДИН раз (не re-select в цикле —
+            # иначе не-резолвящиеся рынки перевыбираются вечно, прогон не терминируется).
+            # Фильтр length(market_id)=66: пропускаем малформенные len-64 id (баг ingestion
+            # TRD-451), которые 404-ят навсегда и раньше вызывали бесконечный churn.
+            rows = await conn.fetch("""
+                SELECT DISTINCT market_id
+                FROM whale_trades
+                WHERE (market_category IS NULL OR market_category = '' OR market_category = 'unknown')
+                  AND length(market_id) = 66
+            """)
+            market_ids = [row["market_id"] for row in rows]
+            logger.info(
+                "backfill_market_categories_targets",
+                target_count=len(market_ids),
+            )
+
+            for market_id in market_ids:
+                try:
+                    # Call the existing get_market_category function with timeout
+                    # This function has its own caching
                     try:
-                        # Call the existing get_market_category function with timeout
-                        # This function has its own caching
-                        try:
-                            category = await asyncio.wait_for(
-                                get_market_category(market_id),
-                                timeout=10.0  # 10 second timeout per market_id
-                            )
-                        except asyncio.TimeoutError:
-                            logger.warning(
-                                "backfill_market_category_timeout",
-                                market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                                timeout_sec=10.0,
-                            )
-                            total_market_ids_processed += 1
-                            await asyncio.sleep(0.5)  # Rate limit even on timeout
-                            continue
-                        
-                        if category is None:
-                            # API returned None - skip (don't write empty string)
-                            logger.debug(
-                                "backfill_market_category_skipped",
-                                market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                                reason="API returned None",
-                            )
-                        else:
-                            # Step 3: UPDATE whale_trades with the category
-                            # Only update rows where market_category is NULL, empty, or 'unknown'
-                            # (handle race condition where another process might have updated)
-                            updated = await conn.execute("""
-                                UPDATE whale_trades 
-                                SET market_category = $1 
-                                WHERE market_id = $2 
-                                AND (market_category IS NULL OR market_category = '' OR market_category = 'unknown')
-                            """, category, market_id)
-                            
-                            # Execute returns "UPDATE N" string, extract count
-                            rows_affected = int(updated.split()[-1]) if updated else 0
-                            total_rows_updated += rows_affected
-                            
-                            logger.debug(
-                                "backfill_market_category_updated",
-                                market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                                category=category,
-                                rows_updated=rows_affected,
-                            )
-                        
-                        total_market_ids_processed += 1
-                        
-                        # Rate limit: sleep 0.5s between API requests
-                        await asyncio.sleep(0.5)
-                        
-                    except Exception as e:
-                        logger.error(
-                            "backfill_market_category_error",
-                            market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                            error=str(e),
+                        category = await asyncio.wait_for(
+                            get_market_category(market_id),
+                            timeout=10.0  # 10 second timeout per market_id
                         )
-                        # Continue with next market_id - handle gracefully
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "backfill_market_category_timeout",
+                            market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
+                            timeout_sec=10.0,
+                        )
+                        total_market_ids_processed += 1
+                        await asyncio.sleep(0.5)  # Rate limit even on timeout
                         continue
-                
-                logger.info(
-                    "backfill_batch_complete",
-                    batch_size=len(market_ids),
-                    total_processed=total_market_ids_processed,
-                    total_rows_updated=total_rows_updated,
-                )
+
+                    if category is None:
+                        # API returned None - skip (don't write empty string)
+                        logger.debug(
+                            "backfill_market_category_skipped",
+                            market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
+                            reason="API returned None",
+                        )
+                    else:
+                        # UPDATE whale_trades with the category
+                        # Only update rows where market_category is NULL, empty, or 'unknown'
+                        # (handle race condition where another process might have updated)
+                        updated = await conn.execute("""
+                            UPDATE whale_trades
+                            SET market_category = $1
+                            WHERE market_id = $2
+                            AND (market_category IS NULL OR market_category = '' OR market_category = 'unknown')
+                        """, category, market_id)
+
+                        # Execute returns "UPDATE N" string, extract count
+                        rows_affected = int(updated.split()[-1]) if updated else 0
+                        total_rows_updated += rows_affected
+
+                        logger.debug(
+                            "backfill_market_category_updated",
+                            market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
+                            category=category,
+                            rows_updated=rows_affected,
+                        )
+
+                    total_market_ids_processed += 1
+
+                    # Rate limit: sleep 0.5s between API requests
+                    await asyncio.sleep(0.5)
+
+                except Exception as e:
+                    logger.error(
+                        "backfill_market_category_error",
+                        market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
+                        error=str(e),
+                    )
+                    # Continue with next market_id - handle gracefully
+                    continue
+
+            logger.info(
+                "backfill_market_categories_complete",
+                market_ids_processed=total_market_ids_processed,
+                rows_updated=total_rows_updated,
+            )
         
         finally:
             # Always close connection
@@ -268,92 +252,15 @@ async def backfill_roundtrip_categories(
             )
             
             # Step 2: Process remaining NULL market_ids via API
-            while True:
-                rows = await conn.fetch("""
-                    SELECT market_id FROM (
-                        SELECT DISTINCT rt.market_id 
-                        FROM whale_trade_roundtrips rt
-                        LEFT JOIN whale_trades wt ON rt.market_id = wt.market_id
-                           AND wt.market_category IS NOT NULL 
-                           AND wt.market_category != 'unknown'
-                        WHERE rt.market_category IS NULL
-                           AND wt.market_id IS NULL
-                    ) t
-                    ORDER BY RANDOM()
-                    LIMIT $1
-                """, batch_size)
-                
-                if not rows:
-                    logger.info(
-                        "roundtrip_step2_api_complete",
-                        message="No more market_ids with NULL market_category",
-                        market_ids_from_api=total_market_ids_from_api,
-                        rows_updated_from_api=total_rows_updated_from_api,
-                    )
-                    break
-                
-                market_ids = [row["market_id"] for row in rows]
-                logger.info(
-                    "roundtrip_batch_start",
-                    batch_size=len(market_ids),
-                    total_processed=total_market_ids_from_api,
-                )
-                
-                for market_id in market_ids:
-                    try:
-                        try:
-                            category = await asyncio.wait_for(
-                                get_market_category(market_id),
-                                timeout=10.0
-                            )
-                        except asyncio.TimeoutError:
-                            logger.warning(
-                                "roundtrip_category_timeout",
-                                market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                            )
-                            total_market_ids_from_api += 1
-                            await asyncio.sleep(0.5)
-                            continue
-                        
-                        if category is None:
-                            logger.debug(
-                                "roundtrip_category_skipped",
-                                market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                            )
-                        else:
-                            updated = await conn.execute("""
-                                UPDATE whale_trade_roundtrips 
-                                SET market_category = $1 
-                                WHERE market_id = $2 
-                                AND market_category IS NULL
-                            """, category, market_id)
-                            
-                            rows_affected = int(updated.split()[-1]) if updated else 0
-                            total_rows_updated_from_api += rows_affected
-                            
-                            logger.debug(
-                                "roundtrip_category_updated",
-                                market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                                category=category,
-                            )
-                        
-                        total_market_ids_from_api += 1
-                        await asyncio.sleep(0.5)
-                        
-                    except Exception as e:
-                        logger.error(
-                            "roundtrip_category_error",
-                            market_id=market_id[:20] + "..." if len(market_id) > 20 else market_id,
-                            error=str(e),
-                        )
-                        continue
-                
-                logger.info(
-                    "roundtrip_batch_complete",
-                    batch_size=len(market_ids),
-                    total_processed=total_market_ids_from_api,
-                )
-            
+            # MIG-002: Step 2 (API-цикл) удалён — Step 1 JOIN покрывает все резолвимые
+            # (not_in_wt=0). Оставшиеся NULL — это малформенные id (баг ingestion), которые
+            # 404-ят навсегда и никогда не резолвятся через API. Переменные
+            # total_market_ids_from_api / total_rows_updated_from_api остаются = 0.
+            logger.info(
+                "roundtrip_step2_api_removed",
+                reason="MIG-002: Step 1 JOIN покрывает все резолвимые (not_in_wt=0); API-фетч удалён",
+            )
+
             # Step 3: Count still NULL
             still_null = await conn.fetchval("""
                 SELECT COUNT(*) - COUNT(market_category) 

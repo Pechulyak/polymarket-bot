@@ -3,11 +3,9 @@
 0 */2 * * * /root/polymarket-bot/scripts/run_settlement.sh >> /root/polymarket-bot/logs/settlement_cron.log 2>&1
 15 * * * * /root/polymarket-bot/scripts/run_close_sell.sh >> /root/polymarket-bot/logs/close_sell_cron.log 2>&1
 15 */2 * * * /root/polymarket-bot/scripts/refresh_views.sh >> /root/polymarket-bot/logs/view_refresh.log 2>&1
-# MIG-002 (2026-07-21): category_backfill приостановлен (интерим). Причина: единичный прогон
-# не завершается никогда (>9 суток непрерывно), вечно чурнит мёртвые рынки, держит flock.
-# Часть 1 (заполнение roundtrip-категорий) выполнена разово. Возврат — после редизайна (третий
-# статус + структурное 404 + возрастной guard). Восстановить: раскомментировать строку ниже.
-# 0 */2 * * * cd /root/polymarket-bot && /usr/bin/flock -n /tmp/category_backfill.lock /bin/sh -c 'cd /root/polymarket-bot && /usr/bin/python3 scripts/run_category_backfill.py >> logs/category_backfill.log 2>&1'
+# MIG-002 (2026-07-21): category_backfill возвращён после фикса (convergence-снапшот + фильтр
+# length=66, удалён Step 2 API). Прогон конечный (~2 мин). Частота снижена 0 */2 → раз в сутки.
+0 5 * * * cd /root/polymarket-bot && /usr/bin/flock -n /tmp/category_backfill.lock /bin/sh -c 'cd /root/polymarket-bot && /usr/bin/python3 scripts/run_category_backfill.py >> logs/category_backfill.log 2>&1'
 0 3 * * * /root/polymarket-bot/scripts/backup_db.sh >> /var/log/polymarket/backup.log 2>&1
 0 8 * * * cd /root/polymarket-bot && /usr/bin/python3 scripts/run_daily_whale_alert.py >> logs/daily_whale_alert.log 2>&1
 0 9 * * 0 cd /root/polymarket-bot && /usr/bin/python3 scripts/run_weekly_whale_analysis.py >> logs/weekly_whale_analysis.log 2>&1
