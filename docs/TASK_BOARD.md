@@ -179,6 +179,7 @@
 | TRD-448 | Учёт комиссии Polymarket в расчёте PnL | | DONE |
 | TRD-449 | Ценовой фильтр входа: отсечка whale-сделок с price > max_entry_price (0.97) | | DONE |
 | TRD-450 | Расхождение our_WR/whale_WR у 0xbacd00c9 (paper): наша копи-симуляция WR=40.16% vs WR кита 60.99% (post-reset). Гипотеза про слияние рынков с разными датами резолюции в один market_id проверена и не подтвердилась (нет (market_id,outcome) с разными close_type) — причина не установлена, нужен отдельный debug | | BACKLOG |
+| TRD-451 | Guard формата market_id в whale_trades: отклонять малформенные id комбо-рынков | | DONE |
 
 ---
 
