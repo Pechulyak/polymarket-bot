@@ -1,5 +1,9 @@
 # CHANGELOG
-## 2026-07-21
+## 2026-07-22
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-22 | DATA-413 | Устранение отставания витрины account_daily_position_ledger (ADPL) — застряла на activity_date=2026-07-18 при свежем сырье. Диагностика по живой БД: три независимые причины. (1) Билдер scripts/build_account_daily_ledger.py отсутствовал в cron — последний прогон ручной 07-20 06:20, автозапуска не было. (2) Фетч account_activity падал 20–21 на INSERT_REDEEM (`no unique constraint matching ON CONFLICT` — рассинхрон idx_activity_unique_redeem с fill_seq, класс ACT-011); из-за `set -e` в run_account_activity_fetch.sh крах Step1 блокировал Step2 → account_positions_snapshot встал на 19-м. Самоизлечился после досоздания redeem-индекса с fill_seq (чистый крон-прогон 22-го 04:10, aps/activity свежие до 22). (3) farming_daily_snapshot/farming_daily_cash (S2) пишут earned-день D-1 на день D в ~09:35 UTC (крон S2 `35 12 * * *` в поясе Europe/Istanbul=UTC+3 → 09:35 UTC; docstring «12:30 UTC» устарел). Гонка: прогон ADPL 07-20 06:20 предшествовал появлению farming-19 → дошёл только до 18. Фикс (S1): добавлен scripts/run_build_ledger.sh (wrapper source .env + flock) + cron `0 10 * * *` (после farming-снапшота). docs/crontab.reference обновлён синхронно (INFRA-051 anti-drift — иначе DRIFT-алерт каждые 30м). Бэкап crontab: backups/crontab_bak_20260722_0559.txt. Билдер провалидирован --dry-run (exit 0, 173 rows). Разрыв 18→21 закрывается автоматически кроном 10:00 UTC того же дня. Известное ограничение SLA: по решению оператора S2-крон не двигаем → farming-производные данные за D-1 структурно недостижимы к 06:00 UTC (награда за D-1 выплачивается в 00:00, но S2 снимает снапшот в 09:35); T-1 полнота гарантируется к ~10:00 UTC, не к 06:00. Полный SLA 06:00 достижим только переносом S2-крона на ~01:00 UTC (`0 4 * * *` в Istanbul-локали; безопасность подтверждена по коду farming_snapshot.py) — вынесено как открытая зависимость от S2. Пояса: S1 crond=Etc/UTC, S2 crond=Europe/Istanbul. |
 
 | Дата | TASK_ID | Описание |
 |------|---------|----------|

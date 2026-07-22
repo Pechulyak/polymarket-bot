@@ -195,6 +195,7 @@
 | DATA-410 | Whitelist для точечного включения /activity endpoint | feature:activity-endpoint | DONE |
 | DATA-411 | Глобальное переключение всех китов на /activity | feature:activity-endpoint | DONE |
 | DATA-412 | Outcome по token_id вместо outcome_index | feature:whale-detection | DONE |
+| DATA-413 | Отставание витрин: ADPL-билдер в cron (10:00 после farming) + диагностика пайплайнов T-1 | | DONE |
 
 ---
 
@@ -442,4 +443,4 @@
 
 ---
 
-*Обновлено: 2026-07-21*
+*Обновлено: 2026-07-22*

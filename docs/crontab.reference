@@ -13,4 +13,6 @@
 0 9,21 * * * cd /root/polymarket-bot && FARM_SCREEN_DB_WRITE=true ./scripts/run_farm_screen.sh >> logs/farm_screen_cron.log 2>&1 && python3 scripts/send_farm_screen_digest.py >> logs/farm_screen_cron.log 2>&1
 0 4 * * * /root/polymarket-bot/scripts/run_retention.sh >> /root/polymarket-bot/logs/retention_cron.log 2>&1
 10 4 * * * cd /root/polymarket-bot && flock -n /tmp/polymarket-bot-account-activity.lock ./scripts/run_account_activity_fetch.sh >> logs/account_activity_fetch.log 2>&1
+# DATA-413 (2026-07-22): ADPL-билдер после farming-снапшота S2 (~09:35 UTC). T-1 полнота к ~10:00 UTC.
+0 10 * * * cd /root/polymarket-bot && flock -n /tmp/build_ledger.lock ./scripts/run_build_ledger.sh >> logs/build_ledger.log 2>&1
 */5 * * * * touch /root/polymarket-bot/logs/cron_heartbeat
