@@ -107,6 +107,7 @@ def insert_candidates_to_db(candidates, scan_run_id, conn):
             funnel_stage, our_daily_usd, est_daily_yield_pct,
             fees_enabled, neg_risk, tick, moves2c, dead_book,
             bid_depth_usd, ask_depth_usd, thin_book,
+            competitive,
             scan_run_id, scanned_at, is_deep_scanned
         ) VALUES (
             %s, %s, %s, %s, %s, %s,
@@ -116,6 +117,7 @@ def insert_candidates_to_db(candidates, scan_run_id, conn):
             %s, %s, %s,
             %s, %s, %s, %s, %s,
             %s, %s, %s,
+            %s,
             %s, NOW(), FALSE
         )
     """
@@ -160,6 +162,7 @@ def insert_candidates_to_db(candidates, scan_run_id, conn):
                 c.get("bid_depth_usd"),     # bid_depth_usd
                 c.get("ask_depth_usd"),     # ask_depth_usd
                 c.get("thin_book"),         # thin_book
+                c.get("competitive"),       # competitive (FARM-049)
                 scan_run_id,                # scan_run_id
             ]
             with conn.cursor() as cur:
@@ -338,6 +341,8 @@ for m in gm:
                  "volume_24hr_clob": m.get("volume24hrClob") or 0,
                  "required_capital": req_cap,
                  "days_to_end": dte,
+                 # FARM-049: Gamma market-quality metric (UI COMP indicator)
+                 "competitive": m.get("competitive"),
                  })
 print(f"phase A filter skips: {skipped}")
 active_tokens = get_active_tokens()
