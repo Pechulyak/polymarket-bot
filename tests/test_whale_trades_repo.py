@@ -21,10 +21,14 @@ repo = WhaleTradesRepo(session_factory=Session)
 # Уникальный tx_hash для теста
 test_tx = f"test_repo_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
 
+# TRD-451: валидный condition_id = 0x + 64 hex
+VALID_MID = "0x" + "abcdef0123456789" * 4  # 64 hex
+VALID_MID_2 = "0x" + "0123456789abcdef" * 4
+
 # Test 1: Валидная запись
 result = repo.save_trade(
     wallet_address="0xTEST_REPO_001",
-    market_id="test_market_001",
+    market_id=VALID_MID,
     side="buy",
     size_usd=Decimal("100.50"),
     price=Decimal("0.65"),
@@ -40,7 +44,7 @@ print("✅ Test 1 PASS: valid trade saved")
 # Test 2: Дубликат
 result = repo.save_trade(
     wallet_address="0xTEST_REPO_001",
-    market_id="test_market_001",
+    market_id=VALID_MID,
     side="buy",
     size_usd=Decimal("100.50"),
     price=Decimal("0.65"),
@@ -53,7 +57,7 @@ print("✅ Test 2 PASS: duplicate detected")
 # Test 3: Rejected — size_usd = 0
 result = repo.save_trade(
     wallet_address="0xTEST_REPO_001",
-    market_id="test_market_002",
+    market_id=VALID_MID,
     side="buy",
     size_usd=Decimal("0"),
     price=Decimal("0.50"),
@@ -66,7 +70,7 @@ print("✅ Test 3 PASS: zero size rejected")
 # Test 4: Rejected — invalid side
 result = repo.save_trade(
     wallet_address="0xTEST_REPO_001",
-    market_id="test_market_003",
+    market_id=VALID_MID,
     side="invalid",
     size_usd=Decimal("50.0"),
     price=Decimal("0.50"),
@@ -76,10 +80,36 @@ result = repo.save_trade(
 assert result == "rejected", f"Test 4 FAIL: expected 'rejected', got '{result}'"
 print("✅ Test 4 PASS: invalid side rejected")
 
+# Test 4b (TRD-451): Rejected — малформенный market_id (комбо-рынок, len=64)
+result = repo.save_trade(
+    wallet_address="0xTEST_REPO_001",
+    market_id="0x036de7c6df84130399e0a57a58298ffeb60000000000000000000000000000",
+    side="buy",
+    size_usd=Decimal("50.0"),
+    price=Decimal("0.50"),
+    tx_hash=f"{test_tx}_combo",
+    source="TRIGGER_TEST",
+)
+assert result == "rejected", f"Test 4b FAIL: expected 'rejected', got '{result}'"
+print("✅ Test 4b PASS: malformed combo market_id rejected")
+
+# Test 4c (TRD-451): Rejected — пустой market_id
+result = repo.save_trade(
+    wallet_address="0xTEST_REPO_001",
+    market_id="",
+    side="buy",
+    size_usd=Decimal("50.0"),
+    price=Decimal("0.50"),
+    tx_hash=f"{test_tx}_empty",
+    source="TRIGGER_TEST",
+)
+assert result == "rejected", f"Test 4c FAIL: expected 'rejected', got '{result}'"
+print("✅ Test 4c PASS: empty market_id rejected")
+
 # Test 5: market_category missing → should save with 'unknown'
 result = repo.save_trade(
     wallet_address="0xTEST_REPO_001",
-    market_id="test_market_004",
+    market_id=VALID_MID_2,
     side="sell",
     size_usd=Decimal("25.0"),
     price=Decimal("0.30"),
@@ -101,7 +131,7 @@ print("✅ Test 5 PASS: missing category → 'unknown'")
 # Test 6: Счётчики
 stats = repo.get_stats()
 assert stats["saved"] == 2, f"Test 6 FAIL: saved should be 2, got {stats['saved']}"
-assert stats["rejected"] == 2, f"Test 6 FAIL: rejected should be 2, got {stats['rejected']}"
+assert stats["rejected"] == 4, f"Test 6 FAIL: rejected should be 4, got {stats['rejected']}"
 assert stats["duplicates"] == 1, f"Test 6 FAIL: duplicates should be 1, got {stats['duplicates']}"
 print(f"✅ Test 6 PASS: stats correct: {stats}")
 

@@ -7,6 +7,7 @@ WhaleTradesRepo — единая точка записи в таблицу whale
 - Автоматический lookup whale_id из таблицы whales
 - Счётчики saved/rejected/duplicates
 """
+import re
 from collections import deque
 from datetime import datetime
 from decimal import Decimal
@@ -17,6 +18,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = structlog.get_logger(__name__)
+
+# TRD-451: валидный condition_id = 0x + 64 hex (66 символов). Комбо-рынки Polymarket
+# (parlay «X AND Y») возвращаются Data API с усечённым conditionId (len=64, хвост нулей)
+# и таким же усечённым asset — идентичность рынка невосстановима. Отклоняем на записи,
+# чтобы не засорять whale_trades/roundtrips. Также ловит пустой conditionId (len=0).
+_CONDITION_ID_RE = re.compile(r"^0x[0-9a-fA-F]{64}\Z")
 
 # SQL для строк БЕЗ tx_hash (null/empty) — без ON CONFLICT
 _INSERT_PLAIN = """
@@ -134,6 +141,19 @@ class WhaleTradesRepo:
             )
             return "rejected"
         
+        # 3b. market_id формат (TRD-451): 0x + 64 hex. Отсекает комбо-рынки
+        # (усечённый conditionId) и пустой conditionId — идентичность невосстановима.
+        if not market_id or not _CONDITION_ID_RE.match(market_id):
+            self._stats["rejected"] += 1
+            logger.warning(
+                "trade_rejected",
+                reason="malformed_market_id",
+                wallet=wallet_address,
+                market_id=market_id,
+                market_id_len=len(market_id) if market_id else 0,
+            )
+            return "rejected"
+
         # 4. Burst detection (только для свежих сделок < 2 часов)
         trade_time = traded_at if traded_at is not None else datetime.utcnow()
         is_recent = (datetime.utcnow() - trade_time).total_seconds() < 7200
