@@ -410,6 +410,7 @@
 | FARM-047 | Авто-аудит: episode→Postgres обогащение (демон S2, опционально) | feature:liquidity-farming | TODO (спека DRAFT) |
 | FARM-048 | free_cash_pusd в дневной снапшот фарминга (таблица farming_daily_cash) | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
 | FARM-049 | Сбор+калибровка Gamma-поля competitive: код готов, калибровка не подтвердила пользу для фильтра п.8 | feature:liquidity-farming | DONE |
+| FARM-050 | Проверка хвостов mid<0.10/>0.90 на скрытые фарм-возможности (read-only) | feature:liquidity-farming | DONE |
 
 ## EPIC: LIVE — Live Execution
 
