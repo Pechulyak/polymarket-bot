@@ -54,7 +54,7 @@ DOLLAR_PER_DAY_MIN = 1.0       # Слой1 гейт6: reward ниже порог
 THIN_BOOK_MULT     = 1.0       # thin_book: min(bid,ask)_depth_usd < THIN_BOOK_MULT × our_size_per_side
 MV2C_MAX        = 8            # Слой3: >N движений≥2¢/нед = волатилен -> вон (adverse)
 PTS_K_MIN       = 0.5          # Слой3: книга тоньше = мёртвый рынок -> вон (не флаг)
-OUR_SIZE        = int(sys.argv[1]) if len(sys.argv) > 1 else 300  # нога: argv[1] или 300
+DEFAULT_OUR_SIZE = int(sys.argv[1]) if len(sys.argv) > 1 else 100  # нога: argv[1] или 100 (FARM-050: per-candidate min_size может быть выше)
 GAMMA_PAGE      = 100          # Gamma режет страницу на 100 (не 500)
 GAMMA_PAGES     = 5            # страниц на окно ликвидности (100×5=500 верх)
 LIQ_WINDOWS     = [(0, 5000), (5000, 20000), (20000, 50000), (50000, None)]  # FARM-018: None = без верха
@@ -357,7 +357,7 @@ print(f"phase A candidates: {len(cand)}")
 # ─────────────────── PHASE B: live-book our_share/our_daily + Слой3 ───────────────────
 # comp_pts = paired + excess/3 (модель Polymarket Qmin, upper-bound).
 # bid_pts, ask_pts = квадратичный score каждой стороны книги в reward-зоне.
-# our_pts  = score НАШЕЙ ноги OUR_SIZE при offset B (s=spread/2, у best_bid/ask).
+# our_pts  = score НАШЕЙ ноги size_for_c (=max(DEFAULT_OUR_SIZE, min_size)) при offset B (s=spread/2, у best_bid/ask).
 # our_share = our_pts/(comp_pts+our_pts); our_daily = our_share × pool.
 # usd_per_kpts (средняя книги) сохранён справочно — диагностика толщины.
 for c in cand:
@@ -394,7 +394,11 @@ for c in cand:
         c["best_bid"] = best_bid
         c["best_ask"] = best_ask
         s_our = min(spr / 2.0, ms * 0.9)   # внутри зоны, у границы если книга шире
-        our_pts = ((ms - s_our) / ms) ** 2 * OUR_SIZE if s_our < ms else 0.0
+        # FARM-050: реальная нога >= min_size рынка (иначе не получить rewards).
+        # Пример: Ornn H200 Index min_size=150 -> нога 150, не 100.
+        size_for_c = max(DEFAULT_OUR_SIZE, float(c.get('min_size') or 0))
+        c['size_used'] = size_for_c
+        our_pts = ((ms - s_our) / ms) ** 2 * size_for_c if s_our < ms else 0.0
         # [гейт пустой книги] comp_pts=0 -> НЕ our_share=1.0 (ложный максимум).
         # Пустая книга = нет контрагентов = мёртвый рынок, а не монополия.
         # first taker метёт ногу, adverse >> pool. Флаг ☠, our_share=None (ранг вниз).
@@ -427,7 +431,7 @@ for c in cand:
                         ask_depth_usd += (1.0 - px) * sz
         c["bid_depth_usd"] = round(bid_depth_usd, 2)
         c["ask_depth_usd"] = round(ask_depth_usd, 2)
-        c["thin_book"] = min(bid_depth_usd, ask_depth_usd) < THIN_BOOK_MULT * OUR_SIZE
+        c["thin_book"] = min(bid_depth_usd, ask_depth_usd) < THIN_BOOK_MULT * size_for_c
     except Exception as e:
         c["our_daily"] = None
         c["err"] = str(e)[:40]
@@ -472,7 +476,7 @@ else:
               "Set env to write to farming_market_candidates.")
 
 # ─────────────────────────────── ВЫВОД ───────────────────────────────
-# Ведущая метрика: our_$/d (доход НАШИХ OUR_SIZE шер). share = наша доля книги.
+# Ведущая метрика: our_$/d (доход НАШИХ size_for_c шер). share = наша доля книги.
 # usd/kpts = средняя книги (справочно). pts_k≈0 = тонкая книга (⚠, гейт11).
 # below $1/d (гейт6) по НАШЕМУ доходу -> флаг ✗.
 hdr = (f"{'our$/d':>7} {'share':>6} {'pool':>6} {'usd/kp':>7} {'pts_k':>7} "
@@ -504,6 +508,6 @@ if multi:
 json.dump(cand, open("/tmp/farm_screen_result.json", "w"))
 print(f"\nsaved: /tmp/farm_screen_result.json ({len(cand)} scored, "
       f"отсеяно: {vol_ct} volatile mv2c>{MV2C_MAX}, {thin_ct} thin pts_k<{PTS_K_MIN})")
-print(f"[v4] сортировка по our_daily (нога {OUR_SIZE} шер, offset B'=внутри reward-зоны). "
+print(f"[v4] сортировка по our_daily (нога {DEFAULT_OUR_SIZE} шер default; per-candidate max с min_size, offset B'=внутри reward-зоны). "
       f"volatile+thin отсечены жёстко. mv2c/rng7 в выводе для доп-контроля.")
 print("Слой3 (moves2c/range7d) в result.json. Вердикты — оператор/аналитик, не скринер.")

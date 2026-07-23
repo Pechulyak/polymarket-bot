@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-23
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-23 | FARM-050 | farm_screen.py считал our_daily_usd всех кандидатов на едином глобальном OUR_SIZE=300, хотя реальный размер входа в фарминг — 100 либо больше, если rewardsMinSize рынка выше (пример: Ornn H200 Index min_size=150; на реальном размере our_daily оказывался заметно ниже, чем показывал скан на 300 — Ornn $3.68→$1.29, ниже порога $1.5/д). Фикс: `OUR_SIZE` → `DEFAULT_OUR_SIZE` (дефолт 300→100, argv[1] override сохранён), в Phase B добавлен per-candidate `size_for_c = max(DEFAULT_OUR_SIZE, min_size)`, используется в `our_pts` и `thin_book`; сохраняется в кандидате как `size_used` (только в памяти/result.json — колонки под него в `farming_market_candidates` нет, INSERT не менялся, ALTER TABLE не выполнялся, вне скоупа). Прогон на 100 без `FARM_SCREEN_DB_WRITE` подтвердил dry-run (guard сработал) и корректность per-candidate размера (8 кандидатов min_size=200 → size_used=200, 22 с min_size<100 → size_used=100). Ревью-субагент APPROVE; отмечено вне-скоуповое pre-existing несоответствие (не регрессия FARM-050) — `required_capital` в INSERT считается по `min_size`, а не по фактически используемому `size_used`, из-за чего `est_daily_yield_pct` может быть завышен для рынков с min_size<100; вынесено отдельной задачей при необходимости. Исполнитель mm.sh/MiniMax-M3 (код, 1 попытка), диагностику/проверку/приёмку выполнил оркестратор. |
+
 ## 2026-07-22
 
 | Дата | TASK_ID | Описание |
