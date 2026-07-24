@@ -262,3 +262,88 @@ def test_edge_notify_halted_recovery_silent_when_already_clear(farming_daemon):
         farming_daemon.notify = orig_notify
 
     assert sent == []
+
+
+# ─── FARM-052: get_open_orders() list staleness -> get_order() confirmation ──
+
+class _OrderStatusClient:
+    """get_open_orders() returns an empty book (both tracked ids absent from
+    the list); get_order(id) returns a canned per-id status from `statuses`
+    (dict oid -> status string, or oid -> None to simulate 'not found')."""
+
+    def __init__(self, statuses):
+        self.statuses = statuses
+        self.queried = []
+
+    def get_open_orders(self):
+        return []
+
+    def get_order(self, order_id):
+        self.queried.append(order_id)
+        status = self.statuses.get(order_id)
+        if status is None:
+            return None
+        return {"status": status}
+
+
+def test_order_is_live_true_for_live_status(farming_daemon):
+    c = _OrderStatusClient({"bid_123": "live"})
+    assert farming_daemon.order_is_live(c, "bid_123") is True
+
+
+def test_order_is_live_false_for_terminal_status(farming_daemon):
+    c = _OrderStatusClient({"bid_123": "matched"})
+    assert farming_daemon.order_is_live(c, "bid_123") is False
+
+
+def test_order_is_live_false_when_not_found(farming_daemon):
+    c = _OrderStatusClient({"bid_123": None})
+    assert farming_daemon.order_is_live(c, "bid_123") is False
+
+
+def test_order_is_live_none_on_lookup_error(farming_daemon):
+    class _Raising:
+        def get_order(self, order_id):
+            raise RuntimeError("simulated CLOB API outage")
+    assert farming_daemon.order_is_live(_Raising(), "bid_123") is None
+
+
+def test_reconcile_stale_list_snapshot_does_not_pause(farming_daemon):
+    """[FARM-052] Both tracked legs are absent from get_open_orders() (empty
+    list), matching the 24.07 McConnell incident pattern (a just-posted order
+    absent from the very next list call) -- but get_order() confirms both are
+    still status='live'. Must NOT trigger missing_legs (no false pause)."""
+    st = _fresh_state()
+    c = _OrderStatusClient({"bid_123": "live", "ask_456": "live"})
+    out = farming_daemon.reconcile_orders(c, "tok1", st, min_size=100)
+    assert out["missing_legs"] is False
+    assert sorted(c.queried) == ["ask_456", "bid_123"]
+
+
+def test_reconcile_confirmed_gone_still_pauses(farming_daemon):
+    """[FARM-052] Both tracked legs absent from the list AND get_order()
+    confirms a terminal status (genuinely filled/cancelled) -- missing_legs
+    must still fire, same as pre-FARM-052 behavior for a real vanish."""
+    st = _fresh_state()
+    c = _OrderStatusClient({"bid_123": "matched", "ask_456": "canceled"})
+    out = farming_daemon.reconcile_orders(c, "tok1", st, min_size=100)
+    assert out["missing_legs"] is True
+
+
+def test_reconcile_mixed_stale_and_gone_pauses_only_for_confirmed(farming_daemon, monkeypatch):
+    """[FARM-052] One leg is a stale list read (still live), the other is
+    genuinely gone -- pause still fires (real vanish present), but only the
+    confirmed-gone id reaches the pause log, not the stale one."""
+    logged = []
+    monkeypatch.setattr(farming_daemon, "log", lambda msg: logged.append(msg))
+    st = _fresh_state()
+    c = _OrderStatusClient({"bid_123": "live", "ask_456": "matched"})
+    out = farming_daemon.reconcile_orders(c, "tok1", st, min_size=100)
+    assert out["missing_legs"] is True
+    pause_lines = [m for m in logged if "tracked leg(s) missing" in m]
+    assert len(pause_lines) == 1
+    assert "ask_456" in pause_lines[0]
+    assert "bid_123" not in pause_lines[0]
+    stale_lines = [m for m in logged if "stale list" in m]
+    assert len(stale_lines) == 1
+    assert "bid_123" in stale_lines[0]

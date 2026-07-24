@@ -696,6 +696,46 @@ def cancel_quotes(c, order_ids):
             log(f"[cancel_quotes] cancel {oid} error (raw, not auto-fixed): {e}")
 
 
+def order_is_live(c, order_id):
+    """[FARM-052] Authoritative single-order status check via get_order() —
+    reused primitive from live_executor_daemon.py:201 (same pattern: status
+    field, 'matched'/terminal states vs still-resting). get_open_orders() is
+    a LIST snapshot that can lag reality on this account/token: observed live
+    24.07 both a just-posted order (post_order confirmed status='live')
+    absent from the very next get_open_orders() call, and the mirror case —
+    a cancel_quotes-confirmed-canceled order still present in the list ~2min
+    later. A direct per-order lookup sidesteps that list staleness.
+    Returns True if still resting (status == 'live'), False if genuinely gone
+    (order not found, or a terminal status like matched/canceled), None if
+    the check itself failed (caller treats None conservatively, same as the
+    pre-FARM-052 default: absent from the list = missing).
+
+    UNVERIFIED ON LIVE v2 (flagged by reviewer, not yet checked on S2):
+    (a) the exact status string for a still-resting order on py_clob_client_v2
+        is assumed 'live' by analogy with post_order()'s own response and
+        live_executor_daemon.py's usage — if v2's GET_ORDER uses a different
+        string, this check silently degrades to a no-op (everything falls
+        through to False, same as pre-FARM-052 behavior — not a regression,
+        just reduced effectiveness). Confirm against a real order on S2 before
+        relying on this to suppress pauses.
+    (b) get_order() returning None ("not found") is treated as genuinely gone,
+        matching pre-FARM-052 behavior — but live_executor_daemon.py:201-204
+        treats None as "not yet indexed, keep waiting" instead. If a just-
+        posted order's GET_ORDER lookup can transiently 404/None before the
+        order is indexed, that is exactly the fresh-order-vanishes-in-<1min
+        pattern this fix targets, and it would NOT be caught by this check.
+        Needs live confirmation of what a freshly-posted order's get_order()
+        actually returns before trusting this path fully."""
+    try:
+        order = c.get_order(order_id)
+    except Exception as e:
+        log(f"[order_is_live] get_order({order_id}) failed (raw, not auto-fixed): {e}")
+        return None
+    if order is None:
+        return False
+    return str(order.get("status", "")).lower() == "live"
+
+
 # ─────────────────── CIRCUIT BREAKER / PAUSE [FARM-011/012] ──────────────────
 def _mid_range_cents(hist, window_sec, now=None):
     """[FARM-011] Range (max-min) of mid over the trailing `window_sec`, in cents.
@@ -935,9 +975,28 @@ def reconcile_orders(c, token, st, min_size, mid=None):
             # through the fill-pause instead: main loop cancels the surviving leg
             # and pauses. Orphan/undersized branches above keep force_requote —
             # those are hygiene, not adverse-flow signals.
-            log(f"[reconcile] tracked leg(s) missing from book (filled/rejected): "
-                f"{sorted(rest)} -> fill-pause (FARM-012)")
-            out["missing_legs"] = True
+            # [FARM-052] Before trusting "absent from the get_open_orders() list"
+            # as filled/rejected, confirm with a direct per-order status check
+            # (order_is_live): the list snapshot was observed lagging reality on
+            # this account/token (a just-posted order absent from the very next
+            # list call). An id whose get_order() status is still 'live' is a
+            # stale list read, not a real vanish -> excluded from confirmed_gone,
+            # no pause fires for it this tick (next tick's list re-check applies
+            # normally). order_is_live()==None (lookup itself failed) keeps the
+            # pre-FARM-052 conservative default (treated as gone).
+            confirmed_gone = set()
+            for oid in rest:
+                alive = order_is_live(c, oid)
+                if alive is True:
+                    log(f"[reconcile] leg id={oid} absent from get_open_orders() "
+                        f"list but get_order() confirms status=live -> stale list "
+                        f"snapshot, NOT missing (FARM-052)")
+                else:
+                    confirmed_gone.add(oid)
+            if confirmed_gone:
+                log(f"[reconcile] tracked leg(s) missing from book (filled/rejected): "
+                    f"{sorted(confirmed_gone)} -> fill-pause (FARM-012)")
+                out["missing_legs"] = True
     if len(sides) < 2:
         out["one_sided"] = True
     return out
@@ -1227,7 +1286,15 @@ def main():
                           # [FARM-025] halted survives restart: manual clear required.
                           "halted": (persisted.get(m["token"]) or {}).get("halted", False),
                           # [FARM-025] last adverse fill for level-gate (cleared on resume).
-                          "last_adverse_fill": (persisted.get(m["token"]) or {}).get("last_adverse_fill")}
+                          "last_adverse_fill": (persisted.get(m["token"]) or {}).get("last_adverse_fill"),
+                          # [FARM-052] NOT persisted (fresh False on every real process
+                          # start/restart). Gates FARM-004f reseed/adoption below so it
+                          # runs at most ONCE per process lifetime, not on every pause
+                          # resume (enter_pause() also sets ids=None -> without this
+                          # flag, the pause path was indistinguishable from a restart,
+                          # so reseed re-ran and could adopt a stale get_open_orders()
+                          # entry for an order already cancelled minutes earlier).
+                          "startup_reseed_done": False}
              for m in MARKETS}
     if persisted:
         log(f"[state] restored cursors: "
@@ -1505,8 +1572,18 @@ def main():
                 # st["ids"]=None, so orphan orders from the dead process never get
                 # detected. Fix: fetch live orders, adopt ONE per side (closest to
                 # target), cancel all other legs even if within threshold.
+                # [FARM-052] st["ids"]=None ALSO happens on every enter_pause(), not
+                # only a genuine process restart -- the old `st["ids"] is None` gate
+                # couldn't tell the two apart, so reseed re-ran on every pause resume
+                # and could adopt a get_open_orders() entry for an order this same
+                # process had already cancel_quotes()-confirmed cancelled minutes
+                # earlier (list snapshot staleness, see order_is_live()). Gated by
+                # startup_reseed_done so this block runs at most once per process
+                # lifetime; any later st["ids"]=None (from a pause) falls through to
+                # a plain fresh place_two_sided() below instead of adoption.
                 ids_before_reseed = st["ids"]   # [FARM-020-fix2] track if reconcile ran full path
-                if st["ids"] is None and not DRY_RUN and mid is not None:
+                if (st["ids"] is None and not st.get("startup_reseed_done", False)
+                        and not DRY_RUN and mid is not None):
                     bid_target = mid - float(QUOTE_OFFSET)
                     ask_target = mid + float(QUOTE_OFFSET)
                     requote_thr = REQUOTE_FRAC * float(QUOTE_OFFSET)
@@ -1577,6 +1654,9 @@ def main():
                         log(f"[FARM-004f] no legs within threshold — cancel-all, "
                             f" штатная постановка с нуля")
                         # st["ids"] stays None → place_two_sided will post fresh
+                    # [FARM-052] mark done regardless of branch -- this process
+                    # will not attempt adoption again until it actually restarts.
+                    st["startup_reseed_done"] = True
 
                 # 3a. reconcile book vs memory (F1/F5): orphans, missing legs,
                 #     undersized legs, one-sided state.                    [FARM-003]

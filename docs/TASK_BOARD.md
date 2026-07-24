@@ -411,6 +411,7 @@
 | FARM-048 | free_cash_pusd в дневной снапшот фарминга (таблица farming_daily_cash) | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
 | FARM-049 | Сбор+калибровка Gamma-поля competitive: код готов, калибровка не подтвердила пользу для фильтра п.8 | feature:liquidity-farming | DONE |
 | FARM-051 | calc_farm_economics: дефолтная дистанция ноги приведена в соответствие с QUOTE_OFFSET демона | feature:liquidity-farming | DONE |
+| FARM-052 | Фикс ложных pause-циклов (FARM-004f adoption + missing-leg детекция доверяли устаревшему get_open_orders()) + офсет-анализ портфеля | feature:liquidity-farming | CODE READY (деплой S2 — отдельный confirmed-шаг) |
 
 ## EPIC: LIVE — Live Execution
 
