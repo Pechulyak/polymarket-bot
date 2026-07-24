@@ -1,4 +1,10 @@
 # CHANGELOG
+## 2026-07-24
+
+| Дата | TASK_ID | Описание |
+|------|---------|----------|
+| 2026-07-24 | FARM-051 | calc_farm_economics.py: дефолтная дистанция ноги от мида (dist) заменена с spread-based оценки `min(spread/2, max_spread*0.9)` на константу `DEFAULT_DIST_CENTS=2c`, равную реальному `QUOTE_OFFSET` демона (farming_daemon.py:59) — демон квотирует на фиксированной дистанции независимо от spread/max_spread рынка. Старая формула завышала прогноз score_factor/$/день в 1.8-4x (сильнее на узких max_spread), что искажало реальные IN/OUT решения по ротации рынков (найдено при daily monitoring 24.07 на примере McConnell). Добавлено предупреждение при узком max_spread (<4×offset) без явного `--offset-cents`. Пересчёт McConnell (max_spread=3.5c): score_factor 0.735→0.184, доля на 200 шер/нога 10.6%→2.4% — согласуется с live-наблюдением (<3%). 6 unit-тестов (tests/unit/test_calc_farm_economics.py). executor/farming_daemon.py не менялся. |
+
 ## 2026-07-22
 
 | Дата | TASK_ID | Описание |

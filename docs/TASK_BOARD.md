@@ -410,6 +410,7 @@
 | FARM-047 | Авто-аудит: episode→Postgres обогащение (демон S2, опционально) | feature:liquidity-farming | TODO (спека DRAFT) |
 | FARM-048 | free_cash_pusd в дневной снапшот фарминга (таблица farming_daily_cash) | feature:liquidity-farming | DONE (деплой S2 — отдельная задача) |
 | FARM-049 | Сбор+калибровка Gamma-поля competitive: код готов, калибровка не подтвердила пользу для фильтра п.8 | feature:liquidity-farming | DONE |
+| FARM-051 | calc_farm_economics: дефолтная дистанция ноги приведена в соответствие с QUOTE_OFFSET демона | feature:liquidity-farming | DONE |
 
 ## EPIC: LIVE — Live Execution
 

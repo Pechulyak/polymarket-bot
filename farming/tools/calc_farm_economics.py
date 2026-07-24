@@ -22,8 +22,16 @@ Usage:
     share         = our_pts / (comp_pts + our_pts)
     our_daily_usd = share * pool
 
-    Размещение ноги по умолчанию: dist = min(spread/2, max_spread*0.9)
-    (offset B'), переопределяется --offset-cents.
+    Размещение ноги по умолчанию: dist = DEFAULT_DIST_CENTS = 2c — это реальный
+    QUOTE_OFFSET демона (executor/farming_daemon.py:59, symmetric/flat-план в
+    inventory_manage(), ~строка 1071), фиксированная константа независимо от
+    max_spread конкретного рынка. НЕ оценка по текущему spread книги (была
+    dist=min(spread/2, max_spread*0.9) до FARM-051 — модель предполагала, что
+    демон подходит к миду почти вплотную, что для узких спредов сильно
+    завышало score_factor и прогноз $/день). Переопределяется --offset-cents.
+    Если override не передан и max_spread рынка < 4×DEFAULT_DIST_CENTS (узкий
+    спред-режим наград) — скрипт печатает предупреждение: расхождение
+    модель/реальность на таких рынках сильнее обычного.
 
     --our-bid/--our-ask вычитают квадратичный score наших ордеров
     из соответствующей стороны книги ДО расчёта comp_pts.
@@ -50,6 +58,11 @@ import urllib.request
 
 CLOB = "https://clob.polymarket.com"
 UA = {"User-Agent": "Mozilla/5.0 (farm-econ-calc)"}
+
+DEFAULT_DIST_CENTS = 2.0  # = QUOTE_OFFSET демона в центах (farming_daemon.py:59,
+                          # 0.02$ = 2c), symmetric/flat-план. Если QUOTE_OFFSET в
+                          # демоне поменяется — обновить и здесь вручную (сознательно
+                          # не импортируем демон-код в read-only калькулятор).
 
 
 def get(url):
@@ -94,6 +107,21 @@ def our_order_score(price, size, mid, ms_cents, is_bid):
     if dist < 0 or dist > ms_cents:
         return 0.0
     return size * ((ms_cents - dist) / ms_cents) ** 2
+
+
+def leg_dist_cents(ms, offset_override=None, default=DEFAULT_DIST_CENTS):
+    """Дистанция нашей ноги от мида (центы) + флаг "узкий max_spread".
+
+    По умолчанию — фиксированный default (реальный QUOTE_OFFSET демона), не
+    оценка по текущему spread книги: демон не смотрит на spread при
+    symmetric/flat-плане (farming_daemon.py:1071). narrow_warn=True, если
+    override не передан и ms < 4*default — на таких рынках расхождение
+    модель/реальность сильнее (см. docstring модуля).
+    """
+    dist = default if offset_override is None else offset_override
+    dist = max(0.0, min(dist, ms))
+    narrow_warn = offset_override is None and ms < 4 * default
+    return dist, narrow_warn
 
 
 def fetch_history(token_id):
@@ -187,9 +215,7 @@ def main():
     except ValueError:
         spread_c = ms  # пустая сторона
 
-    dist = offset_override if offset_override is not None \
-        else min(spread_c / 2.0, ms * 0.9)
-    dist = max(0.0, min(dist, ms))
+    dist, narrow_warn = leg_dist_cents(ms, offset_override)
     score_factor = ((ms - dist) / ms) ** 2
 
     q = m.get("question") or m.get("market_slug") or cid
@@ -200,6 +226,10 @@ def main():
     print(f"Книга в окне награды: bid_pts={bid_pts:.0f} (${bid_depth:.0f})  "
           f"ask_pts={ask_pts:.0f} (${ask_depth:.0f})  -> comp_pts={comp_pts:.0f}")
     print(f"Наша нога: dist={dist:.2f}c от мида, score_factor={score_factor:.3f}")
+    if narrow_warn:
+        print(f"⚠ узкий max_spread={ms:.1f}c (< {4*DEFAULT_DIST_CENTS:.0f}c = "
+              f"4×дефолтный offset={DEFAULT_DIST_CENTS:.0f}c) — модель может "
+              f"разойтись с реальностью сильнее обычного, см. docstring")
     if min(bid_depth, ask_depth) < 300:
         print("⚠ thin_book: слабая сторона < $300 — против FARM-023 фильтра")
     print()
