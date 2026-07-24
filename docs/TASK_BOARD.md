@@ -412,6 +412,9 @@
 | FARM-049 | Сбор+калибровка Gamma-поля competitive: код готов, калибровка не подтвердила пользу для фильтра п.8 | feature:liquidity-farming | DONE |
 | FARM-051 | calc_farm_economics: дефолтная дистанция ноги приведена в соответствие с QUOTE_OFFSET демона | feature:liquidity-farming | DONE |
 | FARM-052 | Фикс ложных pause-циклов (FARM-004f adoption + missing-leg детекция доверяли устаревшему get_open_orders()) + офсет-анализ портфеля | feature:liquidity-farming | CODE READY (деплой S2 — отдельный confirmed-шаг) |
+| FARM-053 | Адаптивная per-market дистанция квотирования вместо фиксированных QUOTE_OFFSET=2c | feature:liquidity-farming | CODE READY (деплой S2 — отдельный confirmed-шаг) |
+| — | Drift-requote триггер сделать leg-aware (сейчас общий для обеих ног, не знает про skew) + guard на слишком узкий max_spread относительно тика | feature:liquidity-farming | BACKLOG |
+| — | calc_farm_economics/farm_smoke.py: свести к единому источнику формулы офсета с демоном (сейчас дублируется вручную в 2+ местах) | feature:liquidity-farming | BACKLOG |
 
 ## EPIC: LIVE — Live Execution
 

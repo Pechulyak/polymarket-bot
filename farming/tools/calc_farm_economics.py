@@ -22,16 +22,23 @@ Usage:
     share         = our_pts / (comp_pts + our_pts)
     our_daily_usd = share * pool
 
-    Размещение ноги по умолчанию: dist = DEFAULT_DIST_CENTS = 2c — это реальный
-    QUOTE_OFFSET демона (executor/farming_daemon.py:59, symmetric/flat-план в
-    inventory_manage(), ~строка 1071), фиксированная константа независимо от
-    max_spread конкретного рынка. НЕ оценка по текущему spread книги (была
+    Размещение ноги по умолчанию: dist = adaptive_offset_cents(max_spread) —
+    зеркало quote_offset_for() демона (executor/farming_daemon.py, FARM-053,
+    inventory_manage()/main() flat-план). С FARM-053 (24.07) демон квотирует
+    per-market дистанцию, а не фиксированные 2c: offset = min(max_spread *
+    ratio, QUOTE_OFFSET_CEILING_CENTS) / 100, ratio = (M_TARGET*REQUOTE_FRAC)/
+    (1+M_TARGET*REQUOTE_FRAC). Все три константы (QUOTE_OFFSET_CEILING_CENTS,
+    REQUOTE_FRAC, M_TARGET) — копии одноимённых констант демона; сознательно
+    не импортируем демон-код в read-only калькулятор, если демон поменяет их —
+    обновить и здесь вручную. НЕ оценка по текущему spread книги (была
     dist=min(spread/2, max_spread*0.9) до FARM-051 — модель предполагала, что
     демон подходит к миду почти вплотную, что для узких спредов сильно
-    завышало score_factor и прогноз $/день). Переопределяется --offset-cents.
-    Если override не передан и max_spread рынка < 4×DEFAULT_DIST_CENTS (узкий
-    спред-режим наград) — скрипт печатает предупреждение: расхождение
-    модель/реальность на таких рынках сильнее обычного.
+    завышало score_factor и прогноз $/день; FARM-051 заменил это фиксированными
+    2c, FARM-053 сделал дистанцию демона per-market, и этот калькулятор снова
+    от неё отстал бы без этой правки). Переопределяется --offset-cents.
+    ОГОВОРКА: модель не учитывает asymmetric skew-план (демон временно сужает
+    одну ногу при перекосе инвентаря, с отдельным полом безопасности) — это
+    всегда upper-bound по symmetric/flat-плану, как и раньше.
 
     --our-bid/--our-ask вычитают квадратичный score наших ордеров
     из соответствующей стороны книги ДО расчёта comp_pts.
@@ -59,10 +66,25 @@ import urllib.request
 CLOB = "https://clob.polymarket.com"
 UA = {"User-Agent": "Mozilla/5.0 (farm-econ-calc)"}
 
-DEFAULT_DIST_CENTS = 2.0  # = QUOTE_OFFSET демона в центах (farming_daemon.py:59,
-                          # 0.02$ = 2c), symmetric/flat-план. Если QUOTE_OFFSET в
-                          # демоне поменяется — обновить и здесь вручную (сознательно
-                          # не импортируем демон-код в read-only калькулятор).
+QUOTE_OFFSET_CEILING_CENTS = 2.0  # = QUOTE_OFFSET демона (farming_daemon.py:59,
+                          # 0.02$=2c) -- потолок адаптивного офсета, демон
+                          # никогда не квотирует шире (FARM-053).
+REQUOTE_FRAC = 0.4        # = REQUOTE_FRAC демона (farming_daemon.py:62)
+M_TARGET = 1.5            # = M_TARGET демона (farming_daemon.py, FARM-053)
+                          # Копии констант демона -- сознательно не импортируем
+                          # демон-код в read-only калькулятор; если демон их
+                          # поменяет, обновить и здесь вручную.
+
+
+def adaptive_offset_cents(ms):
+    """[FARM-053] Зеркало quote_offset_for() демона (executor/farming_daemon.py):
+    per-market дистанция ноги вместо фиксированных 2c. None/<=0 max_spread ->
+    QUOTE_OFFSET_CEILING_CENTS (безопасный дефолт, как при незагруженных
+    reward-параметрах в демоне)."""
+    if ms is None or ms <= 0:
+        return QUOTE_OFFSET_CEILING_CENTS
+    ratio = (M_TARGET * REQUOTE_FRAC) / (1.0 + M_TARGET * REQUOTE_FRAC)
+    return min(ratio * ms, QUOTE_OFFSET_CEILING_CENTS)
 
 
 def get(url):
@@ -109,19 +131,21 @@ def our_order_score(price, size, mid, ms_cents, is_bid):
     return size * ((ms_cents - dist) / ms_cents) ** 2
 
 
-def leg_dist_cents(ms, offset_override=None, default=DEFAULT_DIST_CENTS):
-    """Дистанция нашей ноги от мида (центы) + флаг "узкий max_spread".
+def leg_dist_cents(ms, offset_override=None):
+    """Дистанция нашей ноги от мида (центы) + флаг "адаптивная дистанция".
 
-    По умолчанию — фиксированный default (реальный QUOTE_OFFSET демона), не
+    По умолчанию — adaptive_offset_cents(ms) [FARM-053], зеркало демона; не
     оценка по текущему spread книги: демон не смотрит на spread при
-    symmetric/flat-плане (farming_daemon.py:1071). narrow_warn=True, если
-    override не передан и ms < 4*default — на таких рынках расхождение
-    модель/реальность сильнее (см. docstring модуля).
+    symmetric/flat-плане. is_adaptive=True, если override не передан И
+    рассчитанная дистанция строго ниже потолка QUOTE_OFFSET_CEILING_CENTS
+    (т.е. реально сработало сужение под max_spread этого рынка, а не просто
+    потолок 2c, как было до FARM-053 всегда) -- информационный флаг, не
+    предупреждение о расхождении: сама модель теперь адаптивная.
     """
-    dist = default if offset_override is None else offset_override
+    dist = adaptive_offset_cents(ms) if offset_override is None else offset_override
     dist = max(0.0, min(dist, ms))
-    narrow_warn = offset_override is None and ms < 4 * default
-    return dist, narrow_warn
+    is_adaptive = offset_override is None and dist < QUOTE_OFFSET_CEILING_CENTS
+    return dist, is_adaptive
 
 
 def fetch_history(token_id):
@@ -215,7 +239,7 @@ def main():
     except ValueError:
         spread_c = ms  # пустая сторона
 
-    dist, narrow_warn = leg_dist_cents(ms, offset_override)
+    dist, is_adaptive = leg_dist_cents(ms, offset_override)
     score_factor = ((ms - dist) / ms) ** 2
 
     q = m.get("question") or m.get("market_slug") or cid
@@ -226,10 +250,10 @@ def main():
     print(f"Книга в окне награды: bid_pts={bid_pts:.0f} (${bid_depth:.0f})  "
           f"ask_pts={ask_pts:.0f} (${ask_depth:.0f})  -> comp_pts={comp_pts:.0f}")
     print(f"Наша нога: dist={dist:.2f}c от мида, score_factor={score_factor:.3f}")
-    if narrow_warn:
-        print(f"⚠ узкий max_spread={ms:.1f}c (< {4*DEFAULT_DIST_CENTS:.0f}c = "
-              f"4×дефолтный offset={DEFAULT_DIST_CENTS:.0f}c) — модель может "
-              f"разойтись с реальностью сильнее обычного, см. docstring")
+    if is_adaptive:
+        print(f"ℹ адаптивная дистанция (FARM-053): max_spread={ms:.1f}c уже дал сужение "
+              f"< потолка {QUOTE_OFFSET_CEILING_CENTS:.0f}c — демон здесь квотирует не так, "
+              f"как на широких рынках, где дистанция всё ещё упирается в потолок")
     if min(bid_depth, ask_depth) < 300:
         print("⚠ thin_book: слабая сторона < $300 — против FARM-023 фильтра")
     print()

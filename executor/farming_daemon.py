@@ -56,8 +56,19 @@ LOG_FILE = "/opt/executor/logs/farming_daemon.log"
 # ─────────────────────────── FARMING PARAMS ──────────────────────────
 DRY_RUN = False                       # LIVE 2026-07-06: New People 2nd 200/leg, maker-only bootstrap, confirmed
 POLL_INTERVAL   = 10                 # seconds between ticks
-QUOTE_OFFSET    = 0.02               # FARM-003 F2: offset MUST exceed requote threshold (incident root #1)
+QUOTE_OFFSET    = 0.02               # FARM-003 F2: offset MUST exceed requote threshold (incident root #1).
+                                      # [FARM-053] Also the CEILING for quote_offset_for() below -- the
+                                      # per-market adaptive offset only ever tightens vs this, never widens.
 REQUOTE_FRAC    = 0.4                # FARM-003 F2: threshold = 0.4 * be_margin(2.5c) = 1.0c < 2.0c offset
+M_TARGET        = 1.5                # [FARM-053] Target safety margin (offset / requote_threshold) for
+                                      # quote_offset_for(). Chosen >= the worst-case margin the fixed 2c
+                                      # QUOTE_OFFSET already accepted today across the portfolio (1.43x, on
+                                      # the widest max_spread markets) -- preserves that PORTFOLIO-WORST-CASE
+                                      # margin on the dimensionless M=offset/threshold metric only. Per market
+                                      # this metric still DROPS on markets where the offset tightens (e.g.
+                                      # 3.5c: M 3.33x -> 1.5x) -- see quote_offset_for()'s docstring CAVEAT
+                                      # and the skewed-leg floor in inventory_manage() this necessitated.
+                                      # Second-opinion (Opus) reviewed before implementation.
 STATE_FILE      = "/opt/executor/app/farming_state.json"  # FARM-003: last_ts persistence across restarts
 
 # ── [FARM-011] CIRCUIT BREAKER (incident 2026-07-03: mid 0.615->0.59->back,
@@ -349,6 +360,44 @@ def compute_break_even(max_spread_cents, offset_dollars):
     }
 
 
+def quote_offset_for(max_spread_cents):
+    """[FARM-053] Per-market quoting distance from mid, in dollars.
+
+    Pre-FARM-053, QUOTE_OFFSET (2c) was a single fixed distance for every
+    market regardless of its own max_spread (reward corridor width) -- score
+    = ((max_spread-offset)/max_spread)^2, so a fixed 2c ate a much bigger
+    slice of a narrow corridor (57% on a 3.5c market) than a wide one (36%
+    on 5.5c), and gave an UNEVEN safety margin too: at fixed 2c, M = offset /
+    (REQUOTE_FRAC * be_margin) ranged 1.43x (widest markets) to 3.33x
+    (narrowest) across the 24.07 portfolio -- worse case already accepted
+    at 1.43x today.
+
+    This picks the tightest offset that keeps AT LEAST M_TARGET margin on
+    that same metric for every market alike (derived: offset =
+    max_spread * (M_TARGET*REQUOTE_FRAC)/(1+M_TARGET*REQUOTE_FRAC)), capped
+    at QUOTE_OFFSET so no market is ever quoted WIDER than the pre-FARM-053
+    baseline. CAVEAT (found in post-implementation review, NOT true across
+    the board): this only preserves the >=1.43x PORTFOLIO-WORST-CASE margin
+    on the M=offset/thr metric -- the ABSOLUTE cents buffer between offset
+    and threshold still shrinks on markets where the offset tightens (e.g.
+    3.5c: 1.4c buffer pre-FARM-053 -> 0.4375c after), which is why the
+    skewed-leg floor in inventory_manage() exists (see its own comment) --
+    that gap would otherwise have made the M=1.43x claim misleading in
+    practice. Reviewed by second opinion (Opus) before implementation; a
+    separate, un-related gap in the drift-requote trigger itself (search
+    "drift_c >= REQUOTE_FRAC * be_margin", no tick-size floor there) was
+    flagged as out of scope for this change (candidate follow-up FARM-054).
+
+    None/unknown max_spread -> QUOTE_OFFSET (pre-FARM-053 safe default,
+    matches behavior before reward params have loaded)."""
+    if max_spread_cents is None or max_spread_cents <= 0:
+        return QUOTE_OFFSET
+    ratio = (M_TARGET * REQUOTE_FRAC) / (1.0 + M_TARGET * REQUOTE_FRAC)
+    candidate_cents = ratio * float(max_spread_cents)
+    candidate_cents = min(candidate_cents, QUOTE_OFFSET * 100.0)
+    return candidate_cents / 100.0
+
+
 def read_midpoint(c, token):
     """[REUSE-ish] get_midpoint() → float mid."""
     return float(c.get_midpoint(token)["mid"])
@@ -405,13 +454,19 @@ def estimate_share(depth, size, offset_cents, max_spread):
 
 
 # ─────────────────────── QUOTING CORE [NEW] ──────────────────────────
-def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=None):
+def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=None,
+                     offset=None):
     """[NEW] Place BID @ mid-offset and ASK @ mid+offset, both GTC maker.
     Returns (bid_order_id, ask_order_id). Uses OrderArgsV2 + post_order(GTC)
     like copy-daemon line 361-364, but TWO legs and anchored at mid, not best_bid.
 
     `plan` (from inventory_manage) drives asymmetric offsets/sizes when inventory
-    is skewed; when None or skew='flat', symmetric QUOTE_OFFSET on both legs.
+    is skewed; when `plan` has no bid_offset/ask_offset at all (e.g. inventory
+    unknown -> caller passes plan=None), falls back to `offset` -- [FARM-053]
+    the per-market adaptive value the caller already computed this tick
+    (st["offset"]), so this stays consistent with reconcile/F2/reseed even in
+    the plan=None edge case. `offset=None` (caller didn't have it either)
+    falls back one level further, to the fixed QUOTE_OFFSET.
     `params` supplies neg_risk/tick_size directly (not read from mkt['params'],
     which may be stale/absent for a market whose load failed this tick).
     `locked_sell` (from reconcile_orders) is the sum of (size - matched) for all
@@ -419,6 +474,7 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
 
     MONEY-ADJACENT: real placement guarded by DRY_RUN.
     """
+    _default_off = float(offset) if offset is not None else float(QUOTE_OFFSET)
     if DRY_RUN:
         # [NEW] validate against the LIVE book (LayerX lesson: never quote off bid-prices).
         ob = c.get_order_book(mkt["token"])
@@ -433,8 +489,8 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
             q = (Decimal(str(x)) / Decimal(str(tick))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
             return float(round(q * Decimal(str(tick)), 4))
         _plan = plan or {}
-        bid_off = float(_plan.get("bid_offset", QUOTE_OFFSET))
-        ask_off = float(_plan.get("ask_offset", QUOTE_OFFSET))
+        bid_off = float(_plan.get("bid_offset", _default_off))
+        ask_off = float(_plan.get("ask_offset", _default_off))
         bid_sz = float(_plan.get("bid_size", mkt["min_size"]))
         ask_sz = float(_plan.get("ask_size", mkt["min_size"]))
         our_bid = _round(book_mid - bid_off)
@@ -455,7 +511,7 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
             f"in_corridor={in_corridor}")
         if crosses_bid or crosses_ask:
             log(f"[DRY_RUN]   WARN: quote would cross the book -> taker fill (fee). "
-                f"Increase QUOTE_OFFSET or check tick alignment.")
+                f"Increase the quoting offset or check tick alignment.")
         # mirror live return contract: suppressed leg -> None id
         return (("dry_bid" if bid_sz > 0 else None),
                 ("dry_ask" if ask_sz > 0 else None))
@@ -488,10 +544,11 @@ def place_two_sided(c, mkt, mid, plan=None, params=None, inv=None, locked_sell=N
         q = (Decimal(str(x)) / Decimal(str(tick))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         return float(round(q * Decimal(str(tick)), 4))
 
-    # Plan-driven offsets/sizes (from inventory_manage). Default = symmetric.
+    # Plan-driven offsets/sizes (from inventory_manage). Default = symmetric,
+    # [FARM-053] falling back to the caller's adaptive `offset` (_default_off).
     plan = plan or {}
-    bid_off = float(plan.get("bid_offset", QUOTE_OFFSET))
-    ask_off = float(plan.get("ask_offset", QUOTE_OFFSET))
+    bid_off = float(plan.get("bid_offset", _default_off))
+    ask_off = float(plan.get("ask_offset", _default_off))
     bid_size = float(plan.get("bid_size", mkt["min_size"]))
     ask_size = float(plan.get("ask_size", mkt["min_size"]))
 
@@ -807,10 +864,16 @@ def enter_pause(c, st, mkt, duration_sec, reason):
         log(f"[enter_pause] raw (not auto-fixed): {e}")
 
 
-def reconcile_orders(c, token, st, min_size, mid=None):
+def reconcile_orders(c, token, st, min_size, mid=None, offset=None):
     """[FARM-003 F1+F5] The BOOK is the source of truth, not in-memory st['ids'].
     Incident 2026-07-02: restart lost st['ids'] -> orphan BUY@0.60 rested 8h;
     rejected ASK left daemon 'two-sided' in its head, one-sided in the book.
+
+    `offset` (dollars): [FARM-053] per-market quoting distance already computed
+    this tick (st["offset"]) -- used for the drift thresholds below instead of
+    re-deriving from max_spread here, so this agrees with whatever distance is
+    actually being quoted this tick. None (caller didn't have it, e.g. tests)
+    falls back to QUOTE_OFFSET, same as pre-FARM-053 behavior.
 
     Per tick (live only):
       - ORPHANS: live orders on this token NOT tracked in st['ids'] -> cancel
@@ -820,7 +883,7 @@ def reconcile_orders(c, token, st, min_size, mid=None):
       - F5: a tracked leg whose remaining size < reward min_size earns ZERO
         reward while still fill-exposed -> forces requote (cancel+replace full).
         Exception (FARM-004d): BUY leg with size_matched > 0 (partially filled)
-        is kept in book if drift from mid is within REQUOTE_FRAC*QUOTE_OFFSET —
+        is kept in book if drift from mid is within REQUOTE_FRAC*offset —
         only requote if mid has genuinely drifted away from the order.
       - ONE-SIDED: <2 sides live while quotes expected -> flagged (1/3 score);
         NOT a requote trigger by itself (deliberate skip when inventory short —
@@ -848,6 +911,7 @@ def reconcile_orders(c, token, st, min_size, mid=None):
             pass  # non-critical, leave locked_sell=0
         st["locked_sell"] = locked_sell
         return out
+    _offset = float(offset) if offset is not None else float(QUOTE_OFFSET)
     try:
         live = [o for o in (c.get_open_orders() or [])
                 if o.get("asset_id") == token]
@@ -900,7 +964,7 @@ def reconcile_orders(c, token, st, min_size, mid=None):
             if side == "BUY" and size_matched > 0 and mid is not None:
                 # drift from mid in cents
                 drift_c = abs(mid - order_price) * 100.0
-                threshold_c = REQUOTE_FRAC * QUOTE_OFFSET * 100.0
+                threshold_c = REQUOTE_FRAC * _offset * 100.0
                 if drift_c <= threshold_c:
                     skip_requote = True
                     throttled_log(
@@ -918,8 +982,11 @@ def reconcile_orders(c, token, st, min_size, mid=None):
     # [FARM-004h Fix 1] Drift discipline for unload order: if unload SELL drifted
     # from mid beyond the requote threshold, cancel it and let next tick re-evaluate.
     # Unload is placed at ceil(mid/tick)*tick (next tick boundary above mid), so minimum
-    # drift before crossing to next tick is ~0.5c. Threshold = max(REQUOTE_FRAC*QUOTE_OFFSET, tick)
-    # = max(0.4*2c, 1c) = 1.0c: only fires when mid crosses a full tick boundary.
+    # drift before crossing to next tick is ~0.5c. Threshold = max(REQUOTE_FRAC*offset, tick)
+    # [FARM-053: offset is per-market now, not the fixed QUOTE_OFFSET] -- at the
+    # pre-FARM-053 fixed 2c this was max(0.4*2c, 1c) = 1.0c. A tighter per-market
+    # offset only shrinks the offset-derived term; the max() with tick_cents
+    # guarantees the threshold never drops below one tick regardless.
     if mid is not None and unload_id and unload_id in live_ids:
         try:
             tick_str_local = c.get_tick_size(token)
@@ -932,8 +999,8 @@ def reconcile_orders(c, token, st, min_size, mid=None):
             if oid == unload_id and o.get("side") == "SELL":
                 unload_price = float(o.get("price", 0))
                 drift_c = abs(mid - unload_price) * 100.0
-                # threshold = max(REQUOTE_FRAC * QUOTE_OFFSET, tick) in cents
-                threshold_c = max(REQUOTE_FRAC * QUOTE_OFFSET * 100.0, tick_cents)
+                # threshold = max(REQUOTE_FRAC * offset, tick) in cents [FARM-053: offset]
+                threshold_c = max(REQUOTE_FRAC * _offset * 100.0, tick_cents)
                 if drift_c > threshold_c:
                     log(f"[reconcile] unload SELL@{unload_price:.4f} drifted {drift_c:.2f}c "
                         f"from mid={mid:.4f} > threshold={threshold_c:.2f}c -> cancel, "
@@ -1103,7 +1170,7 @@ def read_cash_balance():
     return None
 
 
-def inventory_manage(c, mkt, inv_shares, mid, params):
+def inventory_manage(c, mkt, inv_shares, mid, params, offset=None):
     """[NEW] After adverse-fill: compute an ASYMMETRIC re-quote that discharges
     inventory WHILE still farming. NOT a market-sell (that would pay taker fee).
 
@@ -1114,6 +1181,21 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
       - if short (inv < -min_size/2): mirror.
       - within dead-band: keep SYMMETRIC quotes (min(Q_one,Q_two) rule — the
         two-sided reward is capped by the WEAKER leg, so symmetry maximizes score).
+
+    CAVEAT [FARM-053, found in review]: "unload faster" above is aspirational,
+    not guaranteed. The skewed leg is floored (below) to stay outside the
+    drift-requote threshold, and on markets with max_spread <= ~4c (currently
+    the ENTIRE live portfolio) that floor equals the flat `off` exactly --
+    skew still suppresses the OTHER leg (widen/stop-accumulating still works),
+    but the "pull toward mid to sell faster" part is a no-op today. Making the
+    drift trigger itself leg-aware (so the floor could safely go tighter) is
+    the real fix -- candidate follow-up FARM-054.
+
+    `offset` (dollars): [FARM-053] the per-market quoting distance already
+    computed this tick (st["offset"], see quote_offset_for()) -- pass it in
+    rather than recomputing from params here, so this always agrees with
+    whatever place_two_sided/reconcile/F2 are using for the SAME tick. None
+    (caller didn't have it yet, e.g. tests) falls back to QUOTE_OFFSET.
 
     Returns a quote plan dict for place_two_sided to consume. DOES NOT place
     orders itself (money-adjacent placement stays behind DRY_RUN + TODO CONFIRM).
@@ -1127,7 +1209,7 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
     # Deviation is measured from inv_center; deadband 0.5*min_size.
     center = float(mkt.get("inv_center") or 0)
     dead = float(mkt.get("inv_deadband") or (min_sz * 0.5))
-    off = float(QUOTE_OFFSET)
+    off = float(offset) if offset is not None else float(QUOTE_OFFSET)
     ms = params.get("max_spread")
     plan = {"bid_offset": off, "ask_offset": off,
             "bid_size": min_sz, "ask_size": min_sz, "skew": "flat"}
@@ -1136,11 +1218,40 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
                       "[inventory_manage] inventory unknown -> hold symmetric (no skew)",
                       seconds=300)
         return plan
+    # [FARM-053] Skew pulls one leg to `tighter` (closer to mid than the flat
+    # `off`) to accelerate unload/reseed -- but the main tick loop's drift-
+    # requote trigger (drift_c >= REQUOTE_FRAC*be_margin) measures against the
+    # FLAT be_margin (from `off`), not against this tighter distance, and
+    # doesn't know skew is active. Post-FARM-053 `off` is itself already
+    # tightened per-market, so the old `off/2.0` can land BELOW that same
+    # threshold on narrow/mid markets (verified: ratio is a near-constant
+    # ~0.75 of the threshold across the whole uncapped range, not just the
+    # widest/narrowest ends) -- mid could then drift through the skewed leg's
+    # actual position before a reposition fires. Second-opinion (Opus)
+    # reviewed this floor after independent review caught the gap.
+    # Floor: never let the skewed leg sit closer to mid than
+    # REQUOTE_FRAC*be_margin (the same threshold the drift trigger uses) plus
+    # a half-tick buffer -- _round()'s HALF_UP rounding in place_two_sided can
+    # move the placed price by up to half a tick versus the raw target, so a
+    # bare epsilon margin isn't enough. Capped at `off` itself (min(...)) so
+    # the "tighter" leg is never pushed OUT to be wider than the flat offset.
+    tighter_floor = 0.0
+    if ms is not None:
+        be_margin_cents = ms - off * 100.0
+        thr_cents = REQUOTE_FRAC * be_margin_cents
+        tick_cents = None
+        try:
+            if params.get("tick_size") is not None:
+                tick_cents = float(params.get("tick_size")) * 100.0
+        except (TypeError, ValueError):
+            tick_cents = None
+        buffer_cents = (tick_cents / 2.0) if tick_cents else 0.5
+        tighter_floor = min((thr_cents + buffer_cents) / 100.0, off)
+    tighter = max(off / 2.0, tighter_floor, 0.005)
     delta = inv_shares - center
     if delta > dead:
         # ABOVE seed (adverse BID fills accumulated): pull ASK toward mid to
         # unload the excess, suppress BID (stop accumulating).
-        tighter = max(off / 2.0, 0.005)
         # [FARM-017] BID widen x2 вместо bid_size=0: подавление BID держало
         # демона one-sided 57% времени 03.07 (1/3 score). Corridor guard ниже
         # капнет offset на max_spread, если x2 вылезает за коридор.
@@ -1148,7 +1259,6 @@ def inventory_manage(c, mkt, inv_shares, mid, params):
     elif delta < -dead:
         # BELOW seed (ASK drained): pull BID toward mid to REBUY the seed,
         # ASK sizing handled by F3 cap (posts only what inventory can back).
-        tighter = max(off / 2.0, 0.005)
         plan.update(bid_offset=tighter, skew="reseed_buy")
     # corridor guard: never propose an offset outside max_spread
     if ms is not None:
@@ -1362,16 +1472,23 @@ def main():
                     mkt["params"] = p   # expose to place_two_sided live path (neg_risk, tick)
                     if mkt.get("max_spread") is None:
                         mkt["max_spread"] = p.get("max_spread")
-                    st["be"] = compute_break_even(p.get("max_spread"), QUOTE_OFFSET)
+                    # [FARM-053] Per-market adaptive offset (see quote_offset_for()
+                    # docstring) -- computed ONCE per tick here and read from st["offset"]
+                    # everywhere else this tick (reseed target, reconcile thresholds,
+                    # inventory_manage flat plan, score estimate) so every consumer
+                    # agrees on the SAME distance actually being quoted. Never recompute
+                    # from max_spread a second time elsewhere -- single source of truth.
+                    st["offset"] = quote_offset_for(p.get("max_spread"))
+                    st["be"] = compute_break_even(p.get("max_spread"), st["offset"])
                     # FARM-003 F2 invariant (incident root #1): the requote
                     # threshold must sit STRICTLY BELOW the quote offset,
                     # otherwise mid can drift through a leg before we reposition.
                     if st["be"] is not None:
                         thr = REQUOTE_FRAC * st["be"]["be_margin_cents"]
-                        if thr >= QUOTE_OFFSET * 100.0:
+                        if thr >= st["offset"] * 100.0:
                             notify(f"[farm] F2 INVARIANT VIOLATED on {mkt['name']}: "
                                    f"requote_threshold={thr:.2f}c >= offset="
-                                   f"{QUOTE_OFFSET*100:.2f}c — legs can be drifted "
+                                   f"{st['offset']*100:.2f}c — legs can be drifted "
                                    f"through before requote. Fix params.")
                 params = st["params"]
 
@@ -1564,7 +1681,8 @@ def main():
                         except Exception as e:
                             log(f"[FARM-004d Fix 3] auto-unload failed: {e}")
                 # plan is cheap and read-only -> compute whenever inventory known
-                plan = inventory_manage(c, mkt, st["inv"], mid, params) \
+                plan = inventory_manage(c, mkt, st["inv"], mid, params,
+                                         offset=st.get("offset")) \
                     if st["inv"] is not None else None
 
                 # [FARM-004f] Reseed: on first tick after restart st["ids"] is None
@@ -1584,9 +1702,14 @@ def main():
                 ids_before_reseed = st["ids"]   # [FARM-020-fix2] track if reconcile ran full path
                 if (st["ids"] is None and not st.get("startup_reseed_done", False)
                         and not DRY_RUN and mid is not None):
-                    bid_target = mid - float(QUOTE_OFFSET)
-                    ask_target = mid + float(QUOTE_OFFSET)
-                    requote_thr = REQUOTE_FRAC * float(QUOTE_OFFSET)
+                    # [FARM-053] target the SAME per-market offset place_two_sided will
+                    # actually quote at this tick (st["offset"], set above alongside
+                    # st["be"]) -- targeting the old fixed QUOTE_OFFSET here would make
+                    # adoption look for orders at a price nothing is placed at anymore.
+                    _reseed_off = float(st.get("offset") or QUOTE_OFFSET)
+                    bid_target = mid - _reseed_off
+                    ask_target = mid + _reseed_off
+                    requote_thr = REQUOTE_FRAC * _reseed_off
                     adopted_ids = []
                     try:
                         live = [o for o in (c.get_open_orders() or [])
@@ -1660,7 +1783,8 @@ def main():
 
                 # 3a. reconcile book vs memory (F1/F5): orphans, missing legs,
                 #     undersized legs, one-sided state.                    [FARM-003]
-                rec = reconcile_orders(c, token, st, float(mkt["min_size"]), mid)
+                rec = reconcile_orders(c, token, st, float(mkt["min_size"]), mid,
+                                        offset=st.get("offset"))
                 # [FARM-012] tracked leg vanished (filled/rejected) -> same
                 # reaction as a detected fill: cancel survivor + pause. Covers
                 # the data-api lag case where the leg is gone from the book
@@ -1681,8 +1805,12 @@ def main():
                 if ms_now is not None:
                     try:
                         depth = read_book_depth(c, token, mid, ms_now)
+                        # [FARM-053] score against the offset actually quoted this
+                        # tick, not the old fixed constant -- otherwise the /status
+                        # score estimate would misreport reality on tightened markets.
                         score = estimate_share(depth, float(mkt["min_size"]),
-                                               QUOTE_OFFSET * 100.0, ms_now)
+                                               float(st.get("offset") or QUOTE_OFFSET) * 100.0,
+                                               ms_now)
                     except Exception as e:
                         throttled_log(f"score_err:{token}",
                                       f"[score] estimate failed (raw): {e}", seconds=300)
@@ -1737,7 +1865,8 @@ def main():
                         except Exception:
                             pass
                     st["ids"] = place_two_sided(c, mkt, mid, plan=plan, params=params,
-                                                inv=st["inv"], locked_sell=st.get("locked_sell"))
+                                                inv=st["inv"], locked_sell=st.get("locked_sell"),
+                                                offset=st.get("offset"))
                     st["center"] = mid
                     action = f"REQUOTE (skew={plan.get('skew') if plan else 'flat'})"
                 else:
